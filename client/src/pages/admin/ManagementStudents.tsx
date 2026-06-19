@@ -63,7 +63,7 @@ export default function ManagementStudents() {
                     {r.paid_by || '—'}
                   </span>
                 </td>
-                <td className="table-td">{r.parent_mobile || '—'}</td>
+                <td className="table-td whitespace-nowrap">{r.parent_mobile || '—'}</td>
                 <td className="table-td font-semibold text-emerald-600">{rs(r.fees_paid)}</td>
                 <td className="table-td">{Number(r.pending_fees) > 0 ? <span className="text-red-500 font-semibold">{rs(r.pending_fees)}</span> : rs(0)}</td>
                 <td className="table-td"><StatusBadge status={r.fee_status || r.status} /></td>

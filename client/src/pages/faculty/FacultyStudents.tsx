@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { api } from '../../api/client';
@@ -61,7 +62,7 @@ export default function FacultyStudents() {
 
       <Section title={`${(mine.data || []).length} students`}>
         {mine.isLoading ? <Spinner /> : (
-          <Table head={['Form', 'Student', 'Grade', 'Subjects', 'Parent Mobile', 'Hours Left', 'Fee Status', 'Status']}>
+          <Table head={['Form', 'Student', 'Grade', 'Subjects', 'Parent Mobile', 'Hours Left', 'Status', '']}>
             {(mine.data || []).length === 0 ? (
               <tr><td className="table-td muted" colSpan={8}>No students assigned to you yet. Use “Add Student to me”.</td></tr>
             ) : mine.data.map((s: any) => (
@@ -70,10 +71,10 @@ export default function FacultyStudents() {
                 <td className="table-td font-medium">{s.full_name}</td>
                 <td className="table-td">{s.year_grade || '—'}</td>
                 <td className="table-td">{s.subjects || '—'}</td>
-                <td className="table-td">{s.parent_mobile || '—'}</td>
+                <td className="table-td whitespace-nowrap">{s.parent_mobile || '—'}</td>
                 <td className="table-td">{s.hours_left != null ? <HoursValue value={s.hours_left} /> : '—'}</td>
-                <td className="table-td">{s.fee_status ? <StatusBadge status={s.fee_status} /> : '—'}</td>
                 <td className="table-td"><StatusBadge status={s.status} /></td>
+                <td className="table-td"><Link to={`/faculty/student/${s.id}`} className="btn-ghost !py-1 !px-2.5 text-xs whitespace-nowrap">View →</Link></td>
               </tr>
             ))}
           </Table>

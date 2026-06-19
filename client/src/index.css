@@ -101,3 +101,13 @@ h1, h2, h3, h4, .font-display {
 
 ::-webkit-scrollbar { width: 10px; height: 10px; }
 ::-webkit-scrollbar-thumb { background: var(--color-border); border-radius: 999px; }
+
+/* sidebar scrollbar (over the navy gradient) */
+aside ::-webkit-scrollbar { width: 8px; }
+aside ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.2); }
+
+/* mobile drawer animations — slides in from the left */
+@keyframes slideInLeft { from { transform: translateX(-100%); } to { transform: translateX(0); } }
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+.animate-slide-in { animation: slideInLeft 0.25s ease-out; }
+.animate-fade-in { animation: fadeIn 0.2s ease-out; }

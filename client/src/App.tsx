@@ -15,6 +15,7 @@ import Teachers from './pages/admin/Teachers';
 import Pivots from './pages/admin/Pivots';
 import FacultyDashboard from './pages/faculty/FacultyDashboard';
 import FacultyStudents from './pages/faculty/FacultyStudents';
+import FacultyStudentDetail from './pages/faculty/FacultyStudentDetail';
 import LectureEntry from './pages/faculty/LectureEntry';
 import StudentDashboard from './pages/student/StudentDashboard';
 import LectureHistory from './pages/student/LectureHistory';
@@ -59,6 +60,7 @@ export default function App() {
       {/* Faculty */}
       <Route path="/faculty" element={<Protected roles={['faculty', 'admin']}><FacultyDashboard /></Protected>} />
       <Route path="/faculty/students" element={<Protected roles={['faculty', 'admin']}><FacultyStudents /></Protected>} />
+      <Route path="/faculty/student/:id" element={<Protected roles={['faculty', 'admin']}><FacultyStudentDetail /></Protected>} />
       <Route path="/faculty/lecture" element={<Protected roles={['faculty', 'admin']}><LectureEntry /></Protected>} />
 
       {/* Student */}

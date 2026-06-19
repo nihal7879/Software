@@ -88,6 +88,61 @@ router.get(
   })
 );
 
+// TEACHER → one of MY students: full detail (hours + lectures, NO fees).
+//   GET /teachers/me/student/:studentId?from=&to=
+router.get(
+  '/me/student/:studentId',
+  requireRole('faculty', 'admin'),
+  wrap(async (req, res) => {
+    const sid = Number(req.params.studentId);
+    const tid = await myTeacherId(req);
+    const isFaculty = req.user!.role === 'faculty';
+
+    if (isFaculty) {
+      const m = await queryOne<any>(
+        'SELECT id FROM student_teacher_mapping WHERE teacher_id = ? AND student_id = ?',
+        [tid, sid]
+      );
+      if (!m) return res.status(403).json({ error: 'Forbidden: not your student' });
+    }
+
+    // student basics + HOURS ONLY (no fee fields exposed)
+    const student = await queryOne(
+      `SELECT s.id, s.form_no, s.full_name, s.status, s.year_grade, s.exam_board, s.school_name,
+              s.student_mobile, s.parent_mobile,
+              hs.total_hours_credited, hs.total_hours_consumed, hs.hours_left, hs.last_attended_lecture
+       FROM students s LEFT JOIN student_hours_summary hs ON hs.student_id = s.id
+       WHERE s.id = ?`,
+      [sid]
+    );
+    if (!student) return res.status(404).json({ error: 'Student not found' });
+
+    const from = (req.query.from as string) || '2000-01-01';
+    const to = (req.query.to as string) || '2999-12-31';
+
+    // faculty see only the lectures THEY took with this student
+    const params: any[] = [sid, from, to];
+    let teacherFilter = '';
+    if (isFaculty) { teacherFilter = 'AND l.teacher_id = ?'; params.push(tid); }
+
+    const lectures = await query(
+      `SELECT l.session_date, l.month, l.time_in, l.time_out, a.hours_consumed AS no_of_hours,
+              t.name AS teacher_name, sub.name AS subject_name,
+              l.topic, l.subtopic, l.remark, l.venue, a.attendance_status
+       FROM lecture_attendees a
+       JOIN lecture_sessions l ON l.id = a.lecture_id
+       LEFT JOIN teachers t ON t.id = l.teacher_id
+       LEFT JOIN subjects sub ON sub.id = l.subject_id
+       WHERE a.student_id = ? AND l.session_date BETWEEN ? AND ? ${teacherFilter}
+       ORDER BY l.session_date`,
+      params
+    );
+
+    const hoursInRange = lectures.reduce((a: number, l: any) => a + Number(l.no_of_hours), 0);
+    res.json({ student, lectures, summary: { from, to, lecture_count: lectures.length, hours_in_range: Math.round(hoursInRange * 100) / 100 } });
+  })
+);
+
 // List teachers
 router.get(
   '/',

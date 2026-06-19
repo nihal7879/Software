@@ -65,7 +65,7 @@ export default function StudentsList() {
                   <td className="table-td">{s.exam_board || '—'}</td>
                   <td className="table-td">{s.school_name || '—'}</td>
                   <td className="table-td"><StatusBadge status={s.status} /></td>
-                  <td className="table-td">{s.parent_mobile || '—'}</td>
+                  <td className="table-td whitespace-nowrap">{s.parent_mobile || '—'}</td>
                 </tr>
               ))}
             </Table>

@@ -41,7 +41,7 @@ export default function Login() {
         <div className="relative z-10 max-w-md">
           <div className="inline-flex items-center gap-2 mb-8 font-display font-extrabold text-2xl">
             <span className="grid place-items-center w-11 h-11 rounded-2xl" style={{ background: '#f7a823' }}>🎓</span>
-            Tuition<span style={{ color: '#f7a823' }}>ERP</span>
+            Class<span style={{ color: '#f7a823' }}>room</span>
           </div>
           <h1 className="font-display font-extrabold text-4xl leading-tight mb-4">
             Empowering Education<br />through <span style={{ color: '#f7a823' }}>Innovation</span>
@@ -63,7 +63,7 @@ export default function Login() {
       {/* Form panel */}
       <div className="flex items-center justify-center p-6">
         <div className="w-full max-w-md">
-          <div className="lg:hidden text-2xl font-display font-extrabold mb-6" style={{ color: 'var(--color-primary)' }}>🎓 TuitionERP</div>
+          <div className="lg:hidden text-2xl font-display font-extrabold mb-6" style={{ color: 'var(--color-primary)' }}>🎓 Classroom</div>
           <h2 className="font-display text-3xl font-extrabold mb-1">Welcome back</h2>
           <p className="muted text-sm mb-8">Sign in to your dashboard</p>
 

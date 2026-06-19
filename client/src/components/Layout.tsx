@@ -1,33 +1,39 @@
 import { ReactNode, useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
+import {
+  LayoutDashboard, Users, ClipboardList, Clock, Wallet, GraduationCap, BarChart3,
+  BookOpen, CalendarDays, User, LogOut, Moon, Sun, ChevronLeft, Menu,
+} from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
 import { useTheme } from '../theme/ThemeContext';
 import { roleLabel } from './MonthSelector';
 
-const NAV: Record<string, { to: string; label: string }[]> = {
+type Item = { to: string; label: string; icon: any };
+
+const NAV: Record<string, Item[]> = {
   admin: [
-    { to: '/admin', label: 'Dashboard' },
-    { to: '/admin/students', label: 'Students' },
-    { to: '/admin/ledger', label: 'Hours Ledger' },
-    { to: '/admin/hours', label: 'Hours (Monthly)' },
-    { to: '/admin/finance', label: 'Finance' },
-    { to: '/admin/teachers', label: 'Teachers' },
-    { to: '/admin/pivots', label: 'Pivots' },
+    { to: '/admin', label: 'Dashboard', icon: LayoutDashboard },
+    { to: '/admin/students', label: 'Students', icon: Users },
+    { to: '/admin/ledger', label: 'Hours Ledger', icon: ClipboardList },
+    { to: '/admin/hours', label: 'Hours (Monthly)', icon: Clock },
+    { to: '/admin/finance', label: 'Finance', icon: Wallet },
+    { to: '/admin/teachers', label: 'Teachers', icon: GraduationCap },
+    { to: '/admin/pivots', label: 'Pivots', icon: BarChart3 },
   ],
   faculty: [
-    { to: '/faculty', label: 'Dashboard' },
-    { to: '/faculty/students', label: 'My Students' },
-    { to: '/faculty/lecture', label: 'Lecture Entry' },
+    { to: '/faculty', label: 'Dashboard', icon: LayoutDashboard },
+    { to: '/faculty/students', label: 'My Students', icon: Users },
+    { to: '/faculty/lecture', label: 'Lecture Entry', icon: BookOpen },
   ],
   student: [
-    { to: '/student', label: 'Dashboard' },
-    { to: '/student/lectures', label: 'Lecture History' },
-    { to: '/student/profile', label: 'Profile' },
+    { to: '/student', label: 'Dashboard', icon: LayoutDashboard },
+    { to: '/student/lectures', label: 'Lecture History', icon: CalendarDays },
+    { to: '/student/profile', label: 'Profile', icon: User },
   ],
   parent: [
-    { to: '/parent', label: 'Dashboard' },
-    { to: '/parent/lectures', label: 'Lectures' },
-    { to: '/parent/fees', label: 'Fees' },
+    { to: '/parent', label: 'Dashboard', icon: LayoutDashboard },
+    { to: '/parent/lectures', label: 'Lectures', icon: CalendarDays },
+    { to: '/parent/fees', label: 'Fees', icon: Wallet },
   ],
 };
 
@@ -35,75 +41,109 @@ export function Layout({ children }: { children: ReactNode }) {
   const { user, logout } = useAuth();
   const { dark, toggle } = useTheme();
   const nav = useNavigate();
-  const [open, setOpen] = useState(false); // mobile drawer
+  const [open, setOpen] = useState(false);        // mobile drawer
+  const [collapsed, setCollapsed] = useState(false); // desktop collapse
   if (!user) return null;
   const items = NAV[user.role] || [];
+  const home = items[0]?.to || '/';
+  const goHome = () => { setOpen(false); setCollapsed(false); nav(home); };
 
-  const SidebarInner = (
-    <div className="h-full flex flex-col p-5 text-white/90" style={{ background: 'linear-gradient(180deg, #1e2a6e 0%, #161f54 100%)' }}>
-      <div className="flex items-center gap-2 font-display font-extrabold text-xl mb-1 text-white">
-        <span className="grid place-items-center w-9 h-9 rounded-xl" style={{ background: 'var(--color-accent)' }}>🎓</span>
-        Tuition<span className="text-[var(--color-accent)]">ERP</span>
+  const Sidebar = ({ mini }: { mini: boolean }) => (
+    <div
+      className="h-full overflow-y-auto flex flex-col border-r"
+      style={{ background: 'var(--color-card)', borderColor: 'var(--color-border)' }}
+    >
+      {/* Brand — click to open dashboard (and expand if collapsed) */}
+      <div className={`flex items-center gap-2.5 px-4 py-4 shrink-0 ${mini ? 'justify-center' : ''}`}>
+        <button onClick={goHome} title="Go to dashboard"
+          className="grid place-items-center w-10 h-10 rounded-xl text-white font-extrabold shrink-0 hover:opacity-90 transition"
+          style={{ background: 'linear-gradient(135deg,#2a3a8f,#6d83f2)' }}>🎓</button>
+        {!mini && (
+          <button onClick={goHome} className="flex-1 min-w-0 text-left" title="Go to dashboard">
+            <div className="font-display font-extrabold leading-tight truncate">Class<span style={{ color: 'var(--color-primary)' }}>room</span></div>
+            <div className="text-[10px] uppercase tracking-[0.15em] muted truncate">Institute Management</div>
+          </button>
+        )}
+        {!mini && (
+          <button className="hidden md:grid place-items-center w-7 h-7 rounded-lg hover:bg-[var(--color-card-alt)]" onClick={() => setCollapsed(true)} title="Collapse">
+            <ChevronLeft size={18} className="muted" />
+          </button>
+        )}
       </div>
-      <div className="text-[11px] uppercase tracking-wider text-white/40 mb-6 ml-1">Institute Management</div>
 
-      <nav className="flex flex-col gap-1 flex-1 overflow-y-auto">
-        {items.map((it) => (
-          <NavLink
-            key={it.to}
-            to={it.to}
-            end={it.to.split('/').length <= 2}
-            onClick={() => setOpen(false)}
-            className={({ isActive }) =>
-              `relative px-3.5 py-2.5 rounded-xl text-sm font-semibold transition-all ${
-                isActive ? 'bg-white/10 text-white' : 'text-white/60 hover:text-white hover:bg-white/5'
-              }`
-            }
-          >
-            {({ isActive }) => (
-              <>
-                {isActive && <span className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-1 rounded-full" style={{ background: 'var(--color-accent)' }} />}
-                {it.label}
-              </>
-            )}
-          </NavLink>
-        ))}
+      {/* Nav */}
+      <nav className="flex flex-col gap-1 px-3 shrink-0">
+        {items.map((it) => {
+          const Icon = it.icon;
+          return (
+            <NavLink
+              key={it.to}
+              to={it.to}
+              end={it.to.split('/').length <= 2}
+              onClick={() => setOpen(false)}
+              title={mini ? it.label : ''}
+              className={({ isActive }) =>
+                `flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition-colors ${mini ? 'justify-center' : ''} ${
+                  isActive ? '' : 'muted hover:bg-[var(--color-card-alt)]'
+                }`
+              }
+              style={({ isActive }: any) => (isActive ? { background: 'var(--color-card-alt)', color: 'var(--color-primary)' } : {})}
+            >
+              <Icon size={19} className="shrink-0" />
+              {!mini && <span className="truncate">{it.label}</span>}
+            </NavLink>
+          );
+        })}
       </nav>
 
-      <div className="rounded-xl bg-white/5 p-3 mb-3">
-        <div className="text-[11px] uppercase tracking-wide text-white/40">{roleLabel(user.role)}</div>
-        <div className="text-sm font-semibold truncate text-white">{user.displayName || user.email}</div>
-      </div>
-      <div className="flex gap-2">
-        <button className="flex-1 rounded-xl px-3 py-2 text-sm font-semibold bg-white/10 hover:bg-white/20 transition" onClick={toggle}>
-          {dark ? '☀️ Light' : '🌙 Dark'}
-        </button>
-        <button className="flex-1 rounded-xl px-3 py-2 text-sm font-semibold bg-white/10 hover:bg-white/20 transition" onClick={() => { logout(); nav('/login'); }}>
-          Logout
-        </button>
+      {/* Footer */}
+      <div className={`mt-auto p-3 shrink-0 ${mini ? 'px-2' : ''}`}>
+        {!mini && (
+          <div className="rounded-xl p-3 mb-2" style={{ background: 'var(--color-card-alt)' }}>
+            <div className="text-[10px] uppercase tracking-wide muted">{roleLabel(user.role)}</div>
+            <div className="text-sm font-semibold truncate">{user.displayName || user.email}</div>
+          </div>
+        )}
+        <div className={`flex gap-2 ${mini ? 'flex-col' : ''}`}>
+          <button className="btn-ghost flex-1 !px-2 grid place-items-center" onClick={toggle} title="Toggle theme">
+            {dark ? <Sun size={16} /> : <Moon size={16} />}
+          </button>
+          <button className="btn-ghost flex-1 !px-2 grid place-items-center" onClick={() => { logout(); nav('/login'); }} title="Logout">
+            <LogOut size={16} />
+          </button>
+          {mini && (
+            <button className="btn-ghost flex-1 !px-2 grid place-items-center" onClick={() => setCollapsed(false)} title="Expand">
+              <Menu size={16} />
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );
 
   return (
     <div className="min-h-screen flex">
-      {/* Desktop sidebar — sticky, full height, nav scrolls independently */}
-      <aside className="hidden md:block w-64 shrink-0 sticky top-0 h-screen">{SidebarInner}</aside>
+      {/* Desktop sidebar */}
+      <aside className={`hidden md:block shrink-0 sticky top-0 h-screen overflow-hidden transition-[width] duration-200 ${collapsed ? 'w-20' : 'w-64'}`}>
+        <Sidebar mini={collapsed} />
+      </aside>
 
-      {/* Mobile drawer */}
+      {/* Mobile drawer — slides in from left */}
       {open && (
         <div className="fixed inset-0 z-50 md:hidden" onClick={() => setOpen(false)}>
-          <div className="absolute inset-0 bg-black/50" />
-          <div className="absolute left-0 top-0 h-full w-64" onClick={(e) => e.stopPropagation()}>{SidebarInner}</div>
+          <div className="absolute inset-0 bg-black/40 animate-fade-in" />
+          <div className="absolute left-0 top-0 h-full w-64 animate-slide-in" onClick={(e) => e.stopPropagation()}>
+            <Sidebar mini={false} />
+          </div>
         </div>
       )}
 
       <div className="flex-1 min-w-0 flex flex-col">
         {/* Mobile top bar */}
         <header className="md:hidden flex items-center justify-between p-4 border-b sticky top-0 z-30" style={{ background: 'var(--color-card)', borderColor: 'var(--color-border)' }}>
-          <button className="text-2xl leading-none" onClick={() => setOpen(true)} aria-label="Open menu">☰</button>
-          <span className="font-display font-extrabold" style={{ color: 'var(--color-primary)' }}>🎓 TuitionERP</span>
-          <button className="text-lg" onClick={toggle}>{dark ? '☀️' : '🌙'}</button>
+          <button onClick={() => setOpen(true)} aria-label="Open menu"><Menu /></button>
+          <span className="font-display font-extrabold" style={{ color: 'var(--color-primary)' }}>🎓 Classroom</span>
+          <button onClick={toggle}>{dark ? <Sun size={20} /> : <Moon size={20} />}</button>
         </header>
 
         <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-[1440px] w-full">{children}</main>
