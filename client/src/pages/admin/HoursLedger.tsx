@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { api, aed } from '../../api/client';
+import { api, rs } from '../../api/client';
 import { Section, StatusBadge, Table, HoursValue, Spinner } from '../../components/ui';
 
 export default function HoursLedger() {
@@ -25,9 +25,9 @@ export default function HoursLedger() {
               <td className="table-td">{Number(r.adjusted_hours).toFixed(1)}</td>
               <td className="table-td">{Number(r.total_hours_consumed).toFixed(1)}</td>
               <td className="table-td"><HoursValue value={r.hours_left} /></td>
-              <td className="table-td">{aed(r.rate_per_hour)}</td>
-              <td className="table-td">{aed(r.pending_fees)}</td>
-              <td className="table-td">{aed(r.extra_amount_left)}</td>
+              <td className="table-td">{rs(r.rate_per_hour)}</td>
+              <td className="table-td">{rs(r.pending_fees)}</td>
+              <td className="table-td">{rs(r.extra_amount_left)}</td>
               <td className="table-td"><StatusBadge status={r.fee_status} /></td>
               <td className="table-td">{r.last_attended_lecture || '—'}</td>
             </tr>

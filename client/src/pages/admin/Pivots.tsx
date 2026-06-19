@@ -51,7 +51,7 @@ export default function Pivots() {
     <div className="space-y-6">
       <h1 className="text-2xl font-bold">Pivots</h1>
 
-      <Section title="Finance Pivot — Revenue (AED) × Student × Month">
+      <Section title="Finance Pivot — Revenue (₹) × Student × Month">
         {finance.isLoading ? <Spinner /> :
           <PivotTable rows={finance.data.rows} months={finance.data.months} valueKey="amount" fmt={(n) => n.toLocaleString()} />}
       </Section>

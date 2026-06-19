@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../auth/AuthContext';
-import { api, aed, hrs } from '../../api/client';
+import { api, rs, hrs } from '../../api/client';
 import { KpiCard, Section, StatusBadge, Table, HoursValue, Spinner } from '../../components/ui';
 
 export default function ParentDashboard() {
@@ -32,7 +32,7 @@ export default function ParentDashboard() {
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
         <KpiCard label="Hours Remaining" value={<HoursValue value={l.hours_left} />} accent={Number(l.hours_left) < 0 ? 'red' : 'emerald'} />
         <KpiCard label="Consumed" value={hrs(l.total_hours_consumed)} accent="indigo" />
-        <KpiCard label="Pending Fees" value={aed(l.pending_fees)} accent="red" />
+        <KpiCard label="Pending Fees" value={rs(l.pending_fees)} accent="red" />
         <KpiCard label="Attendance" value={`${attended}/${totalLec}`} accent="blue" />
         <KpiCard label="Teachers" value={(teachers.data || []).length} accent="emerald" />
       </div>
@@ -60,7 +60,7 @@ export default function ParentDashboard() {
                 <tr key={r.id}>
                   <td className="table-td">{r.session_date}</td>
                   <td className="table-td">{r.subject_name || '—'}</td>
-                  <td className="table-td">{r.topic_remark || '—'}</td>
+                  <td className="table-td">{r.topic || '—'}</td>
                   <td className="table-td">{hrs(r.hours_consumed)}</td>
                 </tr>
               ))}

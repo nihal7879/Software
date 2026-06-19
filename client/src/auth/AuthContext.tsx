@@ -8,12 +8,14 @@ export interface AuthUser {
   email: string;
   displayName?: string;
   studentId?: number | null;
+  teacherId?: number | null;
 }
 
 interface AuthCtx {
   user: AuthUser | null;
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
+  register: (payload: any) => Promise<void>;
   logout: () => void;
 }
 
@@ -40,11 +42,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(r.data.user);
   };
 
+  const register = async (payload: any) => {
+    const r = await api.post('/auth/register', payload);
+    localStorage.setItem('token', r.data.token);
+    setUser(r.data.user);
+  };
+
   const logout = () => {
     localStorage.removeItem('token');
     setUser(null);
     location.href = '/login';
   };
 
-  return <Ctx.Provider value={{ user, loading, login, logout }}>{children}</Ctx.Provider>;
+  return <Ctx.Provider value={{ user, loading, login, register, logout }}>{children}</Ctx.Provider>;
 }

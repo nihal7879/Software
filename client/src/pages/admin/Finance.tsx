@@ -1,14 +1,16 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
-import { api, aed } from '../../api/client';
+import { api, rs } from '../../api/client';
 import { Section, Table, Spinner } from '../../components/ui';
+import { MonthSelector } from '../../components/MonthSelector';
 
 export default function Finance() {
   const qc = useQueryClient();
   const [drawer, setDrawer] = useState(false);
+  const [month, setMonth] = useState('');
 
-  const tx = useQuery({ queryKey: ['transactions'], queryFn: () => api.get('/fees/transactions').then((r) => r.data.data) });
+  const tx = useQuery({ queryKey: ['transactions', month], queryFn: () => api.get('/fees/transactions', { params: { month } }).then((r) => r.data.data) });
   const students = useQuery({ queryKey: ['students-all'], queryFn: () => api.get('/students', { params: { limit: 100 } }).then((r) => r.data.data) });
 
   const { register, handleSubmit, reset } = useForm();
@@ -24,12 +26,15 @@ export default function Finance() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-bold">Finance Tracker</h1>
-        <button className="btn-primary" onClick={() => setDrawer(true)}>+ Record Payment</button>
+        <div className="flex items-center gap-2">
+          <MonthSelector value={month} onChange={setMonth} />
+          <button className="btn-primary" onClick={() => setDrawer(true)}>+ Record Payment</button>
+        </div>
       </div>
 
-      <Section title="Fee Transactions (AED)">
+      <Section title={`Fee Transactions (₹)${month ? ` · ${month}` : ''}`}>
         {tx.isLoading ? <Spinner /> : (
           <Table head={['Date', 'Form', 'Student', 'Amount', 'Source', 'Reference', 'Parent', 'Pkg Hrs', 'Notes']}>
             {tx.data.map((t: any) => (
@@ -37,7 +42,7 @@ export default function Finance() {
                 <td className="table-td">{t.payment_date}</td>
                 <td className="table-td font-mono">{t.form_no}</td>
                 <td className="table-td font-medium">{t.student_name}</td>
-                <td className="table-td font-semibold text-emerald-600">{aed(t.amount)}</td>
+                <td className="table-td font-semibold text-emerald-600">{rs(t.amount)}</td>
                 <td className="table-td">{t.payment_source || '—'}</td>
                 <td className="table-td font-mono text-xs">{t.transaction_reference || '—'}</td>
                 <td className="table-td">{t.parent_name || '—'}</td>
@@ -62,7 +67,7 @@ export default function Finance() {
                 </select>
               </div>
               {[
-                ['amount', 'Amount (AED) *'],
+                ['amount', 'Amount (₹) *'],
                 ['payment_date', 'Payment Date * (YYYY-MM-DD)'],
                 ['payment_source', 'Payment Source'],
                 ['transaction_reference', 'Transaction Reference'],

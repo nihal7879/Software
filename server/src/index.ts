@@ -9,6 +9,7 @@ import lectureRoutes from './routes/lectures';
 import feeRoutes from './routes/fees';
 import teacherRoutes from './routes/teachers';
 import analyticsRoutes from './routes/analytics';
+import managementRoutes from './routes/management';
 
 const app = express();
 
@@ -23,6 +24,7 @@ app.use('/api/lectures', lectureRoutes);
 app.use('/api/fees', feeRoutes);
 app.use('/api/teachers', teacherRoutes);
 app.use('/api/analytics', analyticsRoutes);
+app.use('/api/management', managementRoutes);
 
 app.use(notFound);
 app.use(errorHandler);

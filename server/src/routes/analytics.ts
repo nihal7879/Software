@@ -4,7 +4,8 @@ import { requireAuth, requireRole } from '../middleware/auth';
 import { wrap } from '../middleware/error';
 
 const router = Router();
-router.use(requireAuth, requireRole('admin', 'faculty'));
+// Institute-wide analytics are Management-only. Faculty use /teachers/me instead.
+router.use(requireAuth, requireRole('admin'));
 
 // Management dashboard KPIs
 router.get(
@@ -48,12 +49,14 @@ router.get(
   '/students-breakdown',
   wrap(async (_req, res) => {
     const byGrade = await query(
-      `SELECT COALESCE(year_grade,'Unknown') AS label, COUNT(*) AS value
-       FROM students GROUP BY year_grade ORDER BY label`
+      `SELECT year_grade AS label, COUNT(*) AS value
+       FROM students WHERE year_grade IS NOT NULL AND year_grade <> ''
+       GROUP BY year_grade ORDER BY label`
     );
     const byBoard = await query(
-      `SELECT COALESCE(exam_board,'Unknown') AS label, COUNT(*) AS value
-       FROM students GROUP BY exam_board ORDER BY value DESC`
+      `SELECT exam_board AS label, COUNT(*) AS value
+       FROM students WHERE exam_board IS NOT NULL AND exam_board <> ''
+       GROUP BY exam_board ORDER BY value DESC`
     );
     res.json({ byGrade, byBoard });
   })

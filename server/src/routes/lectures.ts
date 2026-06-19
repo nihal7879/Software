@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import { Router, Request } from 'express';
 import { z } from 'zod';
 import { pool, query, queryOne } from '../db';
 import { requireAuth, requireRole } from '../middleware/auth';
@@ -9,6 +9,12 @@ import { audit } from '../utils/audit';
 const router = Router();
 router.use(requireAuth);
 
+async function myTeacherId(req: Request): Promise<number | null> {
+  if (req.user?.teacherId) return req.user.teacherId;
+  const t = await queryOne<any>('SELECT id FROM teachers WHERE user_id = ?', [req.user!.userId]);
+  return t?.id ?? null;
+}
+
 const lectureSchema = z.object({
   session_date: z.string(),
   teacher_id: z.number().int().nullable().optional(),
@@ -16,7 +22,9 @@ const lectureSchema = z.object({
   time_in: z.string().optional().nullable(),
   time_out: z.string().optional().nullable(),
   total_hours: z.number().optional(),
-  topic_remark: z.string().optional().nullable(),
+  topic: z.string().optional().nullable(),
+  subtopic: z.string().optional().nullable(),
+  remark: z.string().optional().nullable(),
   venue: z.string().optional().nullable(),
   meeting_link: z.string().optional().nullable(),
   branch_id: z.number().int().optional().nullable(),
@@ -35,7 +43,7 @@ const lectureSchema = z.object({
     .min(1),
 });
 
-// LIST lectures — supports ?studentId=  (students/parents see their own only)
+// LIST lectures — supports ?studentId=, ?month=YYYY-MM, ?from=&to= (date range)
 router.get(
   '/',
   wrap(async (req, res) => {
@@ -44,26 +52,33 @@ router.get(
     if ((u.role === 'student' || u.role === 'parent')) {
       studentId = u.studentId ?? -1; // force own scope
     }
+    const where: string[] = [];
     const params: any[] = [];
-    let joinFilter = '';
-    if (studentId) {
-      joinFilter = 'WHERE a.student_id = ?';
-      params.push(studentId);
+    if (studentId) { where.push('a.student_id = ?'); params.push(studentId); }
+    // Faculty only ever see their own lectures.
+    if (u.role === 'faculty') {
+      const tid = await myTeacherId(req);
+      where.push('l.teacher_id = ?'); params.push(tid ?? -1);
     }
+    if (req.query.month) { where.push('l.month = ?'); params.push(req.query.month); }
+    if (req.query.from) { where.push('l.session_date >= ?'); params.push(req.query.from); }
+    if (req.query.to) { where.push('l.session_date <= ?'); params.push(req.query.to); }
+    const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
+
     const rows = await query(
       `SELECT l.id, l.session_date, l.month, l.time_in, l.time_out, l.total_hours,
-              l.hours_rounded, l.topic_remark, l.venue, l.meeting_link,
+              l.hours_rounded, l.topic, l.subtopic, l.remark, l.venue, l.meeting_link,
               t.name AS teacher_name, sub.name AS subject_name,
-              a.student_id, s.full_name AS student_name, a.hours_consumed,
+              a.student_id, s.form_no, s.full_name AS student_name, a.hours_consumed,
               a.attendance_status, a.homework, a.notes, a.performance_rating
        FROM lecture_sessions l
        JOIN lecture_attendees a ON a.lecture_id = l.id
        JOIN students s ON s.id = a.student_id
        LEFT JOIN teachers t ON t.id = l.teacher_id
        LEFT JOIN subjects sub ON sub.id = l.subject_id
-       ${joinFilter}
+       ${whereSql}
        ORDER BY l.session_date DESC, l.id DESC
-       LIMIT 500`,
+       LIMIT 1000`,
       params
     );
     res.json({ data: rows });
@@ -77,6 +92,12 @@ router.post(
   requireRole('admin', 'faculty'),
   wrap(async (req, res) => {
     const b = lectureSchema.parse(req.body);
+    // Faculty can only log lectures under their own teacher id.
+    let teacherId = b.teacher_id ?? null;
+    if (req.user!.role === 'faculty') {
+      teacherId = await myTeacherId(req);
+      if (!teacherId) return res.status(403).json({ error: 'No teacher record linked to this account' });
+    }
     let totalHours = b.total_hours;
     if (totalHours == null && b.time_in && b.time_out) {
       totalHours = timeToDecimalHours(b.time_in, b.time_out);
@@ -89,13 +110,13 @@ router.post(
       await conn.beginTransaction();
       const [r]: any = await conn.query(
         `INSERT INTO lecture_sessions
-          (session_date,month,teacher_id,subject_id,time_in,time_out,total_hours,hours_rounded,topic_remark,venue,meeting_link,branch_id,created_by)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+          (session_date,month,teacher_id,subject_id,time_in,time_out,total_hours,hours_rounded,topic,subtopic,remark,venue,meeting_link,branch_id,created_by)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         [
-          b.session_date, month, b.teacher_id ?? null, b.subject_id ?? null,
+          b.session_date, month, teacherId, b.subject_id ?? null,
           b.time_in || null, b.time_out || null, totalHours, Math.round(totalHours * 2) / 2,
-          b.topic_remark || null, b.venue || null, b.meeting_link || null,
-          b.branch_id ?? null, req.user!.userId,
+          b.topic || null, b.subtopic || null, b.remark || null, b.venue || null,
+          b.meeting_link || null, b.branch_id ?? null, req.user!.userId,
         ]
       );
       const lectureId = r.insertId;

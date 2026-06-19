@@ -4,9 +4,12 @@ import { Layout } from './components/Layout';
 import { Spinner } from './components/ui';
 
 import Login from './pages/Login';
+import Register from './pages/Register';
 import AdminDashboard from './pages/admin/AdminDashboard';
-import StudentsList from './pages/admin/StudentsList';
+import ManagementStudents from './pages/admin/ManagementStudents';
+import StudentReport from './pages/admin/StudentReport';
 import HoursLedger from './pages/admin/HoursLedger';
+import HoursMonthly from './pages/admin/HoursMonthly';
 import Finance from './pages/admin/Finance';
 import Teachers from './pages/admin/Teachers';
 import Pivots from './pages/admin/Pivots';
@@ -41,11 +44,14 @@ export default function App() {
   return (
     <Routes>
       <Route path="/login" element={user ? <Navigate to={HOME[user.role]} replace /> : <Login />} />
+      <Route path="/register" element={user ? <Navigate to={HOME[user.role]} replace /> : <Register />} />
 
-      {/* Admin */}
+      {/* Management (admin role) */}
       <Route path="/admin" element={<Protected roles={['admin']}><AdminDashboard /></Protected>} />
-      <Route path="/admin/students" element={<Protected roles={['admin', 'faculty']}><StudentsList /></Protected>} />
+      <Route path="/admin/students" element={<Protected roles={['admin']}><ManagementStudents /></Protected>} />
+      <Route path="/admin/student/:id" element={<Protected roles={['admin']}><StudentReport /></Protected>} />
       <Route path="/admin/ledger" element={<Protected roles={['admin', 'faculty']}><HoursLedger /></Protected>} />
+      <Route path="/admin/hours" element={<Protected roles={['admin']}><HoursMonthly /></Protected>} />
       <Route path="/admin/finance" element={<Protected roles={['admin']}><Finance /></Protected>} />
       <Route path="/admin/teachers" element={<Protected roles={['admin']}><Teachers /></Protected>} />
       <Route path="/admin/pivots" element={<Protected roles={['admin']}><Pivots /></Protected>} />
@@ -58,7 +64,6 @@ export default function App() {
       {/* Student */}
       <Route path="/student" element={<Protected roles={['student']}><StudentDashboard /></Protected>} />
       <Route path="/student/lectures" element={<Protected roles={['student']}><LectureHistory /></Protected>} />
-      <Route path="/student/fees" element={<Protected roles={['student']}><StudentFees /></Protected>} />
       <Route path="/student/profile" element={<Protected roles={['student']}><StudentProfile /></Protected>} />
 
       {/* Parent */}

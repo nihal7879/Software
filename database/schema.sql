@@ -62,6 +62,8 @@ CREATE TABLE students (
   extra_mobile    VARCHAR(40),
   fees_received   DECIMAL(10,2) DEFAULT 0,
   form_received   BOOLEAN NOT NULL DEFAULT FALSE,
+  profile_completed    BOOLEAN NOT NULL DEFAULT FALSE,  -- student submitted their profile
+  profile_submitted_at DATETIME NULL,
   user_id         INT,
   branch_id       INT,
   created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -142,7 +144,10 @@ CREATE TABLE lecture_sessions (
   time_out      TIME,
   total_hours   DECIMAL(6,2) DEFAULT 0,   -- auto = time_out - time_in (decimal)
   hours_rounded DECIMAL(6,2) DEFAULT 0,
-  topic_remark  VARCHAR(255),
+
+  topic         VARCHAR(255),             -- main topic
+  subtopic      VARCHAR(255),             -- sub-topic under the topic
+  remark        VARCHAR(400),             -- separate teacher remark
   venue         VARCHAR(80),              -- JLT, Online, Oud Metha...
   meeting_link  VARCHAR(400),            -- Google Meet / Zoom / recording
   branch_id     INT,

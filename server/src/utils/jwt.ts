@@ -7,7 +7,8 @@ export interface JwtPayload {
   userId: number;
   role: Role;
   email: string;
-  studentId?: number | null; // for student/parent scoping
+  studentId?: number | null;  // for student/parent scoping
+  teacherId?: number | null;  // for faculty scoping
 }
 
 export function signToken(payload: JwtPayload): string {

@@ -1,8 +1,9 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 
 const DEMO = [
-  ['Admin', 'admin@tuition.ae'],
+  ['Management', 'admin@tuition.ae'],
   ['Faculty', 'sachin@tuition.ae'],
   ['Student', 'sofia@tuition.ae'],
   ['Parent', 'zelia@tuition.ae'],
@@ -10,8 +11,8 @@ const DEMO = [
 
 export default function Login() {
   const { login } = useAuth();
-  const [email, setEmail] = useState('admin@tuition.ae');
-  const [password, setPassword] = useState('password123');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
@@ -66,18 +67,27 @@ export default function Login() {
           <h2 className="font-display text-3xl font-extrabold mb-1">Welcome back</h2>
           <p className="muted text-sm mb-8">Sign in to your dashboard</p>
 
-          <form onSubmit={submit} className="space-y-4">
+          <form onSubmit={submit} className="space-y-4" autoComplete="off">
             <div>
               <label className="text-sm font-semibold">Email</label>
-              <input className="input mt-1.5" value={email} onChange={(e) => setEmail(e.target.value)} />
+              <input className="input mt-1.5" type="email" placeholder="Enter email" autoComplete="off"
+                value={email} onChange={(e) => setEmail(e.target.value)} />
             </div>
             <div>
               <label className="text-sm font-semibold">Password</label>
-              <input className="input mt-1.5" type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
+              <input className="input mt-1.5" type="password" placeholder="Enter password" autoComplete="new-password"
+                value={password} onChange={(e) => setPassword(e.target.value)} />
             </div>
             {error && <div className="text-sm text-red-500 font-medium">{error}</div>}
             <button className="btn-primary w-full !py-3" disabled={busy}>{busy ? 'Signing in…' : 'Sign in →'}</button>
           </form>
+
+          <div className="mt-5 text-sm">
+            New here?{' '}
+            <Link to="/register" className="font-semibold" style={{ color: 'var(--color-primary)' }}>
+              Register →
+            </Link>
+          </div>
 
           <div className="mt-8 text-xs muted">
             <div className="mb-2 font-semibold">Demo accounts · password <code className="px-1.5 py-0.5 rounded bg-[var(--color-card-alt)]">password123</code></div>

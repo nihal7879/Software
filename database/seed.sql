@@ -107,7 +107,7 @@ INSERT INTO ledger_adjustments (student_id, amount_credited, pending_fees, extra
 
 -- Summarising consumption rows (back-fill of historical totals) --------------
 -- Akanksha 219.5, Dhanvir 272.5, Aadam 71.8, Nikita 219.5, Kartik 158.1, Bora 10.5
-INSERT INTO lecture_sessions (session_date, month, teacher_id, subject_id, total_hours, hours_rounded, topic_remark, venue, created_by) VALUES
+INSERT INTO lecture_sessions (session_date, month, teacher_id, subject_id, total_hours, hours_rounded, topic, venue, created_by) VALUES
   ('2026-04-01','2026-04',(SELECT id FROM teachers WHERE name='Krishna Wadhvani'),(SELECT id FROM subjects WHERE name='Chemistry'),219.5,219.5,'Historical consumption back-fill','JLT',1),
   ('2026-04-20','2026-04',(SELECT id FROM teachers WHERE name='Krishna Wadhvani'),(SELECT id FROM subjects WHERE name='Chemistry'),272.5,272.5,'Historical consumption back-fill','JLT',1),
   ('2026-05-14','2026-05',(SELECT id FROM teachers WHERE name='Krishna Wadhvani'),(SELECT id FROM subjects WHERE name='Chemistry'),71.8,71.8,'Historical consumption back-fill','JLT',1),
@@ -116,7 +116,7 @@ INSERT INTO lecture_sessions (session_date, month, teacher_id, subject_id, total
   ('2026-02-06','2026-02',(SELECT id FROM teachers WHERE name='Prabhu Paul'),(SELECT id FROM subjects WHERE name='Chemistry'),10.5,10.5,'Historical consumption back-fill','JLT',1);
 
 INSERT INTO lecture_attendees (lecture_id, student_id, hours_consumed) VALUES
-  ((SELECT id FROM lecture_sessions WHERE topic_remark='Historical consumption back-fill' AND total_hours=219.5 AND month='2026-04'),(SELECT id FROM students WHERE form_no='1'),219.5),
+  ((SELECT id FROM lecture_sessions WHERE topic='Historical consumption back-fill' AND total_hours=219.5 AND month='2026-04'),(SELECT id FROM students WHERE form_no='1'),219.5),
   ((SELECT id FROM lecture_sessions WHERE total_hours=272.5),(SELECT id FROM students WHERE form_no='2'),272.5),
   ((SELECT id FROM lecture_sessions WHERE total_hours=71.8),(SELECT id FROM students WHERE form_no='3'),71.8),
   ((SELECT id FROM lecture_sessions WHERE total_hours=219.5 AND month='2026-05'),(SELECT id FROM students WHERE form_no='4'),219.5),
@@ -124,22 +124,22 @@ INSERT INTO lecture_attendees (lecture_id, student_id, hours_consumed) VALUES
   ((SELECT id FROM lecture_sessions WHERE total_hours=10.5),(SELECT id FROM students WHERE form_no='6'),10.5);
 
 -- A few real detailed Sofia (form 20) lectures -------------------------------
-INSERT INTO lecture_sessions (session_date, month, teacher_id, subject_id, time_in, time_out, total_hours, hours_rounded, topic_remark, venue, created_by) VALUES
+INSERT INTO lecture_sessions (session_date, month, teacher_id, subject_id, time_in, time_out, total_hours, hours_rounded, topic, venue, created_by) VALUES
   ('2026-05-29','2026-05',(SELECT id FROM teachers WHERE name='Sachin Chawan'),(SELECT id FROM subjects WHERE name='Chemistry'),'12:00:00','15:00:00',3.0,3,'Revision marathon','JLT',2),
   ('2026-05-30','2026-05',(SELECT id FROM teachers WHERE name='Sachin Chawan'),(SELECT id FROM subjects WHERE name='Chemistry'),'14:30:00','18:00:00',3.5,3.5,'Mock paper','JLT',2),
   ('2026-06-01','2026-06',(SELECT id FROM teachers WHERE name='Sachin Chawan'),(SELECT id FROM subjects WHERE name='Chemistry'),'10:30:00','16:00:00',5.5,5.5,'Final prep','JLT',2);
 
 INSERT INTO lecture_attendees (lecture_id, student_id, hours_consumed) VALUES
-  ((SELECT id FROM lecture_sessions WHERE topic_remark='Revision marathon'),(SELECT id FROM students WHERE form_no='20'),3.0),
-  ((SELECT id FROM lecture_sessions WHERE topic_remark='Mock paper'),(SELECT id FROM students WHERE form_no='20'),3.5),
-  ((SELECT id FROM lecture_sessions WHERE topic_remark='Final prep'),(SELECT id FROM students WHERE form_no='20'),5.5);
+  ((SELECT id FROM lecture_sessions WHERE topic='Revision marathon'),(SELECT id FROM students WHERE form_no='20'),3.0),
+  ((SELECT id FROM lecture_sessions WHERE topic='Mock paper'),(SELECT id FROM students WHERE form_no='20'),3.5),
+  ((SELECT id FROM lecture_sessions WHERE topic='Final prep'),(SELECT id FROM students WHERE form_no='20'),5.5);
 
 -- A GROUP lecture: one session, multiple attendees ---------------------------
-INSERT INTO lecture_sessions (session_date, month, teacher_id, subject_id, time_in, time_out, total_hours, hours_rounded, topic_remark, venue, created_by)
+INSERT INTO lecture_sessions (session_date, month, teacher_id, subject_id, time_in, time_out, total_hours, hours_rounded, topic, venue, created_by)
 VALUES ('2026-06-09','2026-06',(SELECT id FROM teachers WHERE name='Krishna Wadhvani'),(SELECT id FROM subjects WHERE name='Chemistry'),'17:00:00','19:00:00',2.0,2,'Born Haber cycle (group)','JLT',1);
 INSERT INTO lecture_attendees (lecture_id, student_id, hours_consumed) VALUES
-  ((SELECT id FROM lecture_sessions WHERE topic_remark='Born Haber cycle (group)'),(SELECT id FROM students WHERE form_no='3'),2.0),
-  ((SELECT id FROM lecture_sessions WHERE topic_remark='Born Haber cycle (group)'),(SELECT id FROM students WHERE form_no='4'),2.0);
+  ((SELECT id FROM lecture_sessions WHERE topic='Born Haber cycle (group)'),(SELECT id FROM students WHERE form_no='3'),2.0),
+  ((SELECT id FROM lecture_sessions WHERE topic='Born Haber cycle (group)'),(SELECT id FROM students WHERE form_no='4'),2.0);
 
 -- Fee transactions (Total Fees) ----------------------------------------------
 INSERT INTO fee_transactions (student_id, parent_name, amount, payment_date, month, transaction_reference, payment_source, course_package_hours, notes, created_by) VALUES
@@ -147,3 +147,6 @@ INSERT INTO fee_transactions (student_id, parent_name, amount, payment_date, mon
   ((SELECT id FROM students WHERE form_no='20'),'Zelia Campos Dionisio', 150,'2026-06-10','2026-06','AEXXXXXXXXX','MASHQ Inward Remittance',30,'Package of 30 hours, 25.5 already completed.',1),
   ((SELECT id FROM students WHERE form_no='2'), 'Rajiv Ramesh Thakur', 500,'2026-06-06','2026-06','AEXXXXXXXXX','MASHQ FUND TRANSFER',NULL,'Tuition fees for June.',1),
   ((SELECT id FROM students WHERE form_no='3'), 'Ankit Goyal', 420,'2026-06-04','2026-06','AEXXXXXXX','MASHQ Inward Remittance',30,'Record of sessions; 4.8 additional hours after initial package. Renew 30 hours.',1);
+
+-- Seeded students already have full details → mark their profiles complete.
+UPDATE students SET profile_completed = TRUE;

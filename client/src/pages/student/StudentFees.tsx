@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '../../auth/AuthContext';
-import { api, aed, hrs } from '../../api/client';
+import { api, rs, hrs } from '../../api/client';
 import { KpiCard, Section, StatusBadge, Table, HoursValue, Spinner } from '../../components/ui';
 
 // Shared by student & parent. Parent additionally sees a (disabled) Pay Now button.
@@ -22,9 +22,9 @@ export default function StudentFees() {
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <KpiCard label="Hours Remaining" value={<HoursValue value={l.hours_left} />} accent={Number(l.hours_left) < 0 ? 'red' : 'emerald'} />
-        <KpiCard label="Pending Fees" value={aed(l.pending_fees)} accent="red" />
-        <KpiCard label="Extra Credit" value={aed(l.extra_amount_left)} accent="purple" />
-        <KpiCard label="Rate / Hour" value={aed(l.rate_per_hour)} accent="orange" />
+        <KpiCard label="Pending Fees" value={rs(l.pending_fees)} accent="red" />
+        <KpiCard label="Extra Credit" value={rs(l.extra_amount_left)} accent="purple" />
+        <KpiCard label="Rate / Hour" value={rs(l.rate_per_hour)} accent="orange" />
       </div>
 
       <div className="flex items-center gap-3">
@@ -49,7 +49,7 @@ export default function StudentFees() {
                 <td className="table-td">{hrs(p.package_hours)}</td>
                 <td className="table-td">{hrs(p.discount_hours)}</td>
                 <td className="table-td">{hrs(p.adjusted_hours)}</td>
-                <td className="table-td">{aed(p.rate_per_hour)}</td>
+                <td className="table-td">{rs(p.rate_per_hour)}</td>
                 <td className="table-td">{p.is_active ? 'Yes' : 'No'}</td>
               </tr>
             ))}
@@ -63,7 +63,7 @@ export default function StudentFees() {
             {(tx.data || []).map((t: any) => (
               <tr key={t.id}>
                 <td className="table-td">{t.payment_date}</td>
-                <td className="table-td font-semibold text-emerald-600">{aed(t.amount)}</td>
+                <td className="table-td font-semibold text-emerald-600">{rs(t.amount)}</td>
                 <td className="table-td">{t.payment_source || '—'}</td>
                 <td className="table-td font-mono text-xs">{t.transaction_reference || '—'}</td>
                 <td className="table-td max-w-[260px] truncate" title={t.notes}>{t.notes || '—'}</td>

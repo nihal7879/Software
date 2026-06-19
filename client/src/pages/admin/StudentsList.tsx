@@ -101,7 +101,7 @@ export default function StudentsList() {
                 ['nationality', 'Nationality'],
                 ['student_mobile', 'Student Mobile'],
                 ['parent_mobile', 'Parent Mobile'],
-                ['fees_received', 'Fees Received (AED)'],
+                ['fees_received', 'Fees Received (₹)'],
               ].map(([name, label]) => (
                 <div key={name}>
                   <label className="text-xs font-medium muted">{label}</label>

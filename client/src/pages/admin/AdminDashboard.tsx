@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { api, aed, hrs } from '../../api/client';
+import { api, rs, hrs } from '../../api/client';
 import { KpiCard, Section, Spinner } from '../../components/ui';
 import {
   Bar, BarChart, CartesianGrid, Cell, Legend, Line, LineChart, Pie, PieChart,
@@ -25,13 +25,13 @@ export default function AdminDashboard() {
         <KpiCard label="Students" value={o.students.total} sub={`${o.students.active} active · ${o.students.sp_active} SP`} accent="blue" />
         <KpiCard label="Inactive" value={o.students.inactive} sub={`${o.students.new_admissions} new (30d)`} accent="purple" />
         <KpiCard label="Faculty" value={o.teachers.total} sub={`${o.teachers.active} active`} accent="emerald" />
-        <KpiCard label="Revenue" value={aed(o.revenue.total_revenue)} sub={`${aed(o.revenue.month_revenue)} this month`} accent="orange" />
-        <KpiCard label="Pending Fees" value={aed(o.pending.outstanding)} sub={`${o.pending.payment_required_count} need payment`} accent="red" />
+        <KpiCard label="Revenue" value={rs(o.revenue.total_revenue)} sub={`${rs(o.revenue.month_revenue)} this month`} accent="orange" />
+        <KpiCard label="Pending Fees" value={rs(o.pending.outstanding)} sub={`${o.pending.payment_required_count} need payment`} accent="red" />
         <KpiCard label="Hours Consumed" value={hrs(o.hours.consumed)} sub={`${hrs(o.hours.remaining)} remaining`} accent="indigo" />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Section title="Revenue Trend (AED / month)">
+        <Section title="Revenue Trend (₹ / month)">
           <ResponsiveContainer width="100%" height={240}>
             <LineChart data={trend.data || []}>
               <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
@@ -44,17 +44,28 @@ export default function AdminDashboard() {
         </Section>
 
         <Section title="Students by Board">
-          <ResponsiveContainer width="100%" height={240}>
-            <PieChart>
-              <Pie data={breakdown.data?.byBoard || []} dataKey="value" nameKey="label" outerRadius={90} label>
-                {(breakdown.data?.byBoard || []).map((_: any, i: number) => (
-                  <Cell key={i} fill={PIE[i % PIE.length]} />
-                ))}
-              </Pie>
-              <Legend />
-              <Tooltip />
-            </PieChart>
-          </ResponsiveContainer>
+          {(breakdown.data?.byBoard || []).length === 0 ? (
+            <div className="muted text-sm p-6 text-center">No exam-board data yet.</div>
+          ) : (
+            <ResponsiveContainer width="100%" height={240}>
+              <PieChart>
+                <Pie
+                  data={breakdown.data?.byBoard || []}
+                  dataKey="value"
+                  nameKey="label"
+                  innerRadius={50}
+                  outerRadius={90}
+                  paddingAngle={2}
+                >
+                  {(breakdown.data?.byBoard || []).map((_: any, i: number) => (
+                    <Cell key={i} fill={PIE[i % PIE.length]} />
+                  ))}
+                </Pie>
+                <Legend />
+                <Tooltip />
+              </PieChart>
+            </ResponsiveContainer>
+          )}
         </Section>
 
         <Section title="Students by Grade">

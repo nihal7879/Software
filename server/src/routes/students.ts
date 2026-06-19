@@ -176,4 +176,37 @@ router.patch(
   })
 );
 
+// STUDENT "Complete Profile" submission — the post-login popup.
+// Student fills ALL their Student Master details and Saves → goes to Management.
+const completeSchema = studentSchema
+  .omit({ form_no: true, fees_received: true }) // institute-managed; not student-editable
+  .partial()
+  .extend({ first_name: z.string().min(1) });
+
+router.patch(
+  '/:id/complete-profile',
+  ensureOwnStudent,
+  wrap(async (req, res) => {
+    const b = completeSchema.parse(req.body);
+    const before = await queryOne<any>('SELECT * FROM students WHERE id = ?', [req.params.id]);
+    if (!before) return res.status(404).json({ error: 'Student not found' });
+
+    const merged = { ...before, ...b };
+    const full_name = [merged.first_name, merged.middle_name, merged.last_name].filter(Boolean).join(' ').trim();
+
+    const cols: string[] = [];
+    const params: any[] = [];
+    const set = (c: string, v: any) => { cols.push(`${c} = ?`); params.push(v); };
+    for (const [k, v] of Object.entries(b)) set(k, v as any);
+    set('full_name', full_name);
+    set('profile_completed', true);
+    cols.push('profile_submitted_at = NOW()');
+    params.push(req.params.id);
+
+    await query(`UPDATE students SET ${cols.join(', ')} WHERE id = ?`, params);
+    await audit(req.user!.userId, 'COMPLETE_PROFILE', 'student', req.params.id, before, b);
+    res.json({ ok: true, profile_completed: true });
+  })
+);
+
 export default router;
