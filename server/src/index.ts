@@ -16,7 +16,7 @@ const app = express();
 app.use(cors({ origin: config.clientOrigin, credentials: true }));
 app.use(express.json({ limit: '2mb' }));
 
-app.get('/api/health', (_req, res) => res.json({ ok: true, service: 'tuition-erp', time: new Date().toISOString() }));
+app.get('/api/health', (_req, res) => res.json({ ok: true, service: 'classroom', time: new Date().toISOString() }));
 
 app.use('/api/auth', authRoutes);
 app.use('/api/students', studentRoutes);
