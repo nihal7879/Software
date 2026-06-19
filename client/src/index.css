@@ -1,0 +1,103 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ============================================================
+   Edu-tech theme — navy ink + warm orange accent + soft lavender
+   Headings: Plus Jakarta Sans · Body: Inter
+   ============================================================ */
+:root {
+  --color-primary: #1e2a6e;      /* deep navy/indigo */
+  --color-primary-600: #2a3a8f;
+  --color-accent: #f7a823;       /* warm orange */
+  --color-accent-soft: #fde9c8;
+  --color-bg: #f6f7fc;           /* lavender-tinted page */
+  --color-card: #ffffff;
+  --color-card-alt: #eef0fb;     /* soft lavender pill */
+  --color-text: #1b2559;         /* navy ink */
+  --color-muted: #6b73a3;
+  --color-border: #e6e8f5;
+  --shadow-soft: 0 6px 24px -12px rgba(30, 42, 110, 0.25);
+  --radius: 1rem;
+}
+.dark {
+  --color-primary: #6d83f2;
+  --color-primary-600: #5a72ec;
+  --color-accent: #f7a823;
+  --color-accent-soft: #3a2f1a;
+  --color-bg: #0c1230;
+  --color-card: #141a3a;
+  --color-card-alt: #1b2350;
+  --color-text: #eef1ff;
+  --color-muted: #9aa3d4;
+  --color-border: #283163;
+  --shadow-soft: 0 6px 24px -12px rgba(0, 0, 0, 0.5);
+}
+
+html, body, #root { height: 100%; }
+body {
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+h1, h2, h3, h4, .font-display {
+  font-family: "Plus Jakarta Sans", "Inter", sans-serif;
+  letter-spacing: -0.02em;
+}
+
+@layer components {
+  .card {
+    background: var(--color-card);
+    border: 1px solid var(--color-border);
+    box-shadow: var(--shadow-soft);
+    @apply rounded-2xl;
+  }
+  .pill {
+    background: var(--color-card-alt);
+    @apply rounded-2xl;
+  }
+  .btn-primary {
+    background: var(--color-primary);
+    box-shadow: 0 4px 14px -6px rgba(30, 42, 110, 0.6);
+    @apply text-white rounded-xl px-4 py-2.5 text-sm font-semibold hover:-translate-y-0.5 hover:shadow-lg active:translate-y-0 transition-all duration-150 disabled:opacity-50 disabled:translate-y-0;
+  }
+  .btn-accent {
+    background: var(--color-accent);
+    @apply text-[#3a2606] rounded-xl px-4 py-2.5 text-sm font-semibold hover:-translate-y-0.5 transition-all duration-150 disabled:opacity-50;
+  }
+  .btn-ghost {
+    border: 1px solid var(--color-border);
+    background: var(--color-card);
+    @apply rounded-xl px-4 py-2.5 text-sm font-semibold hover:border-[var(--color-primary)] hover:text-[var(--color-primary)] transition-colors disabled:opacity-50;
+  }
+  .input {
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    color: var(--color-text);
+    @apply rounded-xl px-3.5 py-2.5 text-sm w-full outline-none transition focus:ring-4 focus:ring-[#1e2a6e26] focus:border-[var(--color-primary)];
+  }
+  .muted { color: var(--color-muted); }
+  .table-th {
+    color: var(--color-muted);
+    @apply text-left text-[11px] font-bold uppercase tracking-wider px-3 py-2.5;
+  }
+  .table-td { @apply px-3 py-2.5 text-sm; border-top: 1px solid var(--color-border); }
+  tbody tr:hover .table-td { background: var(--color-card-alt); }
+}
+
+/* Decorative orange underline used under section / hero headings */
+.accent-underline::after {
+  content: "";
+  display: block;
+  width: 2.5rem;
+  height: 3px;
+  margin-top: 0.5rem;
+  border-radius: 999px;
+  background: var(--color-accent);
+}
+
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb { background: var(--color-border); border-radius: 999px; }
