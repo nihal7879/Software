@@ -150,3 +150,7 @@ INSERT INTO fee_transactions (student_id, parent_name, amount, payment_date, mon
 
 -- Seeded students already have full details → mark their profiles complete.
 UPDATE students SET profile_completed = TRUE;
+
+
+
+
