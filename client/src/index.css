@@ -34,6 +34,10 @@
   --shadow-soft: 0 6px 24px -12px rgba(0, 0, 0, 0.5);
 }
 
+/* Root scaled to 90% so the UI renders at 100% browser zoom exactly as it
+   looked at 90% zoom. All rem-based Tailwind sizing scales off this. */
+html { font-size: 90%; }
+
 html, body, #root { height: 100%; }
 body {
   background: var(--color-bg);
