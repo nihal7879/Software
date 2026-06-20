@@ -11,6 +11,15 @@ export const pool = mysql.createPool({
   connectionLimit: 10,
   decimalNumbers: true,
   dateStrings: true,
+  // The DB is remote (over the public internet), so reconnecting on every
+  // request is the main latency cost. Keep sockets alive and a few idle
+  // connections warm so back-to-back requests reuse an open connection
+  // instead of paying a fresh TCP + MySQL auth handshake each time.
+  enableKeepAlive: true,
+  keepAliveInitialDelay: 10_000,
+  maxIdle: 10,
+  idleTimeout: 60_000,
+  connectTimeout: 10_000,
 });
 
 // Small typed query helper

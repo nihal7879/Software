@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
+import { GraduationCap } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
 
 const DEMO = [
@@ -31,20 +32,23 @@ export default function Login() {
 
   return (
     <div className="min-h-screen grid lg:grid-cols-2">
-      {/* Hero panel */}
+      {/* Hero panel — classroom photo with a dark overlay for legible text */}
       <div
-        className="hidden lg:flex flex-col justify-center p-14 text-white relative overflow-hidden"
-        style={{ background: 'linear-gradient(160deg, #1e2a6e 0%, #161f54 60%, #10173f 100%)' }}
+        className="hidden lg:flex flex-col justify-center p-14 text-white relative overflow-hidden bg-cover bg-center"
+        style={{
+          backgroundImage:
+            'linear-gradient(160deg, rgba(40,30,20,0.55) 0%, rgba(60,40,25,0.45) 50%, rgba(30,22,16,0.7) 100%), url(https://images.unsplash.com/photo-1606761568499-6d2451b23c66?auto=format&fit=crop&w=1400&q=80)',
+        }}
       >
-        <div className="absolute -right-24 -top-24 w-80 h-80 rounded-full opacity-20" style={{ background: '#f7a823' }} />
-        <div className="absolute -right-10 bottom-10 w-56 h-56 rounded-full opacity-10 bg-white" />
         <div className="relative z-10 max-w-md">
-          <div className="inline-flex items-center gap-2 mb-8 font-display font-extrabold text-2xl">
-            <span className="grid place-items-center w-11 h-11 rounded-2xl" style={{ background: '#f7a823' }}>🎓</span>
-            Class<span style={{ color: '#f7a823' }}>room</span>
+          <div className="inline-flex items-center gap-2.5 mb-10 font-display font-semibold text-2xl">
+            <span className="grid place-items-center w-11 h-11 rounded-xl" style={{ background: '#f97316' }}>
+              <GraduationCap size={24} />
+            </span>
+            Class<span style={{ color: '#fdba74' }}>room</span>
           </div>
-          <h1 className="font-display font-extrabold text-4xl leading-tight mb-4">
-            Empowering Education<br />through <span style={{ color: '#f7a823' }}>Innovation</span>
+          <h1 className="font-display text-[2.75rem] font-semibold leading-[1.1] mb-5">
+            Empowering Education<br />through <span style={{ color: '#fdba74' }}>Innovation</span>
           </h1>
           <p className="text-white/70 text-lg mb-10">
             Students, parents, faculty &amp; management — hours, fees and progress, all in one place.
@@ -63,9 +67,12 @@ export default function Login() {
       {/* Form panel */}
       <div className="flex items-center justify-center p-6">
         <div className="w-full max-w-md">
-          <div className="lg:hidden text-2xl font-display font-extrabold mb-6" style={{ color: 'var(--color-primary)' }}>🎓 Classroom</div>
-          <h2 className="font-display text-3xl font-extrabold mb-1">Welcome back</h2>
-          <p className="muted text-sm mb-8">Sign in to your dashboard</p>
+          <div className="lg:hidden flex items-center gap-2 text-2xl font-display font-bold mb-6" style={{ color: 'var(--color-primary)' }}>
+            <GraduationCap size={24} /> Classroom
+          </div>
+          <div className="eyebrow mb-2">Welcome Back</div>
+          <h2 className="font-display text-3xl font-semibold mb-1.5">Sign in to <span className="accent-word">Classroom</span></h2>
+          <p className="muted text-sm mb-8">Access your dashboard to continue.</p>
 
           <form onSubmit={submit} className="space-y-4" autoComplete="off">
             <div>

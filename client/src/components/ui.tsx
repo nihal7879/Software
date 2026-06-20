@@ -1,10 +1,10 @@
 import { ReactNode } from 'react';
 
 const ACCENTS: Record<string, string> = {
-  blue: '#1e2a6e',   // navy (brand)
+  blue: '#f97316',   // orange (brand)
   purple: '#7c6cf0',
   emerald: '#10b981',
-  orange: '#f7a823', // warm accent (brand)
+  orange: '#f59e0b', // amber — data viz only
   red: '#ef4444',
   indigo: '#6366f1',
 };
@@ -22,14 +22,12 @@ export function KpiCard({
 }) {
   const color = ACCENTS[accent] || accent;
   return (
-    <div className="card p-5 relative overflow-hidden group hover:-translate-y-0.5 transition-transform duration-150">
-      {/* soft accent glow */}
-      <div className="absolute -right-6 -top-6 w-20 h-20 rounded-full opacity-10" style={{ background: color }} />
+    <div className="card p-5 relative overflow-hidden transition-shadow duration-150 hover:shadow-md">
       <div className="flex items-center gap-2 mb-2">
-        <span className="w-2.5 h-2.5 rounded-full" style={{ background: color }} />
-        <span className="text-[11px] font-bold uppercase tracking-wider muted">{label}</span>
+        <span className="w-2 h-2 rounded-full" style={{ background: color }} />
+        <span className="text-[11px] font-semibold uppercase tracking-wide muted">{label}</span>
       </div>
-      <div className="font-display text-2xl font-extrabold" style={{ color }}>
+      <div className="font-display text-2xl font-bold tnum" style={{ color: 'var(--color-text)' }}>
         {value}
       </div>
       {sub && <div className="text-xs muted mt-1.5">{sub}</div>}
@@ -88,3 +86,8 @@ export function Table({ head, children }: { head: string[]; children: ReactNode 
 export function Spinner() {
   return <div className="muted text-sm p-6">Loading…</div>;
 }
+
+
+
+
+

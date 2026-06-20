@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '../../auth/AuthContext';
 import { api, hrs } from '../../api/client';
+import { CalendarDays, ChevronDown } from 'lucide-react';
 import { Section, Table, Spinner, KpiCard } from '../../components/ui';
 
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -65,9 +66,9 @@ export default function LectureHistory() {
       {/* Calendar dropdown — opens the calendar grid on click */}
       <div className="relative inline-block">
         <button className="btn-ghost flex items-center gap-2" onClick={() => setOpen((o) => !o)}>
-          <span>📅</span>
-          <span className="font-semibold">{triggerLabel}</span>
-          <span className="muted text-xs">▾</span>
+          <CalendarDays size={16} className="muted" />
+          <span className="font-medium">{triggerLabel}</span>
+          <ChevronDown size={15} className="muted" />
         </button>
 
         {open && (

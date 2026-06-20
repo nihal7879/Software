@@ -56,11 +56,13 @@ export function Layout({ children }: { children: ReactNode }) {
       {/* Brand — click to open dashboard (and expand if collapsed) */}
       <div className={`flex items-center gap-2.5 px-4 py-4 shrink-0 ${mini ? 'justify-center' : ''}`}>
         <button onClick={goHome} title="Go to dashboard"
-          className="grid place-items-center w-10 h-10 rounded-xl text-white font-extrabold shrink-0 hover:opacity-90 transition"
-          style={{ background: 'linear-gradient(135deg,#2a3a8f,#6d83f2)' }}>🎓</button>
+          className="grid place-items-center w-9 h-9 rounded-lg text-white shrink-0 hover:opacity-90 transition"
+          style={{ background: 'linear-gradient(135deg,#f97316,#fb923c)' }}>
+          <GraduationCap size={20} />
+        </button>
         {!mini && (
           <button onClick={goHome} className="flex-1 min-w-0 text-left" title="Go to dashboard">
-            <div className="font-display font-extrabold leading-tight truncate">Class<span style={{ color: 'var(--color-primary)' }}>room</span></div>
+            <div className="font-display font-bold leading-tight truncate">Class<span style={{ color: 'var(--color-primary)' }}>room</span></div>
             <div className="text-[10px] uppercase tracking-[0.15em] muted truncate">Institute Management</div>
           </button>
         )}
@@ -142,7 +144,9 @@ export function Layout({ children }: { children: ReactNode }) {
         {/* Mobile top bar */}
         <header className="md:hidden flex items-center justify-between p-4 border-b sticky top-0 z-30" style={{ background: 'var(--color-card)', borderColor: 'var(--color-border)' }}>
           <button onClick={() => setOpen(true)} aria-label="Open menu"><Menu /></button>
-          <span className="font-display font-extrabold" style={{ color: 'var(--color-primary)' }}>🎓 Classroom</span>
+          <span className="font-display font-bold flex items-center gap-1.5" style={{ color: 'var(--color-primary)' }}>
+            <GraduationCap size={18} /> Classroom
+          </span>
           <button onClick={toggle}>{dark ? <Sun size={20} /> : <Moon size={20} />}</button>
         </header>
 

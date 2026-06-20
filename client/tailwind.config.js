@@ -5,13 +5,13 @@ export default {
   theme: {
     extend: {
       fontFamily: {
-        sans: ['Inter', 'ui-sans-serif', 'system-ui', 'sans-serif'],
-        display: ['Plus Jakarta Sans', 'Inter', 'sans-serif'],
+        sans: ['Roboto', 'Google Sans', 'ui-sans-serif', 'system-ui', 'Arial', 'sans-serif'],
+        display: ['Google Sans', 'Roboto', 'ui-sans-serif', 'system-ui', 'sans-serif'],
       },
       colors: {
-        navy: '#1e2a6e',
-        accent: '#f7a823',
-        lavender: '#eef0fb',
+        forest: '#1e4d38',
+        brass: '#b08d57',
+        cream: '#efe9dc',
       },
     },
   },

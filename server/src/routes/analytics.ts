@@ -11,36 +11,45 @@ router.use(requireAuth, requireRole('admin'));
 router.get(
   '/overview',
   wrap(async (_req, res) => {
-    const [students] = await query<any>(
-      `SELECT
-         COUNT(*) AS total,
-         SUM(status='Active') AS active,
-         SUM(status='Inactive') AS inactive,
-         SUM(status='SP-Active') AS sp_active,
-         SUM(date_of_joining >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)) AS new_admissions
-       FROM students`
-    );
-    const [teachers] = await query<any>(
-      `SELECT COUNT(*) AS total, SUM(is_active) AS active FROM teachers`
-    );
-    const [revenue] = await query<any>(
-      `SELECT COALESCE(SUM(amount),0) AS total_revenue,
-              COALESCE(SUM(CASE WHEN month = DATE_FORMAT(CURDATE(),'%Y-%m') THEN amount END),0) AS month_revenue
-       FROM fee_transactions`
-    );
-    const [hours] = await query<any>(
-      `SELECT
-         COALESCE(SUM(total_hours_credited),0) AS purchased,
-         COALESCE(SUM(total_hours_consumed),0) AS consumed,
-         COALESCE(SUM(hours_left),0) AS remaining
-       FROM student_hours_summary`
-    );
-    const [pending] = await query<any>(
-      `SELECT COALESCE(SUM(pending_fees),0) AS outstanding,
-              SUM(fee_status='Payment Required') AS payment_required_count
-       FROM student_hours_summary`
-    );
-    res.json({ students, teachers, revenue, hours, pending });
+    // Run independent aggregates concurrently — against a remote DB the round
+    // trips dominate, so parallel is ~5x faster than awaiting one at a time.
+    // student_hours_summary (a view) is scanned once and reused for both the
+    // hours and pending figures.
+    const [studentsRows, teachersRows, revenueRows, summaryRows] = await Promise.all([
+      query<any>(
+        `SELECT
+           COUNT(*) AS total,
+           SUM(status='Active') AS active,
+           SUM(status='Inactive') AS inactive,
+           SUM(status='SP-Active') AS sp_active,
+           SUM(date_of_joining >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)) AS new_admissions
+         FROM students`
+      ),
+      query<any>(`SELECT COUNT(*) AS total, SUM(is_active) AS active FROM teachers`),
+      query<any>(
+        `SELECT COALESCE(SUM(amount),0) AS total_revenue,
+                COALESCE(SUM(CASE WHEN month = DATE_FORMAT(CURDATE(),'%Y-%m') THEN amount END),0) AS month_revenue
+         FROM fee_transactions`
+      ),
+      query<any>(
+        `SELECT
+           COALESCE(SUM(total_hours_credited),0) AS purchased,
+           COALESCE(SUM(total_hours_consumed),0) AS consumed,
+           COALESCE(SUM(hours_left),0) AS remaining,
+           COALESCE(SUM(pending_fees),0) AS outstanding,
+           SUM(fee_status='Payment Required') AS payment_required_count
+         FROM student_hours_summary`
+      ),
+    ]);
+
+    const s = summaryRows[0];
+    res.json({
+      students: studentsRows[0],
+      teachers: teachersRows[0],
+      revenue: revenueRows[0],
+      hours: { purchased: s.purchased, consumed: s.consumed, remaining: s.remaining },
+      pending: { outstanding: s.outstanding, payment_required_count: s.payment_required_count },
+    });
   })
 );
 

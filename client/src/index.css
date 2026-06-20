@@ -3,35 +3,36 @@
 @tailwind utilities;
 
 /* ============================================================
-   Edu-tech theme — navy ink + warm orange accent + soft lavender
+   Professional theme — deep forest green on warm cream.
+   Editorial palette with a subtle brass accent.
    Headings: Plus Jakarta Sans · Body: Inter
    ============================================================ */
 :root {
-  --color-primary: #1e2a6e;      /* deep navy/indigo */
-  --color-primary-600: #2a3a8f;
-  --color-accent: #f7a823;       /* warm orange */
-  --color-accent-soft: #fde9c8;
-  --color-bg: #f6f7fc;           /* lavender-tinted page */
+  --color-primary: #f97316;      /* warm coral-orange (brand accent) */
+  --color-primary-600: #ea580c;  /* darker orange — hover/interactive */
+  --color-accent: #f97316;       /* orange accent (used sparingly) */
+  --color-accent-soft: #ffedd5;  /* soft peach highlight */
+  --color-bg: #faf9f7;           /* light warm off-white page */
   --color-card: #ffffff;
-  --color-card-alt: #eef0fb;     /* soft lavender pill */
-  --color-text: #1b2559;         /* navy ink */
-  --color-muted: #6b73a3;
-  --color-border: #e6e8f5;
-  --shadow-soft: 0 6px 24px -12px rgba(30, 42, 110, 0.25);
-  --radius: 1rem;
+  --color-card-alt: #f6f4f1;     /* warm light fill (pills/hovers) */
+  --color-text: #2b2926;         /* warm near-black ink */
+  --color-muted: #9a958e;        /* warm gray */
+  --color-border: #eeebe6;       /* soft warm border */
+  --shadow-soft: 0 1px 2px rgba(40, 35, 30, 0.04), 0 1px 3px rgba(40, 35, 30, 0.06);
+  --radius: 0.625rem;            /* 10px */
 }
 .dark {
-  --color-primary: #6d83f2;
-  --color-primary-600: #5a72ec;
-  --color-accent: #f7a823;
-  --color-accent-soft: #3a2f1a;
-  --color-bg: #0c1230;
-  --color-card: #141a3a;
-  --color-card-alt: #1b2350;
-  --color-text: #eef1ff;
-  --color-muted: #9aa3d4;
-  --color-border: #283163;
-  --shadow-soft: 0 6px 24px -12px rgba(0, 0, 0, 0.5);
+  --color-primary: #fb923c;      /* lighter orange for dark */
+  --color-primary-600: #f97316;
+  --color-accent: #fb923c;
+  --color-accent-soft: #3a2a1a;
+  --color-bg: #1a1613;           /* warm dark */
+  --color-card: #221e1a;
+  --color-card-alt: #2b2621;
+  --color-text: #f5f0ea;
+  --color-muted: #a89f96;
+  --color-border: #38322b;
+  --shadow-soft: 0 1px 2px rgba(0, 0, 0, 0.3), 0 1px 3px rgba(0, 0, 0, 0.4);
 }
 
 /* Root scaled to 90% so the UI renders at 100% browser zoom exactly as it
@@ -42,63 +43,87 @@ html, body, #root { height: 100%; }
 body {
   background: var(--color-bg);
   color: var(--color-text);
-  font-family: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-family: "Roboto", "Google Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Arial, sans-serif;
+  font-size: 0.875rem;          /* 14px base — typical for dense SaaS */
+  line-height: 1.5;
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
 }
 
+/* Clean Google-style headings (Roboto). Color is inherited so headings on
+   dark/colored panels (e.g. the login hero) stay readable instead of being
+   forced to dark ink. */
 h1, h2, h3, h4, .font-display {
-  font-family: "Plus Jakarta Sans", "Inter", sans-serif;
-  letter-spacing: -0.02em;
+  font-family: "Google Sans", "Roboto", ui-sans-serif, system-ui, sans-serif;
+  letter-spacing: -0.005em;
 }
+h1 { font-size: 1.5rem; line-height: 1.25; font-weight: 500; }
+h2 { font-size: 1.2rem; line-height: 1.3; font-weight: 500; }
+h3 { font-size: 1.05rem; line-height: 1.35; font-weight: 500; }
+
+/* Accent word — brass colored emphasis */
+.accent-word { color: var(--color-accent); font-weight: 600; }
+
+/* Small uppercase tracked eyebrow label above headings */
+.eyebrow {
+  font-family: "Roboto", sans-serif;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--color-muted);
+}
+
+/* Tabular figures for all data/numbers — the hallmark of a real finance UI */
+.table-td, .table-th, .tnum, table { font-variant-numeric: tabular-nums; }
 
 @layer components {
   .card {
     background: var(--color-card);
     border: 1px solid var(--color-border);
     box-shadow: var(--shadow-soft);
-    @apply rounded-2xl;
+    @apply rounded-xl;
   }
   .pill {
     background: var(--color-card-alt);
-    @apply rounded-2xl;
+    @apply rounded-lg;
   }
   .btn-primary {
     background: var(--color-primary);
-    box-shadow: 0 4px 14px -6px rgba(30, 42, 110, 0.6);
-    @apply text-white rounded-xl px-4 py-2.5 text-sm font-semibold hover:-translate-y-0.5 hover:shadow-lg active:translate-y-0 transition-all duration-150 disabled:opacity-50 disabled:translate-y-0;
+    @apply text-white rounded-lg px-4 py-2 text-sm font-medium shadow-sm hover:bg-[var(--color-primary-600)] active:scale-[0.99] transition-colors duration-150 disabled:opacity-50;
   }
   .btn-accent {
     background: var(--color-accent);
-    @apply text-[#3a2606] rounded-xl px-4 py-2.5 text-sm font-semibold hover:-translate-y-0.5 transition-all duration-150 disabled:opacity-50;
+    @apply text-white rounded-lg px-4 py-2 text-sm font-medium shadow-sm hover:opacity-90 transition-opacity duration-150 disabled:opacity-50;
   }
   .btn-ghost {
     border: 1px solid var(--color-border);
     background: var(--color-card);
-    @apply rounded-xl px-4 py-2.5 text-sm font-semibold hover:border-[var(--color-primary)] hover:text-[var(--color-primary)] transition-colors disabled:opacity-50;
+    @apply rounded-lg px-4 py-2 text-sm font-medium hover:bg-[var(--color-card-alt)] hover:border-[var(--color-muted)] transition-colors disabled:opacity-50;
   }
   .input {
-    background: var(--color-bg);
+    background: var(--color-card);
     border: 1px solid var(--color-border);
     color: var(--color-text);
-    @apply rounded-xl px-3.5 py-2.5 text-sm w-full outline-none transition focus:ring-4 focus:ring-[#1e2a6e26] focus:border-[var(--color-primary)];
+    @apply rounded-lg px-3 py-2 text-sm w-full outline-none transition focus:ring-2 focus:ring-[var(--color-primary)] focus:ring-opacity-30 focus:border-[var(--color-primary)];
   }
   .muted { color: var(--color-muted); }
   .table-th {
     color: var(--color-muted);
-    @apply text-left text-[11px] font-bold uppercase tracking-wider px-3 py-2.5;
+    @apply text-left text-[11px] font-semibold uppercase tracking-wide px-3 py-2.5;
   }
   .table-td { @apply px-3 py-2.5 text-sm; border-top: 1px solid var(--color-border); }
   tbody tr:hover .table-td { background: var(--color-card-alt); }
 }
 
-/* Decorative orange underline used under section / hero headings */
+/* Subtle accent rule under section headings — short and understated */
 .accent-underline::after {
   content: "";
   display: block;
-  width: 2.5rem;
-  height: 3px;
-  margin-top: 0.5rem;
+  width: 1.75rem;
+  height: 2px;
+  margin-top: 0.45rem;
   border-radius: 999px;
   background: var(--color-accent);
 }
