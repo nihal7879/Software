@@ -3,6 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { api, hrs } from '../../api/client';
 import { KpiCard, Section, StatusBadge, Table, HoursValue, Spinner } from '../../components/ui';
+import { DateRangePicker } from '../../components/DateRangePicker';
 
 // TEACHER → one of my students. Hours + lecture history only — NO fees.
 export default function FacultyStudentDetail() {
@@ -30,17 +31,9 @@ export default function FacultyStudentDetail() {
         <span className="muted text-sm">Form {s.form_no} · {s.year_grade || '—'} · {s.exam_board || '—'}</span>
       </div>
 
-      <div className="card p-4 flex flex-wrap items-end gap-3">
-        <div>
-          <label className="text-xs font-medium muted">From</label>
-          <input type="date" className="input mt-1" value={from} onChange={(e) => setFrom(e.target.value)} />
-        </div>
-        <div>
-          <label className="text-xs font-medium muted">To</label>
-          <input type="date" className="input mt-1" value={to} onChange={(e) => setTo(e.target.value)} />
-        </div>
+      <DateRangePicker from={from} to={to} onFrom={setFrom} onTo={setTo}>
         <div className="muted text-sm pb-2">Parent mobile: <b>{s.parent_mobile || '—'}</b></div>
-      </div>
+      </DateRangePicker>
 
       {/* Hours only — no fees */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../../auth/AuthContext';
 import { api, hrs } from '../../api/client';
 import { KpiCard, Section, StatusBadge, Table, HoursValue, Spinner } from '../../components/ui';
@@ -62,6 +62,11 @@ export default function StudentDashboard() {
         <KpiCard label="Hours Purchased" value={hrs(l.total_hours_credited)} accent="blue" />
         <KpiCard label="Hours Consumed" value={hrs(l.total_hours_consumed)} accent="indigo" />
         <KpiCard label="Hours Remaining" value={<HoursValue value={l.hours_left} />} accent={Number(l.hours_left) < 0 ? 'red' : 'emerald'} />
+      </div>
+
+      <div className="flex flex-wrap gap-3">
+        <Link to="/student/tracker" className="btn-primary">📊 Open Tracker</Link>
+        <Link to="/student/lectures" className="btn-ghost">Lecture History</Link>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

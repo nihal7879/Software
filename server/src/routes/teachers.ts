@@ -1,9 +1,11 @@
 import { Router, Request } from 'express';
 import { z } from 'zod';
+import bcrypt from 'bcryptjs';
 import { query, queryOne } from '../db';
 import { requireAuth, requireRole } from '../middleware/auth';
 import { wrap } from '../middleware/error';
 import { audit } from '../utils/audit';
+import { clientIp, deviceInfo, getReqCtx } from '../utils/reqContext';
 
 const router = Router();
 router.use(requireAuth);
@@ -166,6 +168,7 @@ const teacherSchema = z.object({
   mobile: z.string().optional().nullable(),
   specialization: z.string().optional().nullable(),
   branch_id: z.number().int().optional().nullable(),
+  password: z.string().min(6).optional(),
 });
 
 router.post(
@@ -173,44 +176,54 @@ router.post(
   requireRole('admin'),
   wrap(async (req, res) => {
     const b = teacherSchema.parse(req.body);
+
+    // If an email + password are given, create the teacher's faculty login first.
+    let userId: number | null = null;
+    if (b.email && b.password) {
+      const exists = await queryOne<any>('SELECT id FROM users WHERE email = ?', [b.email]);
+      if (exists) return res.status(409).json({ error: 'A user with this email already exists' });
+      const hash = await bcrypt.hash(b.password, 10);
+      const ctx = getReqCtx();
+      const gps = ctx?.lat != null && ctx?.lng != null ? `${ctx.lat},${ctx.lng}` : null;
+      const u: any = await query(
+        `INSERT INTO users (role, email, password_hash, display_name, registration_ip, registration_gps, registration_device)
+         VALUES ('faculty', ?, ?, ?, ?, ?, ?)`,
+        [b.email, hash, b.name, clientIp(req), gps, deviceInfo(req)]
+      );
+      userId = (u as any).insertId;
+    }
+
     const r: any = await query(
-      'INSERT INTO teachers (name,email,mobile,specialization,branch_id) VALUES (?,?,?,?,?)',
-      [b.name, b.email || null, b.mobile || null, b.specialization || null, b.branch_id ?? null]
+      'INSERT INTO teachers (name,email,mobile,specialization,branch_id,user_id) VALUES (?,?,?,?,?,?)',
+      [b.name, b.email || null, b.mobile || null, b.specialization || null, b.branch_id ?? null, userId]
     );
-    await audit(req.user!.userId, 'CREATE', 'teacher', (r as any).insertId, null, b);
-    res.status(201).json({ id: (r as any).insertId });
+    await audit(req.user!.userId, 'CREATE', 'teacher', (r as any).insertId, null, { ...b, password: undefined, login_created: !!userId });
+    res.status(201).json({ id: (r as any).insertId, login_created: !!userId });
   })
 );
 
-// Assign teacher to a student (per subject).
-// Faculty can ONLY assign themselves — teacher_id is forced to their own id.
+// Assign a teacher to a student (per subject). ADMIN ONLY — faculty no longer
+// self-assign; the institute decides who teaches whom.
 router.post(
   '/assign',
-  requireRole('admin', 'faculty'),
+  requireRole('admin'),
   wrap(async (req, res) => {
     const b = z
       .object({
         student_id: z.number().int(),
-        teacher_id: z.number().int().optional(),
+        teacher_id: z.number().int(),
         subject_id: z.number().int(),
         package_hours: z.number().optional(),
       })
       .parse(req.body);
 
-    let teacherId = b.teacher_id;
-    if (req.user!.role === 'faculty') {
-      teacherId = (await myTeacherId(req)) ?? undefined;
-      if (!teacherId) return res.status(403).json({ error: 'No teacher record linked to this account' });
-    }
-    if (!teacherId) return res.status(400).json({ error: 'teacher_id required' });
-
     await query(
       `INSERT INTO student_teacher_mapping (student_id,teacher_id,subject_id,package_hours)
        VALUES (?,?,?,?)
        ON DUPLICATE KEY UPDATE package_hours = VALUES(package_hours)`,
-      [b.student_id, teacherId, b.subject_id, b.package_hours ?? 0]
+      [b.student_id, b.teacher_id, b.subject_id, b.package_hours ?? 0]
     );
-    await audit(req.user!.userId, 'ASSIGN', 'student_teacher', b.student_id, null, { ...b, teacher_id: teacherId });
+    await audit(req.user!.userId, 'ASSIGN', 'student_teacher', b.student_id, null, b);
     res.status(201).json({ ok: true });
   })
 );
@@ -226,6 +239,37 @@ router.get(
        JOIN subjects sub ON sub.id = m.subject_id
        WHERE m.student_id = ?`,
       [req.params.studentId]
+    );
+    res.json({ data: rows });
+  })
+);
+
+// ADMIN roster for a teacher: every student they've TAUGHT or are ASSIGNED to,
+// with an is_assigned flag + hours taught with this teacher. Reconciles with the
+// workload "Students" count (which is the same taught ∪ assigned union).
+router.get(
+  '/:teacherId/roster',
+  requireRole('admin'),
+  wrap(async (req, res) => {
+    const tid = Number(req.params.teacherId);
+    const rows = await query(
+      `SELECT s.id, s.form_no, s.full_name, s.year_grade, s.status,
+              (SELECT GROUP_CONCAT(DISTINCT sub.name SEPARATOR ', ')
+                 FROM student_teacher_mapping m JOIN subjects sub ON sub.id = m.subject_id
+                 WHERE m.teacher_id = ? AND m.student_id = s.id) AS subjects,
+              EXISTS(SELECT 1 FROM student_teacher_mapping m
+                       WHERE m.teacher_id = ? AND m.student_id = s.id) AS is_assigned,
+              COALESCE((SELECT SUM(a.hours_consumed) FROM lecture_attendees a
+                          JOIN lecture_sessions l ON l.id = a.lecture_id
+                          WHERE l.teacher_id = ? AND a.student_id = s.id),0) AS hours_with_teacher
+       FROM students s
+       WHERE s.id IN (
+         SELECT a.student_id FROM lecture_sessions l JOIN lecture_attendees a ON a.lecture_id = l.id WHERE l.teacher_id = ?
+         UNION
+         SELECT m.student_id FROM student_teacher_mapping m WHERE m.teacher_id = ?
+       )
+       ORDER BY s.full_name`,
+      [tid, tid, tid, tid, tid]
     );
     res.json({ data: rows });
   })

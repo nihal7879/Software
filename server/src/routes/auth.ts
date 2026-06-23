@@ -1,12 +1,21 @@
-import { Router } from 'express';
+import { Router, Request } from 'express';
 import bcrypt from 'bcryptjs';
 import { z } from 'zod';
 import { pool, query, queryOne } from '../db';
 import { signToken } from '../utils/jwt';
 import { requireAuth } from '../middleware/auth';
 import { wrap } from '../middleware/error';
+import { audit } from '../utils/audit';
+import { clientIp, deviceInfo } from '../utils/reqContext';
 
 const router = Router();
+
+// GPS comes from the browser as headers — combined into one "lat,lng" string.
+const reqGps = (req: Request): string | null => {
+  const lat = req.headers['x-gps-lat'];
+  const lng = req.headers['x-gps-lng'];
+  return lat && lng ? `${lat},${lng}` : null;
+};
 
 // Compute age from a YYYY-MM-DD date of birth.
 function ageFromDob(dob?: string | null): number | null {
@@ -37,6 +46,13 @@ router.post(
 
     const ok = await bcrypt.compare(password, user.password_hash);
     if (!ok) return res.status(401).json({ error: 'Invalid credentials' });
+
+    // Record where/when/what device this login happened on (+ audit trail).
+    await query(
+      'UPDATE users SET last_login_ip = ?, last_login_device = ?, last_login_at = NOW() WHERE id = ?',
+      [clientIp(req), deviceInfo(req), user.id]
+    );
+    await audit(user.id, 'LOGIN', 'user', user.id, null, { email: user.email, role: user.role });
 
     // Resolve the scope record (student for student/parent, teacher for faculty).
     let studentId: number | null = null;
@@ -97,6 +113,9 @@ const registerSchema = z.object({
   relationship: z.enum(['Father', 'Mother', 'Guardian']).optional(),
   // teacher
   specialization: z.string().optional().nullable(),
+  // optional GPS from the browser at registration
+  lat: z.number().optional().nullable(),
+  lng: z.number().optional().nullable(),
 });
 
 router.post(
@@ -107,6 +126,9 @@ router.post(
     const exists = await queryOne<any>('SELECT id FROM users WHERE email = ?', [b.email]);
     if (exists) return res.status(409).json({ error: 'An account with this email already exists' });
 
+    const ip = clientIp(req);
+    const ua = deviceInfo(req);
+    const gps = reqGps(req) ?? (b.lat != null && b.lng != null ? `${b.lat},${b.lng}` : null);
     const hash = await bcrypt.hash(b.password, 10);
     const conn = await pool.getConnection();
     try {
@@ -116,19 +138,22 @@ router.post(
       if (b.role === 'student') {
         if (!b.first_name) { await conn.rollback(); return res.status(400).json({ error: 'First name is required' }); }
         const fullName = [b.first_name, b.last_name].filter(Boolean).join(' ').trim();
-        const [[m]]: any = await conn.query('SELECT COALESCE(MAX(CAST(form_no AS UNSIGNED)),0)+1 AS next FROM students');
-        const formNo = String(m.next);
 
         const [u]: any = await conn.query(
-          `INSERT INTO users (role, email, password_hash, display_name) VALUES ('student', ?, ?, ?)`,
-          [b.email, hash, fullName]
+          `INSERT INTO users (role, email, password_hash, display_name, registration_ip, registration_gps, registration_device)
+           VALUES ('student', ?, ?, ?, ?, ?, ?)`,
+          [b.email, hash, fullName, ip, gps, ua]
         );
+        // form_no is auto-assigned = the student's DB id (insert temp unique, then set to id).
         const [s]: any = await conn.query(
           `INSERT INTO students (form_no, status, first_name, last_name, full_name, email, user_id, profile_completed)
-           VALUES (?, 'Active', ?, ?, ?, ?, ?, FALSE)`,
-          [formNo, b.first_name, b.last_name || null, fullName, b.email, u.insertId]
+           VALUES (UUID(), 'Active', ?, ?, ?, ?, ?, FALSE)`,
+          [b.first_name, b.last_name || null, fullName, b.email, u.insertId]
         );
+        const formNo = String(s.insertId);
+        await conn.query('UPDATE students SET form_no = ? WHERE id = ?', [formNo, s.insertId]);
         await conn.commit();
+        await audit(u.insertId, 'REGISTER', 'user', u.insertId, null, { role: 'student', email: b.email, form_no: formNo });
         const token = signToken({ userId: u.insertId, role: 'student', email: b.email, studentId: s.insertId });
         return res.status(201).json({
           token,
@@ -149,14 +174,16 @@ router.post(
         }
         const parentName = b.name || [b.first_name, b.last_name].filter(Boolean).join(' ').trim() || 'Parent';
         const [u]: any = await conn.query(
-          `INSERT INTO users (role, email, password_hash, display_name) VALUES ('parent', ?, ?, ?)`,
-          [b.email, hash, parentName]
+          `INSERT INTO users (role, email, password_hash, display_name, registration_ip, registration_gps, registration_device)
+           VALUES ('parent', ?, ?, ?, ?, ?, ?)`,
+          [b.email, hash, parentName, ip, gps, ua]
         );
         await conn.query(
           `INSERT INTO parents (student_id, user_id, name, mobile, relationship) VALUES (?,?,?,?,?)`,
           [child.id, u.insertId, parentName, b.mobile || null, b.relationship || 'Father']
         );
         await conn.commit();
+        await audit(u.insertId, 'REGISTER', 'user', u.insertId, null, { role: 'parent', email: b.email, child_id: child.id });
         const token = signToken({ userId: u.insertId, role: 'parent', email: b.email, studentId: child.id });
         return res.status(201).json({
           token,
@@ -169,14 +196,16 @@ router.post(
       const teacherName = b.name || [b.first_name, b.last_name].filter(Boolean).join(' ').trim();
       if (!teacherName) { await conn.rollback(); return res.status(400).json({ error: 'Name is required' }); }
       const [u]: any = await conn.query(
-        `INSERT INTO users (role, email, password_hash, display_name) VALUES ('faculty', ?, ?, ?)`,
-        [b.email, hash, teacherName]
+        `INSERT INTO users (role, email, password_hash, display_name, registration_ip, registration_gps, registration_device)
+         VALUES ('faculty', ?, ?, ?, ?, ?, ?)`,
+        [b.email, hash, teacherName, ip, gps, ua]
       );
       const [t]: any = await conn.query(
         `INSERT INTO teachers (name, email, mobile, specialization, user_id) VALUES (?,?,?,?,?)`,
         [teacherName, b.email, b.mobile || null, b.specialization || null, u.insertId]
       );
       await conn.commit();
+      await audit(u.insertId, 'REGISTER', 'user', u.insertId, null, { role: 'faculty', email: b.email });
       const token = signToken({ userId: u.insertId, role: 'faculty', email: b.email, teacherId: t.insertId });
       return res.status(201).json({
         token,
@@ -215,6 +244,16 @@ router.post(
     if (!ok) return res.status(400).json({ error: 'Current password is incorrect' });
     const hash = await bcrypt.hash(body.newPassword, 10);
     await query('UPDATE users SET password_hash = ? WHERE id = ?', [hash, user.id]);
+    res.json({ ok: true });
+  })
+);
+
+// Logout — token is cleared client-side; this records the event (IP/GPS/device) in the audit trail.
+router.post(
+  '/logout',
+  requireAuth,
+  wrap(async (req, res) => {
+    await audit(req.user!.userId, 'LOGOUT', 'user', req.user!.userId, null, { email: req.user!.email });
     res.json({ ok: true });
   })
 );

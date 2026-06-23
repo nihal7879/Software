@@ -34,7 +34,7 @@ router.get(
          -- fees paid (all-time or in selected month)
          COALESCE((
            SELECT SUM(ft.amount) FROM fee_transactions ft
-           WHERE ft.student_id = s.id AND (? IS NULL OR ft.month = ?)
+           WHERE ft.student_id = s.id AND ft.is_deleted = FALSE AND (? IS NULL OR ft.month = ?)
          ),0) AS fees_paid,
          -- hours consumed in selected month (or all-time)
          COALESCE((
@@ -48,6 +48,8 @@ router.get(
             WHERE m.student_id = s.id) AS teachers
        FROM students s
        LEFT JOIN student_hours_summary hs ON hs.student_id = s.id
+       LEFT JOIN users u ON u.id = s.user_id
+       WHERE s.is_deleted = FALSE
        ORDER BY CAST(s.form_no AS UNSIGNED)`,
       [month, month, month, month]
     );
@@ -98,7 +100,7 @@ router.get(
       `SELECT payment_date, month, amount, parent_name, payment_source,
               transaction_reference, course_package_hours, notes
        FROM fee_transactions
-       WHERE student_id = ? AND payment_date BETWEEN ? AND ?
+       WHERE student_id = ? AND is_deleted = FALSE AND payment_date BETWEEN ? AND ?
        ORDER BY payment_date`,
       [id, from, to]
     );
@@ -150,7 +152,7 @@ router.get(
   wrap(async (_req, res) => {
     const rows = await query<any>(
       `SELECT DISTINCT month FROM (
-         SELECT month FROM fee_transactions WHERE month IS NOT NULL
+         SELECT month FROM fee_transactions WHERE month IS NOT NULL AND is_deleted = FALSE
          UNION SELECT month FROM lecture_sessions WHERE month IS NOT NULL
        ) m ORDER BY month DESC`
     );

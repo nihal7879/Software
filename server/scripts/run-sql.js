@@ -17,6 +17,7 @@ const mysql = require('mysql2/promise');
     port: Number(process.env.DB_PORT || 3306),
     user: process.env.DB_USER || 'root',
     password: process.env.DB_PASSWORD || '',
+    database: process.env.DB_NAME || undefined, // run against the configured schema
     multipleStatements: true,
   });
   console.log(`Running ${file} ...`);

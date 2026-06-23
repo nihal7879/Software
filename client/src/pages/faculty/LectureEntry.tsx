@@ -101,7 +101,7 @@ export default function LectureEntry() {
             <label className="text-xs font-medium muted">My students — attendees ({attendees.length} selected)</label>
             <div className="card p-2 mt-1 max-h-48 overflow-y-auto grid grid-cols-1 sm:grid-cols-2 gap-1">
               {students.isLoading ? <Spinner /> : (students.data || []).length === 0 ? (
-                <div className="muted text-sm p-2">No students assigned to you. Add them under “My Students”.</div>
+                <div className="muted text-sm p-2">No students assigned to you yet. Your admin will assign students to you.</div>
               ) : students.data.map((s: any) => (
                 <label key={s.id} className="flex items-center gap-2 text-sm px-2 py-1 rounded hover:bg-black/5 dark:hover:bg-white/5 cursor-pointer">
                   <input type="checkbox" checked={attendees.includes(s.id)} onChange={() => toggle(s.id)} />

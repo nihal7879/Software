@@ -29,7 +29,7 @@ router.get(
       query<any>(
         `SELECT COALESCE(SUM(amount),0) AS total_revenue,
                 COALESCE(SUM(CASE WHEN month = DATE_FORMAT(CURDATE(),'%Y-%m') THEN amount END),0) AS month_revenue
-         FROM fee_transactions`
+         FROM fee_transactions WHERE is_deleted = FALSE`
       ),
       query<any>(
         `SELECT
@@ -71,19 +71,23 @@ router.get(
   })
 );
 
-// Teacher workload
+// Teacher workload. "total_students" = distinct students the teacher has either
+// TAUGHT (logged lectures) OR been ASSIGNED to — matches the roster panel below.
 router.get(
   '/teacher-workload',
   wrap(async (_req, res) => {
     const rows = await query(
       `SELECT t.id, t.name,
-              COUNT(DISTINCT a.student_id) AS total_students,
-              COALESCE(SUM(l.total_hours),0) AS total_hours_taught,
-              COALESCE(SUM(CASE WHEN l.month = DATE_FORMAT(CURDATE(),'%Y-%m') THEN l.total_hours END),0) AS month_hours
+              (SELECT COUNT(*) FROM (
+                 SELECT a.student_id FROM lecture_sessions l2 JOIN lecture_attendees a ON a.lecture_id = l2.id WHERE l2.teacher_id = t.id
+                 UNION
+                 SELECT m.student_id FROM student_teacher_mapping m WHERE m.teacher_id = t.id
+               ) u) AS total_students,
+              COALESCE((SELECT SUM(l.total_hours) FROM lecture_sessions l WHERE l.teacher_id = t.id),0) AS total_hours_taught,
+              COALESCE((SELECT SUM(l.total_hours) FROM lecture_sessions l
+                          WHERE l.teacher_id = t.id AND l.month = DATE_FORMAT(CURDATE(),'%Y-%m')),0) AS month_hours
        FROM teachers t
-       LEFT JOIN lecture_sessions l ON l.teacher_id = t.id
-       LEFT JOIN lecture_attendees a ON a.lecture_id = l.id
-       GROUP BY t.id, t.name ORDER BY total_hours_taught DESC`
+       ORDER BY total_hours_taught DESC`
     );
     res.json({ data: rows });
   })
@@ -96,11 +100,12 @@ router.get(
     const rows = await query(
       `SELECT s.form_no, s.full_name AS student_name, ft.month, SUM(ft.amount) AS amount
        FROM fee_transactions ft JOIN students s ON s.id = ft.student_id
+       WHERE ft.is_deleted = FALSE
        GROUP BY s.form_no, s.full_name, ft.month
        ORDER BY CAST(s.form_no AS UNSIGNED), ft.month`
     );
     const months = await query<any>(
-      `SELECT DISTINCT month FROM fee_transactions ORDER BY month`
+      `SELECT DISTINCT month FROM fee_transactions WHERE is_deleted = FALSE ORDER BY month`
     );
     res.json({ rows, months: months.map((m: any) => m.month) });
   })
@@ -131,7 +136,7 @@ router.get(
   wrap(async (_req, res) => {
     const rows = await query(
       `SELECT month AS label, SUM(amount) AS value
-       FROM fee_transactions GROUP BY month ORDER BY month`
+       FROM fee_transactions WHERE is_deleted = FALSE GROUP BY month ORDER BY month`
     );
     res.json({ data: rows });
   })

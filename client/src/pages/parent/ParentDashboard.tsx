@@ -1,8 +1,16 @@
+import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../auth/AuthContext';
 import { api, rs, hrs } from '../../api/client';
 import { KpiCard, Section, StatusBadge, Table, HoursValue, Spinner } from '../../components/ui';
+
+const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const fmtMonth = (m?: string) => {
+  if (!m) return '—';
+  const [y, mm] = m.split('-');
+  return `${MON[Number(mm) - 1] ?? mm}-${y.slice(2)}`;
+};
 
 export default function ParentDashboard() {
   const { user } = useAuth();
@@ -12,6 +20,15 @@ export default function ParentDashboard() {
   const ledger = useQuery({ queryKey: ['ledger', id], queryFn: () => api.get(`/fees/ledger/${id}`).then((r) => r.data), enabled: !!id });
   const lectures = useQuery({ queryKey: ['lectures', id], queryFn: () => api.get('/lectures', { params: { studentId: id } }).then((r) => r.data.data), enabled: !!id });
   const teachers = useQuery({ queryKey: ['teachers-of', id], queryFn: () => api.get(`/teachers/of-student/${id}`).then((r) => r.data.data), enabled: !!id });
+  const tx = useQuery({ queryKey: ['tx', id], queryFn: () => api.get(`/fees/transactions/${id}`).then((r) => r.data.data), enabled: !!id });
+
+  // Month-wise total hours used + fees received (rows, newest first).
+  const monthly = useMemo(() => {
+    const map: Record<string, { hours: number; fees: number }> = {};
+    (lectures.data || []).forEach((x: any) => { if (x.month) (map[x.month] ||= { hours: 0, fees: 0 }).hours += Number(x.hours_consumed || 0); });
+    (tx.data || []).forEach((f: any) => { if (f.month) (map[f.month] ||= { hours: 0, fees: 0 }).fees += Number(f.amount || 0); });
+    return Object.keys(map).sort().reverse().map((m) => ({ month: m, ...map[m] }));
+  }, [lectures.data, tx.data]);
 
   if (!id) return <p className="muted p-6">No student linked to this parent account.</p>;
   if (student.isLoading || ledger.isLoading) return <Spinner />;
@@ -37,7 +54,8 @@ export default function ParentDashboard() {
         <KpiCard label="Teachers" value={(teachers.data || []).length} accent="emerald" />
       </div>
 
-      <div className="flex gap-3">
+      <div className="flex flex-wrap gap-3">
+        <Link to="/parent/tracker" className="btn-primary">📊 Open Tracker</Link>
         <Link to="/parent/lectures" className="btn-ghost">View Lectures</Link>
         <Link to="/parent/fees" className="btn-ghost">View Fees & Pay</Link>
       </div>
@@ -68,6 +86,25 @@ export default function ParentDashboard() {
           )}
         </Section>
       </div>
+
+      {/* Month-wise total hours used + fees received */}
+      <Section title="Month-wise Hours & Fees" action={<Link to="/parent/tracker" className="btn-ghost !py-1 !px-2.5 text-xs">Full Tracker →</Link>}>
+        {lectures.isLoading || tx.isLoading ? <Spinner /> : monthly.length === 0 ? (
+          <p className="muted text-sm">No activity recorded yet.</p>
+        ) : (
+          <div className="max-h-[360px] overflow-y-auto">
+            <Table head={['Month', 'Hours Used', 'Fees Received']}>
+              {monthly.map((r) => (
+                <tr key={r.month}>
+                  <td className="table-td font-semibold whitespace-nowrap">{fmtMonth(r.month)}</td>
+                  <td className="table-td">{hrs(r.hours)}</td>
+                  <td className="table-td text-emerald-600">{rs(r.fees)}</td>
+                </tr>
+              ))}
+            </Table>
+          </div>
+        )}
+      </Section>
     </div>
   );
 }

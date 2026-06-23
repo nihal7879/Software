@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import { config } from './config';
 import { notFound, errorHandler } from './middleware/error';
+import { requestContext } from './utils/reqContext';
 
 import authRoutes from './routes/auth';
 import studentRoutes from './routes/students';
@@ -13,6 +14,9 @@ import managementRoutes from './routes/management';
 
 const app = express();
 
+// Behind Vercel / a reverse proxy — trust X-Forwarded-* so req.ip is the real client IP.
+app.set('trust proxy', true);
+
 // CORS: allow the configured client origin. Set CLIENT_ORIGIN="*" to allow any
 // (fine when the frontend reaches the API through a same-origin Vercel rewrite).
 app.use(
@@ -23,6 +27,9 @@ app.use(
   )
 );
 app.use(express.json({ limit: '2mb' }));
+
+// Capture IP + GPS per request so every audit() call records origin.
+app.use(requestContext);
 
 app.get('/api/health', (_req, res) =>
   res.json({ ok: true, service: 'classroom', time: new Date().toISOString() })

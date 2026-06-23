@@ -63,7 +63,7 @@ export function StatusBadge({ status }: { status: string }) {
 
 export function HoursValue({ value }: { value: number | string }) {
   const n = Number(value);
-  return <span className={n < 0 ? 'text-red-500 font-semibold' : ''}>{n.toFixed(2)} h</span>;
+  return <span className={`whitespace-nowrap ${n < 0 ? 'text-red-500 font-semibold' : ''}`}>{n.toFixed(2)} h</span>;
 }
 
 export function Table({ head, children }: { head: string[]; children: ReactNode }) {

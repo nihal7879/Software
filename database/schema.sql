@@ -28,6 +28,13 @@ CREATE TABLE users (
   password_hash VARCHAR(255) NOT NULL,
   display_name  VARCHAR(160),
   is_active     BOOLEAN NOT NULL DEFAULT TRUE,
+  is_deleted    BOOLEAN NOT NULL DEFAULT FALSE,
+  registration_ip     VARCHAR(45),
+  registration_gps    VARCHAR(60),
+  registration_device VARCHAR(120),
+  last_login_ip       VARCHAR(45),
+  last_login_device   VARCHAR(120),
+  last_login_at       DATETIME,
   branch_id     INT,
   created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -42,6 +49,8 @@ CREATE TABLE students (
   form_no         VARCHAR(40) NOT NULL UNIQUE,
   date_of_joining DATE,
   status          ENUM('Active','Inactive','SP-Active') NOT NULL DEFAULT 'Active',
+  is_active       BOOLEAN NOT NULL DEFAULT TRUE,
+  is_deleted      BOOLEAN NOT NULL DEFAULT FALSE,
   first_name      VARCHAR(80),
   middle_name     VARCHAR(80),
   last_name       VARCHAR(80),
@@ -85,6 +94,8 @@ CREATE TABLE parents (
   name         VARCHAR(160),
   mobile       VARCHAR(40),
   relationship ENUM('Father','Mother','Guardian') DEFAULT 'Father',
+  is_active    BOOLEAN NOT NULL DEFAULT TRUE,
+  is_deleted   BOOLEAN NOT NULL DEFAULT FALSE,
   created_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT fk_parents_student FOREIGN KEY (student_id) REFERENCES students(id) ON DELETE CASCADE,
   CONSTRAINT fk_parents_user    FOREIGN KEY (user_id)    REFERENCES users(id)    ON DELETE SET NULL
@@ -100,6 +111,7 @@ CREATE TABLE teachers (
   mobile         VARCHAR(40),
   specialization VARCHAR(160),
   is_active      BOOLEAN NOT NULL DEFAULT TRUE,
+  is_deleted     BOOLEAN NOT NULL DEFAULT FALSE,
   user_id        INT,
   branch_id      INT,
   created_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -112,7 +124,9 @@ CREATE TABLE teachers (
 -- ----------------------------------------------------------------------------
 CREATE TABLE subjects (
   id   INT AUTO_INCREMENT PRIMARY KEY,
-  name VARCHAR(120) NOT NULL UNIQUE
+  name VARCHAR(120) NOT NULL UNIQUE,
+  is_active  BOOLEAN NOT NULL DEFAULT TRUE,
+  is_deleted BOOLEAN NOT NULL DEFAULT FALSE
 );
 
 -- ----------------------------------------------------------------------------
@@ -124,6 +138,8 @@ CREATE TABLE student_teacher_mapping (
   teacher_id   INT NOT NULL,
   subject_id   INT NOT NULL,
   package_hours DECIMAL(8,2) DEFAULT 0,
+  is_active    BOOLEAN NOT NULL DEFAULT TRUE,
+  is_deleted   BOOLEAN NOT NULL DEFAULT FALSE,
   created_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT fk_stm_student FOREIGN KEY (student_id) REFERENCES students(id) ON DELETE CASCADE,
   CONSTRAINT fk_stm_teacher FOREIGN KEY (teacher_id) REFERENCES teachers(id) ON DELETE CASCADE,
@@ -150,6 +166,7 @@ CREATE TABLE lecture_sessions (
   remark        VARCHAR(400),             -- separate teacher remark
   venue         VARCHAR(80),              -- JLT, Online, Oud Metha...
   meeting_link  VARCHAR(400),            -- Google Meet / Zoom / recording
+  is_deleted    BOOLEAN NOT NULL DEFAULT FALSE,
   branch_id     INT,
   created_by    INT,
   created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -187,6 +204,7 @@ CREATE TABLE fee_packages (
   adjusted_hours  DECIMAL(8,2) DEFAULT 0,
   start_date      DATE,
   is_active       BOOLEAN NOT NULL DEFAULT TRUE,
+  is_deleted      BOOLEAN NOT NULL DEFAULT FALSE,
   created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT fk_pkg_student FOREIGN KEY (student_id) REFERENCES students(id) ON DELETE CASCADE
 );
@@ -205,6 +223,7 @@ CREATE TABLE fee_transactions (
   payment_source        VARCHAR(160),              -- e.g. MASHQ bank transfer
   course_package_hours  DECIMAL(8,2),
   notes                 TEXT,
+  is_deleted            BOOLEAN NOT NULL DEFAULT FALSE,
   created_by            INT,
   created_at            TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT fk_tx_student FOREIGN KEY (student_id) REFERENCES students(id) ON DELETE CASCADE,
@@ -226,6 +245,31 @@ CREATE TABLE ledger_adjustments (
 );
 
 -- ----------------------------------------------------------------------------
+-- Finance Excel import — drafts queue (unmatched / incomplete rows)
+-- ----------------------------------------------------------------------------
+CREATE TABLE fee_import_drafts (
+  id                    INT AUTO_INCREMENT PRIMARY KEY,
+  student_id            INT NULL,
+  guessed_form_no       VARCHAR(40),
+  guessed_student_name  VARCHAR(200),
+  amount                DECIMAL(12,2),
+  payment_date          DATE NULL,
+  month                 VARCHAR(7),
+  transaction_reference VARCHAR(120),
+  payment_source        VARCHAR(160),
+  parent_name           VARCHAR(160),
+  course_package_hours  DECIMAL(8,2) NULL,
+  notes                 TEXT,
+  reason                VARCHAR(200),
+  raw_json              JSON,
+  status                ENUM('draft','imported') NOT NULL DEFAULT 'draft',
+  created_by            INT,
+  created_at            TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_fid_student FOREIGN KEY (student_id) REFERENCES students(id) ON DELETE SET NULL,
+  INDEX idx_fid_status (status)
+);
+
+-- ----------------------------------------------------------------------------
 -- Audit logs
 -- ----------------------------------------------------------------------------
 CREATE TABLE audit_logs (
@@ -236,8 +280,13 @@ CREATE TABLE audit_logs (
   entity_id   VARCHAR(60),
   before_json JSON,
   after_json  JSON,
+  ip_address  VARCHAR(45),
+  gps         VARCHAR(60),
+  device      VARCHAR(120),
   created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  INDEX idx_audit_entity (entity_type, entity_id)
+  INDEX idx_audit_entity (entity_type, entity_id),
+  INDEX idx_audit_user (user_id),
+  INDEX idx_audit_created (created_at)
 );
 
 -- ============================================================================

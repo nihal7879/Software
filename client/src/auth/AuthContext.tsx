@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
-import { api } from '../api/client';
+import { api, ensureLocation } from '../api/client';
 
 export type Role = 'student' | 'parent' | 'faculty' | 'admin';
 export interface AuthUser {
@@ -37,18 +37,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const login = async (email: string, password: string) => {
+    ensureLocation(); // fire-and-forget: starts the GPS fix, never blocks login. IP is server-side.
     const r = await api.post('/auth/login', { email, password });
     localStorage.setItem('token', r.data.token);
     setUser(r.data.user);
   };
 
   const register = async (payload: any) => {
+    ensureLocation();
     const r = await api.post('/auth/register', payload);
     localStorage.setItem('token', r.data.token);
     setUser(r.data.user);
   };
 
-  const logout = () => {
+  const logout = async () => {
+    ensureLocation();
+    try { await api.post('/auth/logout'); } catch { /* token may be expired — ignore */ }
     localStorage.removeItem('token');
     setUser(null);
     location.href = '/login';

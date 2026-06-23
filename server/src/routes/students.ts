@@ -1,15 +1,18 @@
 import { Router } from 'express';
 import { z } from 'zod';
+import bcrypt from 'bcryptjs';
 import { query, queryOne } from '../db';
 import { requireAuth, requireRole, ensureOwnStudent } from '../middleware/auth';
 import { wrap } from '../middleware/error';
 import { audit } from '../utils/audit';
+import { clientIp, deviceInfo, getReqCtx } from '../utils/reqContext';
 
 const router = Router();
 router.use(requireAuth);
 
 const studentSchema = z.object({
-  form_no: z.string().min(1),
+  // form_no is system-assigned (= the student's DB id); never entered manually.
+  form_no: z.string().optional(),
   date_of_joining: z.string().nullable().optional(),
   status: z.enum(['Active', 'Inactive', 'SP-Active']).default('Active'),
   first_name: z.string().optional().nullable(),
@@ -50,7 +53,7 @@ router.get(
     const limit = Math.min(100, Number(req.query.limit || 20));
     const offset = (page - 1) * limit;
 
-    const where: string[] = [];
+    const where: string[] = ['is_deleted = FALSE'];
     const params: any[] = [];
     if (search) {
       where.push('(full_name LIKE ? OR form_no LIKE ? OR email LIKE ?)');
@@ -90,26 +93,47 @@ router.post(
   requireRole('admin', 'faculty'),
   wrap(async (req, res) => {
     const b = studentSchema.parse(req.body);
+    // Optional login: management can hand the student credentials at creation.
+    const creds = z.object({ password: z.string().min(6).optional() }).parse(req.body);
+
+    // If an email + password are given, create the student's login account first.
+    let userId: number | null = null;
+    if (b.email && creds.password) {
+      const exists = await queryOne<any>('SELECT id FROM users WHERE email = ?', [b.email]);
+      if (exists) return res.status(409).json({ error: 'A user with this email already exists' });
+      const hash = await bcrypt.hash(creds.password, 10);
+      const ctx = getReqCtx();
+      const gps = ctx?.lat != null && ctx?.lng != null ? `${ctx.lat},${ctx.lng}` : null;
+      const u: any = await query(
+        `INSERT INTO users (role, email, password_hash, display_name, registration_ip, registration_gps, registration_device)
+         VALUES ('student', ?, ?, ?, ?, ?, ?)`,
+        [b.email, hash, fullName(b) || b.email, clientIp(req), gps, deviceInfo(req)]
+      );
+      userId = (u as any).insertId;
+    }
+
+    // form_no is auto-assigned = DB id. Insert a temp unique value, then set it to the id.
     const result: any = await query(
       `INSERT INTO students
         (form_no,date_of_joining,status,first_name,middle_name,last_name,full_name,
          year_grade,school_name,exam_board,father_name,mother_name,relationship,
          email,dob,age,gender,nationality,student_mobile,parent_mobile,extra_mobile,
-         fees_received,form_received,branch_id)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+         fees_received,form_received,branch_id,user_id)
+       VALUES (UUID(),?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       [
-        b.form_no, b.date_of_joining || null, b.status, b.first_name || null,
+        b.date_of_joining || null, b.status, b.first_name || null,
         b.middle_name || null, b.last_name || null, fullName(b), b.year_grade || null,
         b.school_name || null, b.exam_board || null, b.father_name || null,
         b.mother_name || null, b.relationship || 'Father', b.email || null, b.dob || null,
         b.age ?? null, b.gender || null, b.nationality || null, b.student_mobile || null,
         b.parent_mobile || null, b.extra_mobile || null, b.fees_received ?? 0,
-        b.form_received ?? false, b.branch_id ?? null,
+        b.form_received ?? false, b.branch_id ?? null, userId,
       ]
     );
     const id = (result as any).insertId;
-    await audit(req.user!.userId, 'CREATE', 'student', id, null, b);
-    res.status(201).json({ id });
+    await query('UPDATE students SET form_no = ? WHERE id = ?', [String(id), id]);
+    await audit(req.user!.userId, 'CREATE', 'student', id, null, { ...b, password: undefined, form_no: String(id), login_created: !!userId });
+    res.status(201).json({ id, form_no: String(id), login_created: !!userId });
   })
 );
 
@@ -146,7 +170,7 @@ router.post(
   '/:id/archive',
   requireRole('admin'),
   wrap(async (req, res) => {
-    await query("UPDATE students SET status = 'Inactive' WHERE id = ?", [req.params.id]);
+    await query("UPDATE students SET status = 'Inactive', is_active = FALSE WHERE id = ?", [req.params.id]);
     await audit(req.user!.userId, 'ARCHIVE', 'student', req.params.id, null, null);
     res.json({ ok: true });
   })

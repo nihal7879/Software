@@ -2,7 +2,7 @@ import { ReactNode, useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, Users, ClipboardList, Clock, Wallet, GraduationCap, BarChart3,
-  BookOpen, CalendarDays, User, LogOut, Moon, Sun, ChevronLeft, Menu,
+  BookOpen, CalendarDays, User, LogOut, Moon, Sun, ChevronLeft, Menu, LineChart,
 } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
 import { useTheme } from '../theme/ThemeContext';
@@ -27,11 +27,13 @@ const NAV: Record<string, Item[]> = {
   ],
   student: [
     { to: '/student', label: 'Dashboard', icon: LayoutDashboard },
+    { to: '/student/tracker', label: 'Tracker', icon: LineChart },
     { to: '/student/lectures', label: 'Lecture History', icon: CalendarDays },
     { to: '/student/profile', label: 'Profile', icon: User },
   ],
   parent: [
     { to: '/parent', label: 'Dashboard', icon: LayoutDashboard },
+    { to: '/parent/tracker', label: 'Tracker', icon: LineChart },
     { to: '/parent/lectures', label: 'Lectures', icon: CalendarDays },
     { to: '/parent/fees', label: 'Fees', icon: Wallet },
   ],

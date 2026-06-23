@@ -22,6 +22,8 @@ export default function Register() {
   const submit = async (b: any) => {
     setError(''); setBusy(true);
     try {
+      // GPS is captured in the background (ensureLocation in AuthContext) — we don't
+      // block sign-up on it. IP/device are recorded server-side.
       await doRegister({ role, ...b });
       nav(HOME[role]);
     } catch (e: any) {

@@ -22,6 +22,7 @@ import LectureHistory from './pages/student/LectureHistory';
 import StudentFees from './pages/student/StudentFees';
 import StudentProfile from './pages/student/StudentProfile';
 import ParentDashboard from './pages/parent/ParentDashboard';
+import Tracker from './pages/shared/Tracker';
 
 const HOME: Record<Role, string> = {
   admin: '/admin',
@@ -65,11 +66,13 @@ export default function App() {
 
       {/* Student */}
       <Route path="/student" element={<Protected roles={['student']}><StudentDashboard /></Protected>} />
+      <Route path="/student/tracker" element={<Protected roles={['student']}><Tracker /></Protected>} />
       <Route path="/student/lectures" element={<Protected roles={['student']}><LectureHistory /></Protected>} />
       <Route path="/student/profile" element={<Protected roles={['student']}><StudentProfile /></Protected>} />
 
       {/* Parent */}
       <Route path="/parent" element={<Protected roles={['parent']}><ParentDashboard /></Protected>} />
+      <Route path="/parent/tracker" element={<Protected roles={['parent']}><Tracker /></Protected>} />
       <Route path="/parent/lectures" element={<Protected roles={['parent']}><LectureHistory /></Protected>} />
       <Route path="/parent/fees" element={<Protected roles={['parent']}><StudentFees /></Protected>} />
 

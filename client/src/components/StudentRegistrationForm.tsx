@@ -20,10 +20,12 @@ export function StudentRegistrationForm({
   studentId,
   initial,
   onSaved,
+  submitLabel = 'Save & Submit to Management',
 }: {
   studentId: number;
   initial?: any;
   onSaved?: () => void;
+  submitLabel?: string;
 }) {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -122,7 +124,7 @@ export function StudentRegistrationForm({
       </section>
 
       {error && <div className="text-sm text-red-500 font-medium">{error}</div>}
-      <button className="btn-primary w-full !py-3" disabled={busy}>{busy ? 'Saving…' : 'Save & Submit to Management'}</button>
+      <button className="btn-primary w-full !py-3" disabled={busy}>{busy ? 'Saving…' : submitLabel}</button>
     </form>
   );
 }
