@@ -16,13 +16,18 @@ export default function Finance() {
   const [fromDate, setFromDate] = useState(''); // date-range filter; '' = show all
   const [toDate, setToDate] = useState('');
   const [txSearch, setTxSearch] = useState('');
+  const [page, setPage] = useState(1);
   const [importMsg, setImportMsg] = useState('');
   const [draftsOpen, setDraftsOpen] = useState(false);
   const [confirm, setConfirm] = useState<{ title: string; message: string; confirmLabel: string; onConfirm: () => void } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  const tx = useQuery({ queryKey: ['transactions'], queryFn: () => api.get('/fees/transactions').then((r) => r.data.data) });
-  const students = useQuery({ queryKey: ['students-all'], queryFn: () => api.get('/students', { params: { limit: 100 } }).then((r) => r.data.data) });
+  const tx = useQuery({
+    queryKey: ['transactions', txSearch, fromDate, toDate, page],
+    queryFn: () => api.get('/fees/transactions', { params: { search: txSearch, from: fromDate || undefined, to: toDate || undefined, page, limit: 20 } }).then((r) => r.data),
+  });
+  const [studentSearch, setStudentSearch] = useState('');
+  const students = useQuery({ queryKey: ['students-pick', studentSearch], queryFn: () => api.get('/students', { params: { search: studentSearch, limit: 50 } }).then((r) => r.data.data) });
   const drafts = useQuery({ queryKey: ['fee-drafts'], queryFn: () => api.get('/fees/drafts').then((r) => r.data.data) });
 
   const { register, handleSubmit, reset, watch, setValue } = useForm();
@@ -99,18 +104,10 @@ export default function Finance() {
 
   const draftList = drafts.data || [];
 
-  // Filter the transactions by date range, student, and a free-text search.
-  const needle = txSearch.trim().toLowerCase();
-  const visibleTx = (tx.data || []).filter((t: any) => {
-    const d = String(t.payment_date).slice(0, 10);
-    if (fromDate && d < fromDate) return false;
-    if (toDate && d > toDate) return false;
-    if (needle) {
-      const hay = `${t.student_name || ''} ${t.form_no || ''} ${t.transaction_reference || ''} ${t.payment_source || ''} ${t.parent_name || ''} ${t.notes || ''}`.toLowerCase();
-      if (!hay.includes(needle)) return false;
-    }
-    return true;
-  });
+  // Transactions are filtered + paginated server-side (search, from, to, page).
+  const visibleTx = tx.data?.data || [];
+  const txTotal = tx.data?.total || 0;
+  const txPages = Math.ceil(txTotal / 20) || 1;
 
   return (
     <div className="space-y-4">
@@ -158,6 +155,7 @@ export default function Finance() {
                         key={d.id}
                         draft={d}
                         students={students.data || []}
+                        onStudentSearch={setStudentSearch}
                         busy={assign.isPending || discard.isPending}
                         onAssign={(payload) => assign.mutate({ id: d.id, payload })}
                         onDiscard={() => setConfirm({ title: 'Discard draft', message: 'Discard this draft row? This cannot be undone.', confirmLabel: 'Discard', onConfirm: () => discard.mutate(d.id) })}
@@ -179,17 +177,17 @@ export default function Finance() {
               className="input w-[220px]"
               placeholder="Search payments…"
               value={txSearch}
-              onChange={(e) => setTxSearch(e.target.value)}
+              onChange={(e) => { setTxSearch(e.target.value); setPage(1); }}
             />
             <CalendarRangePicker
               from={fromDate}
               to={toDate}
-              onChange={(f, t) => { setFromDate(f); setToDate(t); }}
+              onChange={(f, t) => { setFromDate(f); setToDate(t); setPage(1); }}
               placeholder="Filter by date / month"
               align="right"
             />
             {(fromDate || toDate || txSearch) && (
-              <button className="btn-ghost !py-1.5 !px-3 text-sm whitespace-nowrap" onClick={() => { setFromDate(''); setToDate(''); setTxSearch(''); }}>
+              <button className="btn-ghost !py-1.5 !px-3 text-sm whitespace-nowrap" onClick={() => { setFromDate(''); setToDate(''); setTxSearch(''); setPage(1); }}>
                 Show all
               </button>
             )}
@@ -221,6 +219,15 @@ export default function Finance() {
             ))}
           </Table>
         ))}
+        {!tx.isLoading && visibleTx.length > 0 && (
+          <div className="flex items-center justify-between mt-3 text-sm">
+            <span className="muted">Page {page} / {txPages} · {txTotal} payments</span>
+            <div className="flex gap-2">
+              <button className="btn-ghost" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>Prev</button>
+              <button className="btn-ghost" disabled={page >= txPages} onClick={() => setPage((p) => p + 1)}>Next</button>
+            </div>
+          </div>
+        )}
       </Section>
 
       {drawer && (
@@ -235,7 +242,8 @@ export default function Finance() {
                   value={watch('student_id') || ''}
                   onChange={(v) => setValue('student_id', v, { shouldValidate: true })}
                   options={(students.data || []).map((s: any) => ({ value: s.id, label: `${s.form_no} — ${s.full_name}` }))}
-                  placeholder="Select student…"
+                  onSearch={setStudentSearch}
+                  placeholder="Search student…"
                 />
               </div>
               <div>
@@ -298,12 +306,14 @@ function DraftRow({
   busy,
   onAssign,
   onDiscard,
+  onStudentSearch,
 }: {
   draft: any;
   students: any[];
   busy: boolean;
   onAssign: (payload: any) => void;
   onDiscard: () => void;
+  onStudentSearch: (q: string) => void;
 }) {
   const [studentId, setStudentId] = useState<string>(draft.student_id ? String(draft.student_id) : '');
   const [pkgHours, setPkgHours] = useState<string>(draft.course_package_hours != null ? String(draft.course_package_hours) : '');
@@ -333,7 +343,8 @@ function DraftRow({
           value={studentId}
           onChange={setStudentId}
           options={students.map((s: any) => ({ value: s.id, label: `${s.form_no} — ${s.full_name}` }))}
-          placeholder="Select student…"
+          onSearch={onStudentSearch}
+          placeholder="Search student…"
         />
       </td>
       <td className="table-td"><input className="input !py-1 w-24" type="number" step="0.01" value={pkgHours} onChange={(e) => setPkgHours(e.target.value)} placeholder="0" /></td>

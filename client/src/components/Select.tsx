@@ -14,6 +14,7 @@ export function Select({
   placeholder = 'Select…',
   className = '',
   allowCustom = false,
+  onSearch,
 }: {
   value: string | number | '';
   onChange: (v: string) => void;
@@ -21,6 +22,10 @@ export function Select({
   placeholder?: string;
   className?: string;
   allowCustom?: boolean;
+  // When provided, filtering is delegated to the server (the parent refetches
+  // `options` from the search term). Used for large lists (e.g. 3000 students)
+  // that can't all be loaded into the dropdown.
+  onSearch?: (q: string) => void;
 }) {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState('');
@@ -30,10 +35,12 @@ export function Select({
   const selected = options.find((o) => String(o.value) === String(value));
 
   const filtered = useMemo(() => {
+    // Server-side search mode: parent already filtered `options`, don't re-filter.
+    if (onSearch) return options;
     if (!q.trim()) return options;
     const needle = q.toLowerCase();
     return options.filter((o) => o.label.toLowerCase().includes(needle));
-  }, [q, options]);
+  }, [q, options, onSearch]);
 
   // Position the fixed menu relative to the trigger; flip upward if needed.
   const reposition = () => {
@@ -96,7 +103,7 @@ export function Select({
                 className="bg-transparent outline-none text-sm w-full"
                 placeholder="Search…"
                 value={q}
-                onChange={(e) => setQ(e.target.value)}
+                onChange={(e) => { setQ(e.target.value); onSearch?.(e.target.value); }}
               />
             </div>
             <div className="overflow-y-auto thin-scroll">

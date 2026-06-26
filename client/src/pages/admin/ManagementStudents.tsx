@@ -12,13 +12,14 @@ import { ConfirmModal } from '../../components/ConfirmModal';
 export default function ManagementStudents() {
   const qc = useQueryClient();
   const [search, setSearch] = useState('');
+  const [page, setPage] = useState(1);
   const [drawer, setDrawer] = useState(false);
   // After step 1 (create) we keep the new student id to fill the full profile form (step 2).
   const [newStudentId, setNewStudentId] = useState<number | null>(null);
 
   const { data, isLoading } = useQuery({
-    queryKey: ['mgmt-master'],
-    queryFn: () => api.get('/management/master').then((r) => r.data.data),
+    queryKey: ['mgmt-master', search, page],
+    queryFn: () => api.get('/management/master', { params: { search, page, limit: 20 } }).then((r) => r.data),
   });
 
   const { register, handleSubmit, reset } = useForm();
@@ -35,9 +36,9 @@ export default function ManagementStudents() {
   });
   const [confirm, setConfirm] = useState<{ id: number; name: string; next: 'Active' | 'Inactive' } | null>(null);
 
-  const rows = (data || []).filter((r: any) =>
-    !search || r.full_name?.toLowerCase().includes(search.toLowerCase()) || String(r.form_no).includes(search)
-  );
+  const rows = data?.data || [];
+  const total = data?.total || 0;
+  const pages = Math.ceil(total / 20) || 1;
 
   return (
     <div className="space-y-4">
@@ -50,13 +51,14 @@ export default function ManagementStudents() {
       </div>
 
       <div className="flex flex-wrap gap-2">
-        <input className="input max-w-xs" placeholder="Search name / form no…" value={search} onChange={(e) => setSearch(e.target.value)} />
+        <input className="input max-w-xs" placeholder="Search name / form no…" value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} />
       </div>
 
-      <Section title={`${rows.length} students`}>
+      <Section title={`${total} students`}>
         {isLoading ? <Spinner /> : rows.length === 0 ? (
           <p className="muted text-sm">No students found.</p>
         ) : (
+          <>
           <Table head={['Student', 'Profile', 'Parent (pays)', 'Relation', 'Status', 'Teachers', '']}>
             {rows.map((r: any) => (
               <tr key={r.id}>
@@ -115,6 +117,14 @@ export default function ManagementStudents() {
               </tr>
             ))}
           </Table>
+          <div className="flex items-center justify-between mt-3 text-sm">
+            <span className="muted">Page {page} / {pages}</span>
+            <div className="flex gap-2">
+              <button className="btn-ghost" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>Prev</button>
+              <button className="btn-ghost" disabled={page >= pages} onClick={() => setPage((p) => p + 1)}>Next</button>
+            </div>
+          </div>
+          </>
         )}
       </Section>
 

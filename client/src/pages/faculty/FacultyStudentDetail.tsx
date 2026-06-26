@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { api, hrs } from '../../api/client';
-import { KpiCard, Section, StatusBadge, Table, HoursValue, Spinner } from '../../components/ui';
+import { Section, StatusBadge, Table, Spinner } from '../../components/ui';
 import { DateRangePicker } from '../../components/DateRangePicker';
 
 // TEACHER → one of my students. Hours + lecture history only — NO fees.
@@ -35,31 +35,32 @@ export default function FacultyStudentDetail() {
         <div className="muted text-sm pb-2">Parent mobile: <b>{s.parent_mobile || '—'}</b></div>
       </DateRangePicker>
 
-      {/* Hours only — no fees */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <KpiCard label="Hours Purchased" value={hrs(s.total_hours_credited)} accent="blue" />
-        <KpiCard label="Hours Consumed" value={hrs(s.total_hours_consumed)} accent="indigo" />
-        <KpiCard label="Hours Remaining" value={<HoursValue value={s.hours_left ?? 0} />} accent={Number(s.hours_left) <= 0 ? 'red' : 'emerald'} />
-        <KpiCard label="My hours (range)" value={hrs(sum.hours_in_range)} sub={`${sum.lecture_count} classes`} accent="orange" />
-      </div>
-
       <Section title="Lecture Log — with you">
         <Table head={['Date', 'Subject', 'Time In', 'Time Out', { label: 'No. of Hours', align: 'right' }, 'Topic', 'Subtopic', 'Remark', 'Venue']}>
           {data.lectures.length === 0 ? (
             <tr><td className="table-td muted" colSpan={9}>No lectures in this range.</td></tr>
-          ) : data.lectures.map((l: any, i: number) => (
-            <tr key={i}>
-              <td className="table-td whitespace-nowrap">{l.session_date}</td>
-              <td className="table-td">{l.subject_name || '—'}</td>
-              <td className="table-td">{l.time_in || '—'}</td>
-              <td className="table-td">{l.time_out || '—'}</td>
-              <td className="table-td text-right tabular-nums font-semibold">{hrs(l.no_of_hours)}</td>
-              <td className="table-td">{l.topic || '—'}</td>
-              <td className="table-td">{l.subtopic || '—'}</td>
-              <td className="table-td">{l.remark || '—'}</td>
-              <td className="table-td">{l.venue || '—'}</td>
-            </tr>
-          ))}
+          ) : (
+            <>
+              {data.lectures.map((l: any, i: number) => (
+                <tr key={i}>
+                  <td className="table-td whitespace-nowrap">{l.session_date}</td>
+                  <td className="table-td">{l.subject_name || '—'}</td>
+                  <td className="table-td">{l.time_in || '—'}</td>
+                  <td className="table-td">{l.time_out || '—'}</td>
+                  <td className="table-td text-right tabular-nums font-semibold">{hrs(l.no_of_hours)}</td>
+                  <td className="table-td">{l.topic || '—'}</td>
+                  <td className="table-td">{l.subtopic || '—'}</td>
+                  <td className="table-td">{l.remark || '—'}</td>
+                  <td className="table-td">{l.venue || '—'}</td>
+                </tr>
+              ))}
+              <tr className="border-t-2" style={{ borderColor: 'var(--color-border)', background: 'var(--color-card)' }}>
+                <td className="table-td font-bold" colSpan={4}>Total</td>
+                <td className="table-td text-right tabular-nums font-bold">{hrs(sum.hours_in_range)}</td>
+                <td className="table-td" colSpan={4}></td>
+              </tr>
+            </>
+          )}
         </Table>
       </Section>
     </div>

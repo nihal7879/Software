@@ -4,33 +4,53 @@ import { query, queryOne } from '../db';
 import { requireAuth, requireRole, ensureOwnStudent } from '../middleware/auth';
 import { wrap } from '../middleware/error';
 import { deriveMonth } from '../utils/hours';
+import { HOURS_COLUMNS, deriveHours } from '../utils/hoursSummary';
 import { audit } from '../utils/audit';
 
 const router = Router();
 router.use(requireAuth);
 
-// Hours ledger summary for one student (from the VIEW)
+// Hours ledger summary for ONE student — computed scoped to this student id
+// (indexed lookups), not by reading the recompute-everything view.
 router.get(
   '/ledger/:id',
   ensureOwnStudent,
   wrap(async (req, res) => {
-    const row = await queryOne('SELECT * FROM student_hours_summary WHERE student_id = ?', [
-      req.params.id,
-    ]);
+    const row = await queryOne<any>(
+      `SELECT s.id AS student_id, s.form_no, s.full_name AS student_name, s.status, ${HOURS_COLUMNS}
+       FROM students s WHERE s.id = ?`,
+      [req.params.id]
+    );
     if (!row) return res.status(404).json({ error: 'No ledger for student' });
-    res.json(row);
+    res.json(deriveHours(row));
   })
 );
 
-// Full ledger table (admin) — the 154-Summary screen
+// Full ledger table (admin) — one PAGE of students, each computed scoped to its
+// own id, so we never aggregate the whole table.
 router.get(
   '/ledger',
   requireRole('admin', 'faculty'),
-  wrap(async (_req, res) => {
-    const rows = await query(
-      'SELECT * FROM student_hours_summary ORDER BY CAST(form_no AS UNSIGNED)'
+  wrap(async (req, res) => {
+    const search = (req.query.search as string) || '';
+    const page = Math.max(1, Number(req.query.page || 1));
+    const limit = Math.min(100, Number(req.query.limit || 20));
+    const offset = (page - 1) * limit;
+
+    const searchSql = search ? 'WHERE (s.full_name LIKE ? OR s.form_no LIKE ?)' : '';
+    const searchParams = search ? [`%${search}%`, `%${search}%`] : [];
+
+    const rows = await query<any>(
+      `SELECT s.id AS student_id, s.form_no, s.full_name AS student_name, s.status, ${HOURS_COLUMNS}
+       FROM students s ${searchSql}
+       ORDER BY CAST(s.form_no AS UNSIGNED) LIMIT ? OFFSET ?`,
+      [...searchParams, limit, offset]
     );
-    res.json({ data: rows });
+    const [{ total }] = await query<any>(
+      `SELECT COUNT(*) AS total FROM students s ${searchSql}`,
+      searchParams
+    );
+    res.json({ data: rows.map(deriveHours), page, limit, total });
   })
 );
 
@@ -53,16 +73,39 @@ router.get(
   requireRole('admin'),
   wrap(async (req, res) => {
     const month = req.query.month as string;
+    const search = (req.query.search as string) || '';
+    const from = req.query.from as string;
+    const to = req.query.to as string;
+    const page = Math.max(1, Number(req.query.page || 1));
+    const limit = Math.min(100, Number(req.query.limit || 20));
+    const offset = (page - 1) * limit;
+
+    const where: string[] = ['ft.is_deleted = FALSE'];
     const params: any[] = [];
-    let where = 'WHERE ft.is_deleted = FALSE';
-    if (month) { where += ' AND ft.month = ?'; params.push(month); }
+    if (month) { where.push('ft.month = ?'); params.push(month); }
+    if (from) { where.push('ft.payment_date >= ?'); params.push(from); }
+    if (to) { where.push('ft.payment_date <= ?'); params.push(to); }
+    if (search) {
+      where.push('(s.full_name LIKE ? OR s.form_no LIKE ? OR ft.transaction_reference LIKE ? OR ft.payment_source LIKE ? OR ft.parent_name LIKE ? OR ft.notes LIKE ?)');
+      const like = `%${search}%`;
+      params.push(like, like, like, like, like, like);
+    }
+    const whereSql = `WHERE ${where.join(' AND ')}`;
+
     const rows = await query(
       `SELECT ft.*, s.full_name AS student_name, s.form_no
        FROM fee_transactions ft JOIN students s ON s.id = ft.student_id
-       ${where} ORDER BY ft.payment_date DESC`,
+       ${whereSql} ORDER BY ft.payment_date DESC, ft.id DESC
+       LIMIT ? OFFSET ?`,
+      [...params, limit, offset]
+    );
+    const [{ total }] = await query<any>(
+      `SELECT COUNT(*) AS total
+       FROM fee_transactions ft JOIN students s ON s.id = ft.student_id
+       ${whereSql}`,
       params
     );
-    res.json({ data: rows });
+    res.json({ data: rows, page, limit, total });
   })
 );
 

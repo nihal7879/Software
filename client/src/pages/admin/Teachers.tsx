@@ -5,6 +5,7 @@ import { useForm } from 'react-hook-form';
 import { api, hrs } from '../../api/client';
 import { Section, Table, Spinner } from '../../components/ui';
 import { ConfirmModal } from '../../components/ConfirmModal';
+import { AdminLectureEntryModal } from '../../components/AdminLectureEntryModal';
 
 export default function Teachers() {
   const qc = useQueryClient();
@@ -48,6 +49,12 @@ export default function Teachers() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['workload'] }),
   });
   const [confirm, setConfirm] = useState<{ title: string; message: string; confirmLabel: string; danger?: boolean; onConfirm: () => void } | null>(null);
+  // Admin logs a lecture on behalf of a (busy) teacher.
+  const [lectureFor, setLectureFor] = useState<{ id: number; name: string } | null>(null);
+  const [workloadSearch, setWorkloadSearch] = useState('');
+  const visibleWorkload = (workload.data || []).filter((t: any) =>
+    !workloadSearch || t.name?.toLowerCase().includes(workloadSearch.toLowerCase())
+  );
 
   return (
     <div className="space-y-4">
@@ -98,11 +105,15 @@ export default function Teachers() {
         )}
       </Section>
 
-      <Section title="Workload">
+      <Section title="Workload" action={
+        <input className="input max-w-[220px]" placeholder="Search teacher…" value={workloadSearch} onChange={(e) => setWorkloadSearch(e.target.value)} />
+      }>
         <p className="muted text-sm mb-3">Click a teacher to see the students assigned to them. Assign teachers from a student's Report.</p>
-        {workload.isLoading ? <Spinner /> : (
+        {workload.isLoading ? <Spinner /> : visibleWorkload.length === 0 ? (
+          <p className="muted text-sm">No teachers match “{workloadSearch}”.</p>
+        ) : (
           <Table head={['Teacher', { label: 'Students', align: 'right' }, { label: 'Total Hours Taught', align: 'right' }, { label: 'This Month', align: 'right' }, 'Status', '']}>
-            {workload.data.map((t: any) => {
+            {visibleWorkload.map((t: any) => {
               const active = Number(t.is_active) === 1;
               return (
               <tr key={t.id}>
@@ -122,6 +133,12 @@ export default function Teachers() {
                       onClick={() => setOpenTeacher(openTeacher?.id === t.id ? null : { id: t.id, name: t.name })}
                     >
                       {openTeacher?.id === t.id ? 'Hide students' : 'View students'}
+                    </button>
+                    <button
+                      className="!py-1 !px-2.5 text-xs rounded-lg border border-blue-500/30 text-blue-600 hover:bg-blue-500/10 transition-colors whitespace-nowrap"
+                      onClick={() => setLectureFor({ id: t.id, name: t.name })}
+                    >
+                      + Lecture
                     </button>
                     {active ? (
                       <button
@@ -221,6 +238,14 @@ export default function Teachers() {
           danger={confirm.danger}
           onConfirm={() => { confirm.onConfirm(); setConfirm(null); }}
           onClose={() => setConfirm(null)}
+        />
+      )}
+
+      {lectureFor && (
+        <AdminLectureEntryModal
+          teacherId={lectureFor.id}
+          teacherName={lectureFor.name}
+          onClose={() => setLectureFor(null)}
         />
       )}
     </div>

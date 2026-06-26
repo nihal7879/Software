@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { query, queryOne } from '../db';
 import { requireAuth, requireRole } from '../middleware/auth';
 import { wrap } from '../middleware/error';
+import { CREDITED_EXPR, CONSUMED_EXPR, PENDING_EXPR, LAST_LECTURE_EXPR, deriveHours } from '../utils/hoursSummary';
 
 const router = Router();
 router.use(requireAuth, requireRole('admin', 'faculty'));
@@ -15,6 +16,13 @@ router.get(
   '/master',
   wrap(async (req, res) => {
     const month = (req.query.month as string) || null;
+    const search = (req.query.search as string) || '';
+    const page = Math.max(1, Number(req.query.page || 1));
+    const limit = Math.min(100, Number(req.query.limit || 20));
+    const offset = (page - 1) * limit;
+
+    const searchSql = search ? ' AND (s.full_name LIKE ? OR s.form_no LIKE ?)' : '';
+    const searchParams = search ? [`%${search}%`, `%${search}%`] : [];
 
     const rows = await query(
       `SELECT
@@ -29,8 +37,11 @@ router.get(
          s.relationship AS paid_by,
          s.parent_mobile,
          s.fees_received,
-         hs.total_hours_credited, hs.total_hours_consumed, hs.hours_left,
-         hs.pending_fees, hs.fee_status, hs.last_attended_lecture,
+         -- hours summary, computed scoped to this student (no full-table view)
+         ${CREDITED_EXPR} AS total_hours_credited,
+         ${CONSUMED_EXPR} AS total_hours_consumed,
+         ${PENDING_EXPR}  AS pending_fees,
+         ${LAST_LECTURE_EXPR} AS last_attended_lecture,
          -- fees paid (all-time or in selected month)
          COALESCE((
            SELECT SUM(ft.amount) FROM fee_transactions ft
@@ -47,13 +58,17 @@ router.get(
             FROM student_teacher_mapping m JOIN teachers t ON t.id = m.teacher_id
             WHERE m.student_id = s.id) AS teachers
        FROM students s
-       LEFT JOIN student_hours_summary hs ON hs.student_id = s.id
        LEFT JOIN users u ON u.id = s.user_id
-       WHERE s.is_deleted = FALSE
-       ORDER BY CAST(s.form_no AS UNSIGNED)`,
-      [month, month, month, month]
+       WHERE s.is_deleted = FALSE${searchSql}
+       ORDER BY CAST(s.form_no AS UNSIGNED)
+       LIMIT ? OFFSET ?`,
+      [month, month, month, month, ...searchParams, limit, offset]
     );
-    res.json({ data: rows, month });
+    const [{ total }] = await query<any>(
+      `SELECT COUNT(*) AS total FROM students s WHERE s.is_deleted = FALSE${searchSql}`,
+      searchParams
+    );
+    res.json({ data: rows.map(deriveHours), page, limit, total, month });
   })
 );
 
@@ -68,17 +83,20 @@ router.get(
     const from = (req.query.from as string) || '2000-01-01';
     const to = (req.query.to as string) || '2999-12-31';
 
-    const student = await queryOne(
-      `SELECT s.*, hs.total_hours_credited, hs.total_hours_consumed, hs.hours_left,
-              hs.pending_fees, hs.fee_status, hs.rate_per_hour,
+    const studentRow = await queryOne<any>(
+      `SELECT s.*,
+              ${CREDITED_EXPR} AS total_hours_credited,
+              ${CONSUMED_EXPR} AS total_hours_consumed,
+              ${PENDING_EXPR}  AS pending_fees,
+              COALESCE((SELECT MAX(rate_per_hour) FROM fee_packages WHERE student_id = s.id AND is_active = TRUE),0) AS rate_per_hour,
               CASE s.relationship WHEN 'Mother' THEN s.mother_name WHEN 'Father' THEN s.father_name
                    ELSE COALESCE(s.father_name, s.mother_name) END AS parent_name
        FROM students s
-       LEFT JOIN student_hours_summary hs ON hs.student_id = s.id
        WHERE s.id = ?`,
       [id]
     );
-    if (!student) return res.status(404).json({ error: 'Student not found' });
+    if (!studentRow) return res.status(404).json({ error: 'Student not found' });
+    const student = deriveHours(studentRow);
 
     // Per-day lecture log within range
     const lectures = await query(

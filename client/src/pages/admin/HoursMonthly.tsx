@@ -16,8 +16,13 @@ export default function HoursMonthly() {
   const [adjustOpen, setAdjustOpen] = useState(false);
 
   const [summarySearch, setSummarySearch] = useState('');
-  const allLedger = useQuery({ queryKey: ['ledger-all'], queryFn: () => api.get('/fees/ledger').then((r) => r.data.data) });
-  const students = useQuery({ queryKey: ['students-all'], queryFn: () => api.get('/students', { params: { limit: 200 } }).then((r) => r.data.data) });
+  const [summaryPage, setSummaryPage] = useState(1);
+  const allLedger = useQuery({
+    queryKey: ['ledger-all', summarySearch, summaryPage],
+    queryFn: () => api.get('/fees/ledger', { params: { search: summarySearch, page: summaryPage, limit: 20 } }).then((r) => r.data),
+  });
+  const [studentSearch, setStudentSearch] = useState('');
+  const students = useQuery({ queryKey: ['students-pick', studentSearch], queryFn: () => api.get('/students', { params: { search: studentSearch, limit: 50 } }).then((r) => r.data.data) });
   const ledger = useQuery({ queryKey: ['ledger', studentId], queryFn: () => api.get(`/fees/ledger/${studentId}`).then((r) => r.data), enabled: !!studentId });
   const lectures = useQuery({ queryKey: ['lectures', studentId], queryFn: () => api.get('/lectures', { params: { studentId } }).then((r) => r.data.data), enabled: !!studentId });
   const packages = useQuery({ queryKey: ['pkg', studentId], queryFn: () => api.get(`/fees/packages/${studentId}`).then((r) => r.data.data), enabled: !!studentId });
@@ -112,18 +117,18 @@ export default function HoursMonthly() {
           </div>
         </div>
         <div className="w-72">
-          <Select value={studentId} onChange={setStudentId} options={options} placeholder="Select a student…" />
+          <Select value={studentId} onChange={setStudentId} options={options} onSearch={setStudentSearch} placeholder="Search & select a student…" />
         </div>
       </div>
 
       {!studentId ? (
         <Section title="All students — hours summary" action={
-          <input className="input max-w-[220px]" placeholder="Search student…" value={summarySearch} onChange={(e) => setSummarySearch(e.target.value)} />
+          <input className="input max-w-[220px]" placeholder="Search student…" value={summarySearch} onChange={(e) => { setSummarySearch(e.target.value); setSummaryPage(1); }} />
         }>
           {allLedger.isLoading ? <Spinner /> : (
+            <>
             <Table head={['Form', 'Student', 'Status', { label: 'Total', align: 'right' }, { label: 'Used', align: 'right' }, { label: 'Remaining', align: 'right' }, 'Fee Status', 'Last Lecture']}>
-              {(allLedger.data || [])
-                .filter((r: any) => !summarySearch || r.student_name?.toLowerCase().includes(summarySearch.toLowerCase()) || String(r.form_no).includes(summarySearch))
+              {(allLedger.data?.data || [])
                 .map((r: any) => (
                   <tr key={r.student_id} className="cursor-pointer hover:bg-[var(--color-card-alt)]" onClick={() => setStudentId(String(r.student_id))}>
                     <td className="table-td font-mono">{r.form_no}</td>
@@ -137,6 +142,16 @@ export default function HoursMonthly() {
                   </tr>
                 ))}
             </Table>
+            {(() => { const total = allLedger.data?.total || 0; const pages = Math.ceil(total / 20) || 1; return (
+              <div className="flex items-center justify-between mt-3 text-sm">
+                <span className="muted">Page {summaryPage} / {pages} · {total} students</span>
+                <div className="flex gap-2">
+                  <button className="btn-ghost" disabled={summaryPage <= 1} onClick={() => setSummaryPage((p) => p - 1)}>Prev</button>
+                  <button className="btn-ghost" disabled={summaryPage >= pages} onClick={() => setSummaryPage((p) => p + 1)}>Next</button>
+                </div>
+              </div>
+            ); })()}
+            </>
           )}
         </Section>
       ) : ledger.isLoading || lectures.isLoading || packages.isLoading ? (

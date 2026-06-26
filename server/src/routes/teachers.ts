@@ -6,6 +6,7 @@ import { requireAuth, requireRole } from '../middleware/auth';
 import { wrap } from '../middleware/error';
 import { audit } from '../utils/audit';
 import { clientIp, deviceInfo, getReqCtx } from '../utils/reqContext';
+import { CREDITED_EXPR, CONSUMED_EXPR, PENDING_EXPR, LAST_LECTURE_EXPR, deriveHours } from '../utils/hoursSummary';
 
 const router = Router();
 router.use(requireAuth);
@@ -49,20 +50,21 @@ router.get(
   wrap(async (req, res) => {
     const tid = await myTeacherId(req);
     if (!tid) return res.json({ data: [] });
-    const rows = await query(
-      `SELECT DISTINCT s.id, s.form_no, s.full_name, s.year_grade, s.status, s.parent_mobile,
+    const rows = await query<any>(
+      `SELECT s.id, s.form_no, s.full_name, s.year_grade, s.status, s.parent_mobile,
               GROUP_CONCAT(DISTINCT sub.name SEPARATOR ', ') AS subjects,
-              hs.hours_left, hs.fee_status
+              ${CREDITED_EXPR} AS total_hours_credited,
+              ${CONSUMED_EXPR} AS total_hours_consumed,
+              ${PENDING_EXPR}  AS pending_fees
        FROM student_teacher_mapping m
        JOIN students s ON s.id = m.student_id
        JOIN subjects sub ON sub.id = m.subject_id
-       LEFT JOIN student_hours_summary hs ON hs.student_id = s.id
        WHERE m.teacher_id = ?
-       GROUP BY s.id, s.form_no, s.full_name, s.year_grade, s.status, s.parent_mobile, hs.hours_left, hs.fee_status
+       GROUP BY s.id, s.form_no, s.full_name, s.year_grade, s.status, s.parent_mobile
        ORDER BY s.full_name`,
       [tid]
     );
-    res.json({ data: rows, teacherId: tid });
+    res.json({ data: rows.map(deriveHours), teacherId: tid });
   })
 );
 
@@ -108,16 +110,20 @@ router.get(
       if (!m) return res.status(403).json({ error: 'Forbidden: not your student' });
     }
 
-    // student basics + HOURS ONLY (no fee fields exposed)
-    const student = await queryOne(
+    // student basics + HOURS ONLY (no fee fields exposed), computed scoped to this id
+    const studentRow = await queryOne<any>(
       `SELECT s.id, s.form_no, s.full_name, s.status, s.year_grade, s.exam_board, s.school_name,
               s.student_mobile, s.parent_mobile,
-              hs.total_hours_credited, hs.total_hours_consumed, hs.hours_left, hs.last_attended_lecture
-       FROM students s LEFT JOIN student_hours_summary hs ON hs.student_id = s.id
+              ${CREDITED_EXPR} AS total_hours_credited,
+              ${CONSUMED_EXPR} AS total_hours_consumed,
+              ${PENDING_EXPR}  AS pending_fees,
+              ${LAST_LECTURE_EXPR} AS last_attended_lecture
+       FROM students s
        WHERE s.id = ?`,
       [sid]
     );
-    if (!student) return res.status(404).json({ error: 'Student not found' });
+    if (!studentRow) return res.status(404).json({ error: 'Student not found' });
+    const student = deriveHours(studentRow);
 
     const from = (req.query.from as string) || '2000-01-01';
     const to = (req.query.to as string) || '2999-12-31';
