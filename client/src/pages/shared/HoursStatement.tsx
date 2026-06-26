@@ -84,7 +84,7 @@ export default function HoursStatement() {
       <Section
         title="Hours statement — credited & consumed"
         action={
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <CalendarRangePicker from={fromDate} to={toDate} onChange={(f, t) => { setFromDate(f); setToDate(t); }} placeholder="Filter by date / month" align="right" />
             {(fromDate || toDate) && (
               <button className="btn-ghost !py-1.5 !px-3 text-sm whitespace-nowrap" onClick={() => { setFromDate(''); setToDate(''); }}>Show all</button>

@@ -51,3 +51,17 @@ export function deriveHours<T extends Record<string, any>>(row: T): T & { hours_
   const fee_status = pending > 0 || hours_left <= 0 ? 'Payment Required' : 'Active';
   return { ...row, hours_left, fee_status };
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+

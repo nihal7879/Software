@@ -76,7 +76,7 @@ router.get(
   '/teacher-workload',
   wrap(async (_req, res) => {
     const rows = await query(
-      `SELECT t.id, t.name, t.is_active,
+      `SELECT t.id, t.name, t.is_active, t.specialization,
               (SELECT COUNT(*) FROM (
                  SELECT a.student_id FROM lecture_sessions l2 JOIN lecture_attendees a ON a.lecture_id = l2.id WHERE l2.teacher_id = t.id
                  UNION

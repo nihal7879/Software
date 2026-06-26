@@ -6,6 +6,29 @@ import { api, hrs } from '../../api/client';
 import { Section, Table, Spinner } from '../../components/ui';
 import { ConfirmModal } from '../../components/ConfirmModal';
 import { AdminLectureEntryModal } from '../../components/AdminLectureEntryModal';
+import { MultiSelect } from '../../components/MultiSelect';
+
+// Chips with a clickable "+N" that expands/collapses the rest (touch-friendly).
+function ChipList({ value }: { value?: string }) {
+  const [open, setOpen] = useState(false);
+  const list = String(value || '').split(',').map((x) => x.trim()).filter(Boolean);
+  if (list.length === 0) return <span className="muted">—</span>;
+  const shown = open ? list : list.slice(0, 3);
+  const extra = list.length - shown.length;
+  return (
+    <span className="flex flex-wrap gap-1 items-center">
+      {shown.map((n) => (
+        <span key={n} className="text-xs px-2 py-0.5 rounded-full whitespace-nowrap" style={{ background: 'var(--color-card-alt)' }}>{n}</span>
+      ))}
+      {extra > 0 && (
+        <button type="button" onClick={() => setOpen(true)} className="text-xs px-2 py-0.5 rounded-full muted hover:text-[var(--color-primary)]" style={{ background: 'var(--color-card-alt)' }}>+{extra}</button>
+      )}
+      {open && list.length > 3 && (
+        <button type="button" onClick={() => setOpen(false)} className="text-xs px-2 py-0.5 rounded-full muted hover:text-[var(--color-primary)]" style={{ background: 'var(--color-card-alt)' }}>show less</button>
+      )}
+    </span>
+  );
+}
 
 export default function Teachers() {
   const qc = useQueryClient();
@@ -25,7 +48,7 @@ export default function Teachers() {
     enabled: !!openTeacher,
   });
 
-  const { register, handleSubmit, reset } = useForm();
+  const { register, handleSubmit, reset, watch, setValue } = useForm();
   const create = useMutation({
     mutationFn: (b: any) => api.post('/teachers', b),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['teachers'] }); qc.invalidateQueries({ queryKey: ['workload'] }); setDrawer(false); reset(); },
@@ -52,9 +75,11 @@ export default function Teachers() {
   // Admin logs a lecture on behalf of a (busy) teacher.
   const [lectureFor, setLectureFor] = useState<{ id: number; name: string } | null>(null);
   const [workloadSearch, setWorkloadSearch] = useState('');
-  const visibleWorkload = (workload.data || []).filter((t: any) =>
-    !workloadSearch || t.name?.toLowerCase().includes(workloadSearch.toLowerCase())
-  );
+  const visibleWorkload = (workload.data || []).filter((t: any) => {
+    if (!workloadSearch) return true;
+    const q = workloadSearch.toLowerCase();
+    return t.name?.toLowerCase().includes(q) || String(t.specialization || '').toLowerCase().includes(q);
+  });
 
   return (
     <div className="space-y-4">
@@ -112,12 +137,15 @@ export default function Teachers() {
         {workload.isLoading ? <Spinner /> : visibleWorkload.length === 0 ? (
           <p className="muted text-sm">No teachers match “{workloadSearch}”.</p>
         ) : (
-          <Table head={['Teacher', { label: 'Students', align: 'right' }, { label: 'Total Hours Taught', align: 'right' }, { label: 'This Month', align: 'right' }, 'Status', '']}>
+          <Table head={['Teacher', 'Specialization', { label: 'Students', align: 'right' }, { label: 'Total Hours Taught', align: 'right' }, { label: 'This Month', align: 'right' }, 'Status', '']}>
             {visibleWorkload.map((t: any) => {
               const active = Number(t.is_active) === 1;
               return (
               <tr key={t.id}>
                 <td className="table-td font-medium">{t.name}</td>
+                <td className="table-td max-w-[260px]">
+                  <ChipList value={t.specialization} />
+                </td>
                 <td className="table-td text-right tabular-nums">{t.total_students}</td>
                 <td className="table-td text-right tabular-nums">{hrs(t.total_hours_taught)}</td>
                 <td className="table-td text-right tabular-nums">{hrs(t.month_hours)}</td>
@@ -199,12 +227,23 @@ export default function Teachers() {
             <h2 className="text-lg font-bold mb-1">Add Teacher</h2>
             <p className="muted text-sm mb-4">Set the email &amp; password — these are the teacher's login (share them with the teacher).</p>
             <form onSubmit={handleSubmit((b) => create.mutate(b))} className="space-y-3">
-              {[['name', 'Name *'], ['mobile', 'Mobile'], ['specialization', 'Specialization']].map(([n, l]) => (
+              {[['name', 'Name *'], ['mobile', 'Mobile']].map(([n, l]) => (
                 <div key={n}>
                   <label className="text-xs font-medium muted">{l}</label>
                   <input className="input mt-1" {...register(n, n === 'name' ? { required: true } : {})} />
                 </div>
               ))}
+              <div>
+                <label className="text-xs font-medium muted block mb-1">Specialization</label>
+                <input type="hidden" {...register('specialization')} />
+                <MultiSelect
+                  value={watch('specialization') || ''}
+                  onChange={(v) => setValue('specialization', v)}
+                  options={(subjects.data || []).map((s: any) => ({ value: s.name, label: s.name }))}
+                  placeholder="Select subject(s)…"
+                  allowCustom
+                />
+              </div>
               <div className="rounded-lg p-3 space-y-3" style={{ background: 'var(--color-card-alt)' }}>
                 <div className="text-xs font-semibold">🔑 Teacher login</div>
                 <div>

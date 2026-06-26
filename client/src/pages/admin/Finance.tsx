@@ -172,9 +172,9 @@ export default function Finance() {
       <Section
         title="Fee Transactions (AED)"
         action={
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
             <input
-              className="input w-[220px]"
+              className="input w-full sm:w-[220px]"
               placeholder="Search payments…"
               value={txSearch}
               onChange={(e) => { setTxSearch(e.target.value); setPage(1); }}

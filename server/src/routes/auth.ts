@@ -29,6 +29,14 @@ function ageFromDob(dob?: string | null): number | null {
   return age >= 0 && age < 120 ? age : null;
 }
 
+// Public: subjects list for the registration page (specialization dropdown).
+router.get(
+  '/subjects',
+  wrap(async (_req, res) => {
+    res.json({ data: await query('SELECT id, name FROM subjects WHERE is_deleted = FALSE ORDER BY name') });
+  })
+);
+
 const loginSchema = z.object({
   email: z.string().email(),
   password: z.string().min(1),

@@ -123,7 +123,7 @@ export default function HoursMonthly() {
 
       {!studentId ? (
         <Section title="All students — hours summary" action={
-          <input className="input max-w-[220px]" placeholder="Search student…" value={summarySearch} onChange={(e) => { setSummarySearch(e.target.value); setSummaryPage(1); }} />
+          <input className="input w-full sm:max-w-[220px]" placeholder="Search student…" value={summarySearch} onChange={(e) => { setSummarySearch(e.target.value); setSummaryPage(1); }} />
         }>
           {allLedger.isLoading ? <Spinner /> : (
             <>
@@ -173,7 +173,7 @@ export default function HoursMonthly() {
           <Section
             title="Hours statement — credited & consumed"
             action={
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <CalendarRangePicker
                   from={fromDate}
                   to={toDate}

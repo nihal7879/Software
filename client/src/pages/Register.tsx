@@ -1,7 +1,11 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { useAuth } from '../auth/AuthContext';
+import { api } from '../api/client';
+import { MultiSelect } from '../components/MultiSelect';
+import { Select } from '../components/Select';
+import { CalendarPicker } from '../components/CalendarPicker';
 
 type Role = 'student' | 'parent' | 'teacher';
 const ROLES: { key: Role; label: string; icon: string; desc: string }[] = [
@@ -17,7 +21,9 @@ export default function Register() {
   const [role, setRole] = useState<Role>('student');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
-  const { register, handleSubmit, reset, formState: { errors } } = useForm<any>();
+  const { register, handleSubmit, reset, watch, setValue, formState: { errors } } = useForm<any>();
+  const [subjects, setSubjects] = useState<{ id: number; name: string }[]>([]);
+  useEffect(() => { api.get('/auth/subjects').then((r) => setSubjects(r.data.data)).catch(() => {}); }, []);
 
   const submit = async (b: any) => {
     setError(''); setBusy(true);
@@ -82,7 +88,19 @@ export default function Register() {
           {role === 'teacher' && (
             <div className="grid grid-cols-2 gap-3">
               <Field name="name" label="Full Name" required />
-              <Field name="specialization" label="Specialization" placeholder="Chemistry" />
+              <div>
+                <label className="text-sm font-semibold">Specialization</label>
+                <input type="hidden" {...register('specialization')} />
+                <div className="mt-1">
+                  <MultiSelect
+                    value={watch('specialization') || ''}
+                    onChange={(v) => setValue('specialization', v)}
+                    options={subjects.map((s) => ({ value: s.name, label: s.name }))}
+                    placeholder="Select subject(s)…"
+                    allowCustom
+                  />
+                </div>
+              </div>
               <div className="col-span-2"><Field name="mobile" label="Mobile" /></div>
             </div>
           )}
@@ -93,7 +111,13 @@ export default function Register() {
                 <div className="text-xs font-semibold mb-2">🔗 Link to your child</div>
                 <div className="grid grid-cols-2 gap-3">
                   <Field name="child_form_no" label="Child's Form No" required placeholder="e.g. 20" />
-                  <Field name="child_dob" label="Child's DOB" type="date" />
+                  <div>
+                    <label className="text-sm font-semibold">Child's DOB</label>
+                    <input type="hidden" {...register('child_dob')} />
+                    <div className="mt-1">
+                      <CalendarPicker value={watch('child_dob') || ''} onChange={(v) => setValue('child_dob', v)} placeholder="Select date of birth" />
+                    </div>
+                  </div>
                 </div>
                 <p className="muted text-[11px] mt-2">We use the Form No (and DOB if on file) to verify and link you to your child.</p>
               </div>
@@ -101,9 +125,15 @@ export default function Register() {
                 <Field name="name" label="Your Name" required />
                 <div>
                   <label className="text-sm font-semibold">Relationship</label>
-                  <select className="input mt-1" {...register('relationship')}>
-                    <option>Father</option><option>Mother</option><option>Guardian</option>
-                  </select>
+                  <input type="hidden" {...register('relationship')} />
+                  <div className="mt-1">
+                    <Select
+                      value={watch('relationship') || ''}
+                      onChange={(v) => setValue('relationship', v)}
+                      options={['Father', 'Mother', 'Guardian'].map((r) => ({ value: r, label: r }))}
+                      placeholder="Select…"
+                    />
+                  </div>
                 </div>
                 <div className="col-span-2"><Field name="mobile" label="Mobile" /></div>
               </div>

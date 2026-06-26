@@ -37,10 +37,10 @@ export function KpiCard({
 
 export function Section({ title, action, children }: { title: string; action?: ReactNode; children: ReactNode }) {
   return (
-    <div className="card p-5">
-      <div className="flex items-center justify-between mb-4">
+    <div className="card p-4 sm:p-5">
+      <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
         <h3 className="font-display font-bold text-base accent-underline">{title}</h3>
-        {action}
+        {action && <div className="flex flex-wrap items-center gap-2">{action}</div>}
       </div>
       {children}
     </div>

@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { api, rs, hrs, num } from '../../api/client';
 import { KpiCard, Section, StatusBadge, Table, HoursValue, Spinner } from '../../components/ui';
+import { toast } from '../../components/Toast';
 import { DateRangePicker } from '../../components/DateRangePicker';
 import { StudentRegistrationForm } from '../../components/StudentRegistrationForm';
 import { Select } from '../../components/Select';
@@ -42,12 +43,39 @@ export default function StudentReport() {
       teacher_id: Number(b.teacher_id),
       subject_id: Number(b.subject_id),
     }),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['teachers-of', id] }); qc.invalidateQueries({ queryKey: ['student-report', id] }); reset(); },
+    onSuccess: (_data, vars: any) => {
+      qc.invalidateQueries({ queryKey: ['teachers-of', id] });
+      qc.invalidateQueries({ queryKey: ['student-report', id] });
+      toast(vars?._dup ? 'Already assigned — updated' : 'Teacher assigned');
+      reset();
+    },
+    onError: (e: any) => toast(e?.response?.data?.error || 'Could not assign teacher', 'error'),
   });
 
   if (isLoading) return <Spinner />;
   const s = data.student;
   const sum = data.summary;
+
+  // Link the Teacher and Subject dropdowns via each teacher's specialization
+  // (a comma-separated list of subject names). Pick a teacher → only their
+  // subjects show; pick a subject → only teachers who teach it show.
+  const allTeachers = teachers.data || [];
+  const allSubjects = subjects.data || [];
+  const subjNamesOf = (t: any) => String(t?.specialization || '').split(',').map((x: string) => x.trim().toLowerCase()).filter(Boolean);
+
+  const selTeacher = allTeachers.find((t: any) => String(t.id) === String(watch('teacher_id')));
+  const selTeacherSubs = selTeacher ? subjNamesOf(selTeacher) : [];
+  const subjectOptions = (selTeacherSubs.length
+    ? allSubjects.filter((sub: any) => selTeacherSubs.includes(String(sub.name).toLowerCase()))
+    : allSubjects
+  ).map((sub: any) => ({ value: sub.id, label: sub.name }));
+
+  const selSubject = allSubjects.find((sub: any) => String(sub.id) === String(watch('subject_id')));
+  const matchingTeachers = selSubject
+    ? allTeachers.filter((t: any) => subjNamesOf(t).includes(String(selSubject.name).toLowerCase()))
+    : allTeachers;
+  // Fall back to all teachers if none have that subject set, so assignment is never blocked.
+  const teacherOptions = (matchingTeachers.length ? matchingTeachers : allTeachers).map((t: any) => ({ value: t.id, label: t.name }));
 
   return (
     <div className="space-y-5">
@@ -82,14 +110,24 @@ export default function StudentReport() {
 
       {/* Assigned teachers + assign form */}
       <Section title="Assigned Teachers">
-        <form onSubmit={handleSubmit((b) => assign.mutate(b))} className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end mb-4">
+        <form onSubmit={handleSubmit((b) => {
+          const subjName = String(allSubjects.find((x: any) => String(x.id) === String(b.subject_id))?.name || '').toLowerCase();
+          const _dup = (assigned.data || []).some((a: any) => String(a.teacher_id) === String(b.teacher_id) && String(a.subject_name || '').toLowerCase() === subjName);
+          assign.mutate({ ...b, _dup });
+        })} className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end mb-4">
           <div>
             <label className="text-xs font-medium muted block mb-1">Teacher</label>
             <input type="hidden" {...register('teacher_id', { required: true })} />
             <Select
               value={watch('teacher_id') || ''}
-              onChange={(v) => setValue('teacher_id', v, { shouldValidate: true })}
-              options={(teachers.data || []).map((t: any) => ({ value: t.id, label: t.name }))}
+              onChange={(v) => {
+                setValue('teacher_id', v, { shouldValidate: true });
+                const t = allTeachers.find((x: any) => String(x.id) === String(v));
+                const subs = t ? subjNamesOf(t) : [];
+                const cur = allSubjects.find((sub: any) => String(sub.id) === String(watch('subject_id')));
+                if (subs.length && cur && !subs.includes(String(cur.name).toLowerCase())) setValue('subject_id', '');
+              }}
+              options={teacherOptions}
               placeholder="Select teacher…"
             />
           </div>
@@ -98,8 +136,13 @@ export default function StudentReport() {
             <input type="hidden" {...register('subject_id', { required: true })} />
             <Select
               value={watch('subject_id') || ''}
-              onChange={(v) => setValue('subject_id', v, { shouldValidate: true })}
-              options={(subjects.data || []).map((s: any) => ({ value: s.id, label: s.name }))}
+              onChange={(v) => {
+                setValue('subject_id', v, { shouldValidate: true });
+                const sub = allSubjects.find((x: any) => String(x.id) === String(v));
+                const t = allTeachers.find((x: any) => String(x.id) === String(watch('teacher_id')));
+                if (sub && t) { const names = subjNamesOf(t); if (names.length && !names.includes(String(sub.name).toLowerCase())) setValue('teacher_id', ''); }
+              }}
+              options={subjectOptions}
               placeholder="Select subject…"
             />
           </div>

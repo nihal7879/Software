@@ -117,8 +117,8 @@ export default function Pivots() {
             <table className="w-full border-collapse text-sm">
               <thead>
                 <tr>
-                  <th className="px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wide muted sticky left-0 z-10" style={{ background: 'var(--color-card)' }}>Form</th>
-                  <th className="px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wide muted sticky left-[56px] z-10" style={{ background: 'var(--color-card)' }}>Student</th>
+                  <th className="px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wide muted sm:sticky sm:left-0 sm:z-10" style={{ background: 'var(--color-card)' }}>Form</th>
+                  <th className="px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wide muted sm:sticky sm:left-[56px] sm:z-10" style={{ background: 'var(--color-card)' }}>Student</th>
                   {MONTHS.map((m) => <th key={m} className="px-3 py-2.5 text-right text-xs font-bold uppercase tracking-wide muted whitespace-nowrap">{m}</th>)}
                   <th className="px-3 py-2.5 text-right text-xs font-bold uppercase tracking-wide whitespace-nowrap" style={{ color: 'var(--color-primary)' }}>Total {unit}</th>
                 </tr>
@@ -129,8 +129,8 @@ export default function Pivots() {
                   const stripe = i % 2 ? 'var(--color-card-alt)' : 'var(--color-card)';
                   return (
                     <tr key={s.form_no} style={{ background: i % 2 ? 'var(--color-card-alt)' : 'transparent' }}>
-                      <td className="px-3 py-2 font-mono sticky left-0 z-10" style={{ background: stripe }}>{s.form_no}</td>
-                      <td className="px-3 py-2 font-medium whitespace-nowrap sticky left-[56px] z-10" style={{ background: stripe }}>{s.student_name}</td>
+                      <td className="px-3 py-2 font-mono sm:sticky sm:left-0 sm:z-10" style={{ background: stripe }}>{s.form_no}</td>
+                      <td className="px-3 py-2 font-medium whitespace-nowrap sm:sticky sm:left-[56px] sm:z-10" style={{ background: stripe }}>{s.student_name}</td>
                       {monthKeys.map((m) => (
                         <td key={m} className={`px-3 py-2 text-right tabular-nums ${s.cells[m] ? '' : 'muted'}`}>{s.cells[m] ? fmt(s.cells[m]) : '—'}</td>
                       ))}
@@ -141,8 +141,8 @@ export default function Pivots() {
               </tbody>
               <tfoot>
                 <tr className="border-t-2" style={{ borderColor: 'var(--color-border)' }}>
-                  <td className="px-3 py-2.5 font-bold sticky left-0 z-10" style={{ background: 'var(--color-card)' }}>Total</td>
-                  <td className="px-3 py-2.5 sticky left-[56px] z-10" style={{ background: 'var(--color-card)' }} />
+                  <td className="px-3 py-2.5 font-bold sm:sticky sm:left-0 sm:z-10" style={{ background: 'var(--color-card)' }}>Total</td>
+                  <td className="px-3 py-2.5 sm:sticky sm:left-[56px] sm:z-10" style={{ background: 'var(--color-card)' }} />
                   {monthTotals.map((t, idx) => (
                     <td key={idx} className="px-3 py-2.5 text-right font-bold tabular-nums">{t ? fmt(t) : '—'}</td>
                   ))}

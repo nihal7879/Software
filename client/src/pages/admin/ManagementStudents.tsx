@@ -7,6 +7,33 @@ import { Section, StatusBadge, Table, Spinner } from '../../components/ui';
 import { StudentRegistrationForm } from '../../components/StudentRegistrationForm';
 import { ConfirmModal } from '../../components/ConfirmModal';
 
+// Teachers cell: show 3 chips, then a clickable "+N" that expands/collapses the
+// rest (works on touch — no hover dependency).
+function TeacherChips({ teachers }: { teachers?: string }) {
+  const [open, setOpen] = useState(false);
+  const list = String(teachers || '').split(',').map((x) => x.trim()).filter(Boolean);
+  if (list.length === 0) return <span className="muted">—</span>;
+  const shown = open ? list : list.slice(0, 3);
+  const extra = list.length - shown.length;
+  return (
+    <span className="flex flex-wrap gap-1 items-center">
+      {shown.map((n) => (
+        <span key={n} className="text-xs px-2 py-0.5 rounded-full whitespace-nowrap" style={{ background: 'var(--color-card-alt)' }}>{n}</span>
+      ))}
+      {extra > 0 && (
+        <button type="button" onClick={() => setOpen(true)} className="text-xs px-2 py-0.5 rounded-full muted hover:text-[var(--color-primary)]" style={{ background: 'var(--color-card-alt)' }}>
+          +{extra}
+        </button>
+      )}
+      {open && list.length > 3 && (
+        <button type="button" onClick={() => setOpen(false)} className="text-xs px-2 py-0.5 rounded-full muted hover:text-[var(--color-primary)]" style={{ background: 'var(--color-card-alt)' }}>
+          show less
+        </button>
+      )}
+    </span>
+  );
+}
+
 // MANAGEMENT master: one row per student — parent (who pays), fee paid status,
 // hours, teachers. Month selector scopes the fees-paid / hours figures.
 export default function ManagementStudents() {
@@ -93,7 +120,9 @@ export default function ManagementStudents() {
                 </td>
 
                 <td className="table-td whitespace-nowrap"><StatusBadge status={r.status} /></td>
-                <td className="table-td max-w-[160px] truncate text-sm" title={r.teachers}>{r.teachers || <span className="muted">—</span>}</td>
+                <td className="table-td max-w-[220px] text-sm">
+                  <TeacherChips teachers={r.teachers} />
+                </td>
                 <td className="table-td">
                   <div className="flex gap-1.5 whitespace-nowrap">
                     <Link to={`/admin/student/${r.id}`} className="btn-ghost !py-1 !px-2.5 text-xs">Report →</Link>
