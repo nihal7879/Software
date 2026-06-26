@@ -124,7 +124,7 @@ export default function LectureHistory() {
         {shown.length === 0 ? (
           <p className="muted text-sm">No lectures {selectedDay ? 'on this day' : 'this month'}.</p>
         ) : (
-          <Table head={['Date', 'Teacher', 'Subject', 'Topic', 'Subtopic', 'Remark', 'Duration', 'Venue', 'Link']}>
+          <Table head={['Date', 'Teacher', 'Subject', 'Topic', 'Subtopic', 'Remark', { label: 'Duration', align: 'right' }, 'Venue', 'Link']}>
             {shown.map((r: any) => (
               <tr key={r.id}>
                 <td className="table-td whitespace-nowrap">{r.session_date}</td>
@@ -133,7 +133,7 @@ export default function LectureHistory() {
                 <td className="table-td">{r.topic || '—'}</td>
                 <td className="table-td">{r.subtopic || '—'}</td>
                 <td className="table-td">{r.remark || '—'}</td>
-                <td className="table-td">{hrs(r.hours_consumed)}</td>
+                <td className="table-td text-right tabular-nums">{hrs(r.hours_consumed)}</td>
                 <td className="table-td">{r.venue || '—'}</td>
                 <td className="table-td">{r.meeting_link ? <a className="text-blue-500 underline" href={r.meeting_link} target="_blank">Link</a> : '—'}</td>
               </tr>

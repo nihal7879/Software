@@ -154,11 +154,45 @@ router.get(
   })
 );
 
-// Subjects helper
+// Subjects helper — list active (non-deleted) subjects.
 router.get(
   '/subjects',
   wrap(async (_req, res) => {
-    res.json({ data: await query('SELECT * FROM subjects ORDER BY name') });
+    res.json({ data: await query('SELECT * FROM subjects WHERE is_deleted = FALSE ORDER BY name') });
+  })
+);
+
+// Add a subject (admin). Re-activates a soft-deleted one with the same name.
+router.post(
+  '/subjects',
+  requireRole('admin'),
+  wrap(async (req, res) => {
+    const b = z.object({ name: z.string().min(1) }).parse(req.body);
+    const name = b.name.trim();
+    if (!name) return res.status(400).json({ error: 'Subject name is required' });
+
+    const existing = await queryOne<any>('SELECT id, is_deleted FROM subjects WHERE name = ?', [name]);
+    if (existing) {
+      if (!existing.is_deleted) return res.status(409).json({ error: 'Subject already exists' });
+      await query('UPDATE subjects SET is_deleted = FALSE, is_active = TRUE WHERE id = ?', [existing.id]);
+      await audit(req.user!.userId, 'CREATE', 'subject', existing.id, null, { name });
+      return res.status(201).json({ id: existing.id, name });
+    }
+
+    const r: any = await query('INSERT INTO subjects (name) VALUES (?)', [name]);
+    await audit(req.user!.userId, 'CREATE', 'subject', r.insertId, null, { name });
+    res.status(201).json({ id: r.insertId, name });
+  })
+);
+
+// Soft-delete a subject (admin).
+router.delete(
+  '/subjects/:id',
+  requireRole('admin'),
+  wrap(async (req, res) => {
+    await query('UPDATE subjects SET is_deleted = TRUE, is_active = FALSE WHERE id = ?', [req.params.id]);
+    await audit(req.user!.userId, 'DELETE', 'subject', req.params.id, null, null);
+    res.json({ ok: true });
   })
 );
 
@@ -199,6 +233,23 @@ router.post(
     );
     await audit(req.user!.userId, 'CREATE', 'teacher', (r as any).insertId, null, { ...b, password: undefined, login_created: !!userId });
     res.status(201).json({ id: (r as any).insertId, login_created: !!userId });
+  })
+);
+
+// Activate / deactivate a teacher (admin). Also toggles their faculty login.
+router.post(
+  '/:id/set-status',
+  requireRole('admin'),
+  wrap(async (req, res) => {
+    const b = z.object({ is_active: z.boolean() }).parse(req.body);
+    await query('UPDATE teachers SET is_active = ? WHERE id = ?', [b.is_active, req.params.id]);
+    // Keep the linked login in sync so a deactivated teacher can't sign in.
+    await query(
+      'UPDATE users SET is_active = ? WHERE id = (SELECT user_id FROM teachers WHERE id = ?)',
+      [b.is_active, req.params.id]
+    );
+    await audit(req.user!.userId, 'SET_STATUS', 'teacher', req.params.id, null, { is_active: b.is_active });
+    res.json({ ok: true });
   })
 );
 

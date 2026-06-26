@@ -48,7 +48,7 @@ CREATE TABLE students (
   id              INT AUTO_INCREMENT PRIMARY KEY,
   form_no         VARCHAR(40) NOT NULL UNIQUE,
   date_of_joining DATE,
-  status          ENUM('Active','Inactive','SP-Active') NOT NULL DEFAULT 'Active',
+  status          ENUM('Active','Inactive') NOT NULL DEFAULT 'Active',
   is_active       BOOLEAN NOT NULL DEFAULT TRUE,
   is_deleted      BOOLEAN NOT NULL DEFAULT FALSE,
   first_name      VARCHAR(80),
@@ -197,6 +197,7 @@ CREATE TABLE lecture_attendees (
 CREATE TABLE fee_packages (
   id              INT AUTO_INCREMENT PRIMARY KEY,
   student_id      INT NOT NULL,
+  transaction_id  INT,                               -- fee_transaction that created this credit (NULL = manual)
   course_name     VARCHAR(160),
   package_hours   DECIMAL(8,2) NOT NULL DEFAULT 0,   -- hours committed
   rate_per_hour   DECIMAL(10,2) DEFAULT 0,
@@ -222,6 +223,7 @@ CREATE TABLE fee_transactions (
   transaction_reference VARCHAR(120),
   payment_source        VARCHAR(160),              -- e.g. MASHQ bank transfer
   course_package_hours  DECIMAL(8,2),
+  discount_hours        DECIMAL(8,2),
   notes                 TEXT,
   is_deleted            BOOLEAN NOT NULL DEFAULT FALSE,
   created_by            INT,
@@ -259,10 +261,11 @@ CREATE TABLE fee_import_drafts (
   payment_source        VARCHAR(160),
   parent_name           VARCHAR(160),
   course_package_hours  DECIMAL(8,2) NULL,
+  discount_hours        DECIMAL(8,2) NULL,
   notes                 TEXT,
   reason                VARCHAR(200),
   raw_json              JSON,
-  status                ENUM('draft','imported') NOT NULL DEFAULT 'draft',
+  status                ENUM('draft','imported','discarded') NOT NULL DEFAULT 'draft',
   created_by            INT,
   created_at            TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT fk_fid_student FOREIGN KEY (student_id) REFERENCES students(id) ON DELETE SET NULL,
@@ -294,8 +297,19 @@ CREATE TABLE audit_logs (
 --   total_hours_credited = package_hours + discount_hours + adjusted_hours
 --   total_hours_consumed = SUM(lecture_attendees.hours_consumed)
 --   hours_left           = credited - consumed   (NOT clamped)
---   fee_status           = 'Payment Required' if pending_fees>0 OR hours_left<0
+--   fee_status           = 'Payment Required' if pending_fees>0 OR hours_left<=0
 -- ============================================================================
+-- Manual hours adjustments (admin "Adjust Hours") — each a dated ledger event.
+CREATE TABLE IF NOT EXISTS hours_adjustments (
+  id          INT AUTO_INCREMENT PRIMARY KEY,
+  student_id  INT NOT NULL,
+  delta       DECIMAL(8,2) NOT NULL,
+  reason      VARCHAR(255),
+  created_by  INT,
+  created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_ha_student (student_id)
+);
+
 CREATE OR REPLACE VIEW student_hours_summary AS
 SELECT
   s.id                              AS student_id,
@@ -304,11 +318,11 @@ SELECT
   s.status                          AS status,
   COALESCE(pk.package_hours,0)      AS hours_committed,
   COALESCE(pk.discount_hours,0)     AS discount_hours,
-  COALESCE(pk.adjusted_hours,0)     AS adjusted_hours,
-  COALESCE(pk.package_hours,0) + COALESCE(pk.discount_hours,0) + COALESCE(pk.adjusted_hours,0)
+  COALESCE(pk.adjusted_hours,0) + COALESCE(adj.total,0)  AS adjusted_hours,
+  COALESCE(pk.package_hours,0) + COALESCE(pk.discount_hours,0) + COALESCE(pk.adjusted_hours,0) + COALESCE(adj.total,0)
                                     AS total_hours_credited,
   COALESCE(con.consumed,0)          AS total_hours_consumed,
-  (COALESCE(pk.package_hours,0) + COALESCE(pk.discount_hours,0) + COALESCE(pk.adjusted_hours,0))
+  (COALESCE(pk.package_hours,0) + COALESCE(pk.discount_hours,0) + COALESCE(pk.adjusted_hours,0) + COALESCE(adj.total,0))
     - COALESCE(con.consumed,0)      AS hours_left,
   COALESCE(pk.rate_per_hour,0)      AS rate_per_hour,
   COALESCE(la.amount_credited,0)    AS amount_credited,
@@ -316,7 +330,7 @@ SELECT
   COALESCE(la.extra_amount_left,0)  AS extra_amount_left,
   CASE
     WHEN COALESCE(la.pending_fees,0) > 0
-      OR ((COALESCE(pk.package_hours,0)+COALESCE(pk.discount_hours,0)+COALESCE(pk.adjusted_hours,0)) - COALESCE(con.consumed,0)) < 0
+      OR ((COALESCE(pk.package_hours,0)+COALESCE(pk.discount_hours,0)+COALESCE(pk.adjusted_hours,0)+COALESCE(adj.total,0)) - COALESCE(con.consumed,0)) <= 0
     THEN 'Payment Required' ELSE 'Active'
   END                               AS fee_status,
   con.last_lecture_date             AS last_attended_lecture
@@ -337,4 +351,7 @@ LEFT JOIN (
   JOIN lecture_sessions l ON l.id = a.lecture_id
   GROUP BY a.student_id
 ) con ON con.student_id = s.id
+LEFT JOIN (
+  SELECT student_id, SUM(delta) AS total FROM hours_adjustments GROUP BY student_id
+) adj ON adj.student_id = s.id
 LEFT JOIN ledger_adjustments la ON la.student_id = s.id;

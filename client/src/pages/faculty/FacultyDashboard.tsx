@@ -32,7 +32,7 @@ export default function FacultyDashboard() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Section title="My Students" action={<Link to="/faculty/students" className="btn-ghost !py-1.5 !px-3 text-sm">Manage</Link>}>
           {students.isLoading ? <Spinner /> : (
-            <Table head={['Form', 'Student', 'Grade', 'Subjects', 'Hours Left', 'Status']}>
+            <Table head={['Form', 'Student', 'Grade', 'Subjects', { label: 'Hours Left', align: 'right' }, 'Status']}>
               {(students.data || []).length === 0 ? (
                 <tr><td className="table-td muted" colSpan={6}>No students assigned to you yet.</td></tr>
               ) : students.data.map((s: any) => (
@@ -41,7 +41,7 @@ export default function FacultyDashboard() {
                   <td className="table-td font-medium">{s.full_name}</td>
                   <td className="table-td">{s.year_grade || '—'}</td>
                   <td className="table-td">{s.subjects || '—'}</td>
-                  <td className="table-td">{s.hours_left != null ? <HoursValue value={s.hours_left} /> : '—'}</td>
+                  <td className="table-td text-right tabular-nums">{s.hours_left != null ? <HoursValue value={s.hours_left} /> : '—'}</td>
                   <td className="table-td"><StatusBadge status={s.status} /></td>
                 </tr>
               ))}
@@ -51,7 +51,7 @@ export default function FacultyDashboard() {
 
         <Section title="My Recent Classes">
           {lectures.isLoading ? <Spinner /> : (
-            <Table head={['Date', 'Subject', 'Students', 'Topic', 'Hours']}>
+            <Table head={['Date', 'Subject', 'Students', 'Topic', { label: 'Hours', align: 'right' }]}>
               {recent.length === 0 ? (
                 <tr><td className="table-td muted" colSpan={5}>No lectures recorded yet.</td></tr>
               ) : recent.map((l: any) => (
@@ -60,7 +60,7 @@ export default function FacultyDashboard() {
                   <td className="table-td">{l.subject_name || '—'}</td>
                   <td className="table-td max-w-[160px] truncate" title={l.students}>{l.students}</td>
                   <td className="table-td">{l.topic || '—'}</td>
-                  <td className="table-td">{hrs(l.total_hours)}</td>
+                  <td className="table-td text-right tabular-nums">{hrs(l.total_hours)}</td>
                 </tr>
               ))}
             </Table>

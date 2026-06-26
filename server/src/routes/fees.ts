@@ -74,6 +74,7 @@ const txSchema = z.object({
   transaction_reference: z.string().optional().nullable(),
   payment_source: z.string().optional().nullable(),
   course_package_hours: z.number().optional().nullable(),
+  discount_hours: z.number().optional().nullable(),
   notes: z.string().optional().nullable(),
 });
 
@@ -85,15 +86,26 @@ router.post(
     const b = txSchema.parse(req.body);
     const r: any = await query(
       `INSERT INTO fee_transactions
-        (student_id,parent_name,amount,payment_date,month,transaction_reference,payment_source,course_package_hours,notes,created_by)
-       VALUES (?,?,?,?,?,?,?,?,?,?)`,
+        (student_id,parent_name,amount,payment_date,month,transaction_reference,payment_source,course_package_hours,discount_hours,notes,created_by)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
       [
         b.student_id, b.parent_name || null, b.amount, b.payment_date,
         deriveMonth(b.payment_date), b.transaction_reference || null,
-        b.payment_source || null, b.course_package_hours ?? null, b.notes || null,
-        req.user!.userId,
+        b.payment_source || null, b.course_package_hours ?? null, b.discount_hours ?? null,
+        b.notes || null, req.user!.userId,
       ]
     );
+    // If hours were entered, credit them as a package linked to this transaction
+    // so they show in the student's hours ledger / statement — and so deleting
+    // the transaction can later remove them.
+    if ((b.course_package_hours && b.course_package_hours > 0) || (b.discount_hours && b.discount_hours > 0)) {
+      const hrs = b.course_package_hours || 0;
+      const rate = b.amount && hrs ? b.amount / hrs : 0;
+      await query(
+        `INSERT INTO fee_packages (student_id,transaction_id,package_hours,discount_hours,rate_per_hour,start_date) VALUES (?,?,?,?,?,?)`,
+        [b.student_id, (r as any).insertId, hrs, b.discount_hours || 0, rate, b.payment_date]
+      );
+    }
     await audit(req.user!.userId, 'CREATE', 'fee_transaction', (r as any).insertId, null, b);
     res.status(201).json({ id: (r as any).insertId });
   })
@@ -116,6 +128,32 @@ router.put(
       params.push(req.params.id);
       await query(`UPDATE fee_transactions SET ${fields.join(', ')} WHERE id = ?`, params);
     }
+
+    // Keep the linked hours package in sync so the student's statement reflects
+    // the edit. Use the merged (new ?? old) values.
+    const merged = { ...before, ...b };
+    const hrs = merged.course_package_hours != null ? Number(merged.course_package_hours) : 0;
+    const disc = merged.discount_hours != null ? Number(merged.discount_hours) : 0;
+    const amount = Number(merged.amount) || 0;
+    const date = merged.payment_date ? String(merged.payment_date).slice(0, 10) : null;
+    const existingPkg = await queryOne<any>('SELECT id FROM fee_packages WHERE transaction_id = ?', [req.params.id]);
+    if (hrs > 0 || disc > 0) {
+      const rate = amount && hrs ? amount / hrs : 0;
+      if (existingPkg) {
+        await query(
+          `UPDATE fee_packages SET package_hours = ?, discount_hours = ?, rate_per_hour = ?, start_date = ?, is_active = TRUE, is_deleted = FALSE WHERE id = ?`,
+          [hrs, disc, rate, date, existingPkg.id]
+        );
+      } else {
+        await query(
+          `INSERT INTO fee_packages (student_id,transaction_id,package_hours,discount_hours,rate_per_hour,start_date) VALUES (?,?,?,?,?,?)`,
+          [merged.student_id, req.params.id, hrs, disc, rate, date]
+        );
+      }
+    } else if (existingPkg) {
+      // Hours cleared on the transaction → retire the credit.
+      await query('UPDATE fee_packages SET is_active = FALSE, is_deleted = TRUE WHERE id = ?', [existingPkg.id]);
+    }
     await audit(req.user!.userId, 'UPDATE', 'fee_transaction', req.params.id, before, b);
     res.json({ ok: true });
   })
@@ -129,6 +167,8 @@ router.delete(
     const before = await queryOne('SELECT * FROM fee_transactions WHERE id = ? AND is_deleted = FALSE', [req.params.id]);
     if (!before) return res.status(404).json({ error: 'Transaction not found' });
     await query('UPDATE fee_transactions SET is_deleted = TRUE WHERE id = ?', [req.params.id]); // soft delete
+    // Remove the hours this payment credited from the student's ledger/statement.
+    await query('UPDATE fee_packages SET is_active = FALSE, is_deleted = TRUE WHERE transaction_id = ?', [req.params.id]);
     await audit(req.user!.userId, 'DELETE', 'fee_transaction', req.params.id, before, null);
     res.json({ ok: true });
   })
@@ -157,6 +197,7 @@ const importRowSchema = z.object({
   payment_source: z.string().optional().nullable(),
   parent_name: z.string().optional().nullable(),
   course_package_hours: z.union([z.number(), z.string()]).optional().nullable(),
+  discount_hours: z.union([z.number(), z.string()]).optional().nullable(),
   notes: z.string().optional().nullable(),
   raw: z.any().optional(),
 });
@@ -187,6 +228,7 @@ router.post(
       const amount = row.amount == null || row.amount === '' ? NaN : Number(row.amount);
       const date = normDate(row.payment_date);
       const pkgHours = row.course_package_hours ? Number(row.course_package_hours) : null;
+      const discHours = row.discount_hours ? Number(row.discount_hours) : null;
       const studentId = await matchStudent(row.form_no, row.student_name);
       const month = date ? deriveMonth(date) : null;
 
@@ -194,13 +236,21 @@ router.post(
       const ready = studentId != null && amountOk && !!date;
 
       if (ready) {
-        await query(
+        const tr: any = await query(
           `INSERT INTO fee_transactions
-            (student_id,parent_name,amount,payment_date,month,transaction_reference,payment_source,course_package_hours,notes,created_by)
-           VALUES (?,?,?,?,?,?,?,?,?,?)`,
+            (student_id,parent_name,amount,payment_date,month,transaction_reference,payment_source,course_package_hours,discount_hours,notes,created_by)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
           [studentId, row.parent_name || null, amount, date, month, row.transaction_reference || null,
-           row.payment_source || null, pkgHours, row.notes || null, req.user!.userId]
+           row.payment_source || null, pkgHours, discHours, row.notes || null, req.user!.userId]
         );
+        // Auto-credit imported hours so they appear in the student's statement.
+        if ((pkgHours && pkgHours > 0) || (discHours && discHours > 0)) {
+          const rate = amount && pkgHours ? amount / pkgHours : 0;
+          await query(
+            `INSERT INTO fee_packages (student_id,transaction_id,package_hours,discount_hours,rate_per_hour,start_date) VALUES (?,?,?,?,?,?)`,
+            [studentId, tr.insertId, pkgHours || 0, discHours || 0, rate, date]
+          );
+        }
         imported++;
       } else {
         const reason = studentId == null ? 'No matching student'
@@ -210,12 +260,12 @@ router.post(
         await query(
           `INSERT INTO fee_import_drafts
             (student_id,guessed_form_no,guessed_student_name,amount,payment_date,month,
-             transaction_reference,payment_source,parent_name,course_package_hours,notes,reason,raw_json,created_by)
-           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+             transaction_reference,payment_source,parent_name,course_package_hours,discount_hours,notes,reason,raw_json,created_by)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
           [studentId, row.form_no || null, row.student_name || null,
            Number.isFinite(amount) ? amount : null, date, month,
            row.transaction_reference || null, row.payment_source || null, row.parent_name || null,
-           pkgHours, row.notes || null, reason, JSON.stringify(row.raw ?? row), req.user!.userId]
+           pkgHours, discHours, row.notes || null, reason, JSON.stringify(row.raw ?? row), req.user!.userId]
         );
         drafted++;
       }
@@ -256,6 +306,7 @@ router.post(
         transaction_reference: z.string().optional().nullable(),
         payment_source: z.string().optional().nullable(),
         course_package_hours: z.number().optional().nullable(),
+        discount_hours: z.number().optional().nullable(),
         notes: z.string().optional().nullable(),
       })
       .parse(req.body);
@@ -268,31 +319,39 @@ router.post(
     if (!Number.isFinite(amount) || amount <= 0) return res.status(400).json({ error: 'A valid amount is required' });
     if (!date) return res.status(400).json({ error: 'A valid payment date is required' });
 
+    const pkgHours = b.course_package_hours ?? (draft.course_package_hours != null ? Number(draft.course_package_hours) : null);
+    const discHours = b.discount_hours ?? (draft.discount_hours != null ? Number(draft.discount_hours) : null);
     const r: any = await query(
       `INSERT INTO fee_transactions
-        (student_id,parent_name,amount,payment_date,month,transaction_reference,payment_source,course_package_hours,notes,created_by)
-       VALUES (?,?,?,?,?,?,?,?,?,?)`,
+        (student_id,parent_name,amount,payment_date,month,transaction_reference,payment_source,course_package_hours,discount_hours,notes,created_by)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
       [
         b.student_id, b.parent_name ?? draft.parent_name ?? null, amount, date, deriveMonth(date),
         b.transaction_reference ?? draft.transaction_reference ?? null,
         b.payment_source ?? draft.payment_source ?? null,
-        b.course_package_hours ?? (draft.course_package_hours != null ? Number(draft.course_package_hours) : null),
-        b.notes ?? draft.notes ?? null, req.user!.userId,
+        pkgHours, discHours, b.notes ?? draft.notes ?? null, req.user!.userId,
       ]
     );
+    if ((pkgHours && pkgHours > 0) || (discHours && discHours > 0)) {
+      const rate = amount && pkgHours ? amount / pkgHours : 0;
+      await query(
+        `INSERT INTO fee_packages (student_id,transaction_id,package_hours,discount_hours,rate_per_hour,start_date) VALUES (?,?,?,?,?,?)`,
+        [b.student_id, r.insertId, pkgHours || 0, discHours || 0, rate, date]
+      );
+    }
     await query("UPDATE fee_import_drafts SET status = 'imported', student_id = ? WHERE id = ?", [b.student_id, req.params.id]);
     await audit(req.user!.userId, 'ASSIGN_IMPORT', 'fee_transaction', (r as any).insertId, draft, b);
     res.status(201).json({ id: (r as any).insertId });
   })
 );
 
-// Discard a draft (admin)
+// Discard a draft (admin) — soft delete: keep the row, flip status to 'discarded'.
 router.delete(
   '/drafts/:id',
   requireRole('admin'),
   wrap(async (req, res) => {
-    await query('DELETE FROM fee_import_drafts WHERE id = ?', [req.params.id]);
-    await audit(req.user!.userId, 'DELETE', 'fee_import_draft', req.params.id, null, null);
+    await query("UPDATE fee_import_drafts SET status = 'discarded' WHERE id = ?", [req.params.id]);
+    await audit(req.user!.userId, 'DISCARD', 'fee_import_draft', req.params.id, null, null);
     res.json({ ok: true });
   })
 );
@@ -374,6 +433,38 @@ router.put(
     }
     await audit(req.user!.userId, 'ADJUST', 'ledger', req.params.id, null, b);
     res.json({ ok: true });
+  })
+);
+
+// Quick +/- hours adjustment (admin) — logged as its own dated ledger event so
+// it shows in the student's hours statement. Corrects a missed lecture entry or
+// grants extra hours.
+router.post(
+  '/ledger/:id/adjust-hours',
+  requireRole('admin'),
+  wrap(async (req, res) => {
+    const b = z.object({ delta: z.number(), reason: z.string().optional().nullable() }).parse(req.body);
+    if (!b.delta) return res.status(400).json({ error: 'Enter a non-zero number of hours' });
+
+    const r: any = await query(
+      'INSERT INTO hours_adjustments (student_id, delta, reason, created_by) VALUES (?,?,?,?)',
+      [req.params.id, b.delta, b.reason || null, req.user!.userId]
+    );
+    await audit(req.user!.userId, 'ADJUST_HOURS', 'student', req.params.id, null, { delta: b.delta, reason: b.reason ?? null });
+    res.status(201).json({ id: r.insertId });
+  })
+);
+
+// List hours adjustments for a student (for the statement timeline).
+router.get(
+  '/adjustments/:id',
+  ensureOwnStudent,
+  wrap(async (req, res) => {
+    const rows = await query(
+      'SELECT id, delta, reason, created_at FROM hours_adjustments WHERE student_id = ? ORDER BY created_at',
+      [req.params.id]
+    );
+    res.json({ data: rows });
   })
 );
 

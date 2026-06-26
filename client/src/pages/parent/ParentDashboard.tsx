@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../auth/AuthContext';
-import { api, rs, hrs } from '../../api/client';
+import { api, rs, hrs, num } from '../../api/client';
 import { KpiCard, Section, StatusBadge, Table, HoursValue, Spinner } from '../../components/ui';
 
 const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -46,9 +46,10 @@ export default function ParentDashboard() {
         <span className="muted text-sm">({s.year_grade} · {s.exam_board})</span>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-        <KpiCard label="Hours Remaining" value={<HoursValue value={l.hours_left} />} accent={Number(l.hours_left) < 0 ? 'red' : 'emerald'} />
-        <KpiCard label="Consumed" value={hrs(l.total_hours_consumed)} accent="indigo" />
+      <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
+        <KpiCard label="Total Hours" value={hrs(l.total_hours_credited)} accent="blue" />
+        <KpiCard label="Total Hours Delivered" value={hrs(l.total_hours_consumed)} accent="indigo" />
+        <KpiCard label="Balance Hours" value={<HoursValue value={l.hours_left} />} accent={Number(l.hours_left) <= 0 ? 'red' : 'emerald'} />
         <KpiCard label="Pending Fees" value={rs(l.pending_fees)} accent="red" />
         <KpiCard label="Attendance" value={`${attended}/${totalLec}`} accent="blue" />
         <KpiCard label="Teachers" value={(teachers.data || []).length} accent="emerald" />
@@ -73,13 +74,14 @@ export default function ParentDashboard() {
 
         <Section title="Recent Lecture History">
           {lectures.isLoading ? <Spinner /> : (
-            <Table head={['Date', 'Subject', 'Topic', 'Hours']}>
+            <Table head={['Date', 'Subject', 'Topic', 'Subtopic', { label: 'Hours', align: 'right' }]}>
               {(lectures.data || []).slice(0, 8).map((r: any) => (
                 <tr key={r.id}>
                   <td className="table-td">{r.session_date}</td>
                   <td className="table-td">{r.subject_name || '—'}</td>
                   <td className="table-td">{r.topic || '—'}</td>
-                  <td className="table-td">{hrs(r.hours_consumed)}</td>
+                  <td className="table-td">{r.subtopic || '—'}</td>
+                  <td className="table-td text-right tabular-nums">{hrs(r.hours_consumed)}</td>
                 </tr>
               ))}
             </Table>
@@ -93,12 +95,12 @@ export default function ParentDashboard() {
           <p className="muted text-sm">No activity recorded yet.</p>
         ) : (
           <div className="max-h-[360px] overflow-y-auto">
-            <Table head={['Month', 'Hours Used', 'Fees Received']}>
+            <Table head={['Month', { label: 'Hours Used', align: 'right' }, { label: 'Fees Received (AED)', align: 'right' }]}>
               {monthly.map((r) => (
                 <tr key={r.month}>
                   <td className="table-td font-semibold whitespace-nowrap">{fmtMonth(r.month)}</td>
-                  <td className="table-td">{hrs(r.hours)}</td>
-                  <td className="table-td text-emerald-600">{rs(r.fees)}</td>
+                  <td className="table-td text-right tabular-nums">{hrs(r.hours)}</td>
+                  <td className="table-td text-right tabular-nums text-emerald-600">{num(r.fees)}</td>
                 </tr>
               ))}
             </Table>

@@ -21,7 +21,6 @@ router.get(
            COUNT(*) AS total,
            SUM(status='Active') AS active,
            SUM(status='Inactive') AS inactive,
-           SUM(status='SP-Active') AS sp_active,
            SUM(date_of_joining >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)) AS new_admissions
          FROM students`
       ),
@@ -77,7 +76,7 @@ router.get(
   '/teacher-workload',
   wrap(async (_req, res) => {
     const rows = await query(
-      `SELECT t.id, t.name,
+      `SELECT t.id, t.name, t.is_active,
               (SELECT COUNT(*) FROM (
                  SELECT a.student_id FROM lecture_sessions l2 JOIN lecture_attendees a ON a.lecture_id = l2.id WHERE l2.teacher_id = t.id
                  UNION

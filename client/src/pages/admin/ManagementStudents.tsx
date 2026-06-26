@@ -2,24 +2,23 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
-import { api, rs } from '../../api/client';
-import { Section, StatusBadge, Table, HoursValue, Spinner } from '../../components/ui';
-import { MonthSelector } from '../../components/MonthSelector';
+import { api } from '../../api/client';
+import { Section, StatusBadge, Table, Spinner } from '../../components/ui';
 import { StudentRegistrationForm } from '../../components/StudentRegistrationForm';
+import { ConfirmModal } from '../../components/ConfirmModal';
 
 // MANAGEMENT master: one row per student — parent (who pays), fee paid status,
 // hours, teachers. Month selector scopes the fees-paid / hours figures.
 export default function ManagementStudents() {
   const qc = useQueryClient();
-  const [month, setMonth] = useState('');
   const [search, setSearch] = useState('');
   const [drawer, setDrawer] = useState(false);
   // After step 1 (create) we keep the new student id to fill the full profile form (step 2).
   const [newStudentId, setNewStudentId] = useState<number | null>(null);
 
   const { data, isLoading } = useQuery({
-    queryKey: ['mgmt-master', month],
-    queryFn: () => api.get('/management/master', { params: { month } }).then((r) => r.data.data),
+    queryKey: ['mgmt-master'],
+    queryFn: () => api.get('/management/master').then((r) => r.data.data),
   });
 
   const { register, handleSubmit, reset } = useForm();
@@ -30,6 +29,12 @@ export default function ManagementStudents() {
 
   const closeDrawer = () => { setDrawer(false); setNewStudentId(null); reset(); create.reset(); };
 
+  const setStudentStatus = useMutation({
+    mutationFn: (v: { id: number; status: 'Active' | 'Inactive' }) => api.post(`/students/${v.id}/set-status`, { status: v.status }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['mgmt-master'] }),
+  });
+  const [confirm, setConfirm] = useState<{ id: number; name: string; next: 'Active' | 'Inactive' } | null>(null);
+
   const rows = (data || []).filter((r: any) =>
     !search || r.full_name?.toLowerCase().includes(search.toLowerCase()) || String(r.form_no).includes(search)
   );
@@ -39,21 +44,20 @@ export default function ManagementStudents() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold">Students — Master</h1>
-          <p className="muted text-sm">Parent mapping, who pays, fee status, hours & teachers {month && `· ${month}`}</p>
+          <p className="muted text-sm">Parent mapping, who pays, fee status, hours & teachers</p>
         </div>
         <button className="btn-primary" onClick={() => setDrawer(true)}>+ Add Student</button>
       </div>
 
       <div className="flex flex-wrap gap-2">
         <input className="input max-w-xs" placeholder="Search name / form no…" value={search} onChange={(e) => setSearch(e.target.value)} />
-        <MonthSelector value={month} onChange={setMonth} />
       </div>
 
       <Section title={`${rows.length} students`}>
         {isLoading ? <Spinner /> : rows.length === 0 ? (
           <p className="muted text-sm">No students found.</p>
         ) : (
-          <Table head={['Student', 'Profile', 'Parent (pays)', 'Relation', 'Fees', 'Hours Left', 'Status', 'Teachers', '']}>
+          <Table head={['Student', 'Profile', 'Parent (pays)', 'Relation', 'Status', 'Teachers', '']}>
             {rows.map((r: any) => (
               <tr key={r.id}>
                 {/* Student — name + form + grade */}
@@ -86,18 +90,28 @@ export default function ManagementStudents() {
                     : <span className="muted">—</span>}
                 </td>
 
-                {/* Fees — paid + pending */}
-                <td className="table-td whitespace-nowrap">
-                  <div className="font-semibold text-emerald-600">{rs(r.fees_paid)}</div>
-                  {Number(r.pending_fees) > 0
-                    ? <div className="text-xs text-red-500 mt-0.5">{rs(r.pending_fees)} due</div>
-                    : <div className="text-xs muted mt-0.5">No dues</div>}
-                </td>
-
-                <td className="table-td whitespace-nowrap"><HoursValue value={r.hours_left ?? 0} /></td>
-                <td className="table-td whitespace-nowrap"><StatusBadge status={r.fee_status || r.status} /></td>
+                <td className="table-td whitespace-nowrap"><StatusBadge status={r.status} /></td>
                 <td className="table-td max-w-[160px] truncate text-sm" title={r.teachers}>{r.teachers || <span className="muted">—</span>}</td>
-                <td className="table-td"><Link to={`/admin/student/${r.id}`} className="btn-ghost !py-1 !px-2.5 text-xs whitespace-nowrap">Report →</Link></td>
+                <td className="table-td">
+                  <div className="flex gap-1.5 whitespace-nowrap">
+                    <Link to={`/admin/student/${r.id}`} className="btn-ghost !py-1 !px-2.5 text-xs">Report →</Link>
+                    {r.status === 'Inactive' ? (
+                      <button
+                        className="!py-1 !px-2.5 text-xs rounded-lg border border-emerald-500/30 text-emerald-600 hover:bg-emerald-500/10 transition-colors"
+                        onClick={() => setConfirm({ id: r.id, name: r.full_name, next: 'Active' })}
+                      >
+                        Activate
+                      </button>
+                    ) : (
+                      <button
+                        className="!py-1 !px-2.5 text-xs rounded-lg border border-red-500/30 text-red-600 hover:bg-red-500/10 transition-colors"
+                        onClick={() => setConfirm({ id: r.id, name: r.full_name, next: 'Inactive' })}
+                      >
+                        Deactivate
+                      </button>
+                    )}
+                  </div>
+                </td>
               </tr>
             ))}
           </Table>
@@ -139,7 +153,7 @@ export default function ManagementStudents() {
                   <div>
                     <label className="text-xs font-medium muted">Status</label>
                     <select className="input mt-1" {...register('status')} defaultValue="Active">
-                      <option>Active</option><option>Inactive</option><option>SP-Active</option>
+                      <option>Active</option><option>Inactive</option>
                     </select>
                   </div>
                   {create.isError && (
@@ -170,6 +184,18 @@ export default function ManagementStudents() {
             )}
           </div>
         </div>
+      )}
+
+      {confirm && (
+        <ConfirmModal
+          title={confirm.next === 'Inactive' ? 'Deactivate student' : 'Activate student'}
+          message={`${confirm.next === 'Inactive' ? 'Deactivate' : 'Activate'} ${confirm.name}?`}
+          confirmLabel={confirm.next === 'Inactive' ? 'Deactivate' : 'Activate'}
+          danger={confirm.next === 'Inactive'}
+          busy={setStudentStatus.isPending}
+          onConfirm={() => { setStudentStatus.mutate({ id: confirm.id, status: confirm.next }); setConfirm(null); }}
+          onClose={() => setConfirm(null)}
+        />
       )}
     </div>
   );

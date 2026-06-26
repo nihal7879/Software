@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '../../auth/AuthContext';
-import { api, rs, hrs } from '../../api/client';
+import { api, rs, hrs, num } from '../../api/client';
 import { KpiCard, Section, StatusBadge, Table, HoursValue, Spinner } from '../../components/ui';
 import { DateRangePicker } from '../../components/DateRangePicker';
 
@@ -72,7 +72,7 @@ export default function Tracker() {
       {/* Summary — overall snapshot (all-time, across all months) */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
         <KpiCard label="Total Hours" value={hrs(l.total_hours_consumed)} sub="all months" accent="indigo" />
-        <KpiCard label="Hours Left" value={<HoursValue value={l.hours_left ?? 0} />} sub="overall balance" accent={Number(l.hours_left) < 0 ? 'red' : 'emerald'} />
+        <KpiCard label="Hours Left" value={<HoursValue value={l.hours_left ?? 0} />} sub="overall balance" accent={Number(l.hours_left) <= 0 ? 'red' : 'emerald'} />
         <KpiCard label="Fees Received" value={rs(allFees)} sub="all months total" accent="emerald" />
         <KpiCard label="Attendance" value={`${presentCount}/${rawLecs.length}`} sub="present / total" accent="blue" />
         <KpiCard label="Pending Fees" value={rs(l.pending_fees)} sub="outstanding" accent="red" />
@@ -105,18 +105,18 @@ export default function Tracker() {
           <p className="muted text-sm">No activity recorded yet.</p>
         ) : (
           <div className="max-h-[420px] overflow-y-auto">
-            <Table head={[gran === 'month' ? 'Month' : 'Date', 'Total Hours', 'Fees Received']}>
+            <Table head={[gran === 'month' ? 'Month' : 'Date', { label: 'Total Hours', align: 'right' }, { label: 'Fees Received (AED)', align: 'right' }]}>
               {periodRows.map((r) => (
                 <tr key={r.period}>
                   <td className="table-td font-semibold whitespace-nowrap">{gran === 'month' ? fmtMonth(r.period) : r.period}</td>
-                  <td className="table-td">{hrs(r.hours)}</td>
-                  <td className="table-td text-emerald-600">{rs(r.fees)}</td>
+                  <td className="table-td text-right tabular-nums">{hrs(r.hours)}</td>
+                  <td className="table-td text-right tabular-nums text-emerald-600">{num(r.fees)}</td>
                 </tr>
               ))}
               <tr style={{ borderTop: '2px solid var(--color-border)' }}>
                 <td className="table-td font-bold">Total (range)</td>
-                <td className="table-td font-bold">{hrs(rangeHours)}</td>
-                <td className="table-td font-bold text-emerald-600">{rs(rangeFees)}</td>
+                <td className="table-td text-right tabular-nums font-bold">{hrs(rangeHours)}</td>
+                <td className="table-td text-right tabular-nums font-bold text-emerald-600">{num(rangeFees)}</td>
               </tr>
             </Table>
           </div>
@@ -125,9 +125,9 @@ export default function Tracker() {
 
       {/* Full per-lecture log */}
       <Section title="Lecture Log">
-        <Table head={['Date', 'Month', 'Form No', 'Student Name', 'Subject', 'Time In', 'Time Out', 'No. of Hrs', 'Teacher', 'Attendance']}>
+        <Table head={['Date', 'Month', 'Form No', 'Student Name', 'Subject', 'Topic', 'Subtopic', 'Time In', 'Time Out', { label: 'No. of Hrs', align: 'right' }, 'Teacher', 'Attendance']}>
           {lecs.length === 0 ? (
-            <tr><td className="table-td muted" colSpan={10}>No lectures in this range.</td></tr>
+            <tr><td className="table-td muted" colSpan={12}>No lectures in this range.</td></tr>
           ) : lecs.map((r: any) => (
             <tr key={r.id}>
               <td className="table-td whitespace-nowrap">{r.session_date}</td>
@@ -135,9 +135,11 @@ export default function Tracker() {
               <td className="table-td font-mono">{r.form_no}</td>
               <td className="table-td">{r.student_name}</td>
               <td className="table-td">{r.subject_name || '—'}</td>
+              <td className="table-td">{r.topic || '—'}</td>
+              <td className="table-td">{r.subtopic || '—'}</td>
               <td className="table-td">{r.time_in || '—'}</td>
               <td className="table-td">{r.time_out || '—'}</td>
-              <td className="table-td font-semibold">{hrs(r.hours_consumed)}</td>
+              <td className="table-td text-right tabular-nums font-semibold">{hrs(r.hours_consumed)}</td>
               <td className="table-td">{r.teacher_name || '—'}</td>
               <td className="table-td">
                 <span className={`text-xs px-2 py-0.5 rounded-full ${

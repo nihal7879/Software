@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { api } from '../../api/client';
 import { Section, StatusBadge, Table, Spinner } from '../../components/ui';
+import { ConfirmModal } from '../../components/ConfirmModal';
 
 export default function StudentsList() {
   const qc = useQueryClient();
@@ -10,6 +11,7 @@ export default function StudentsList() {
   const [status, setStatus] = useState('');
   const [page, setPage] = useState(1);
   const [drawer, setDrawer] = useState(false);
+  const [confirm, setConfirm] = useState<{ id: number; name: string; next: 'Active' | 'Inactive' } | null>(null);
 
   const { data, isLoading } = useQuery({
     queryKey: ['students', search, status, page],
@@ -32,6 +34,11 @@ export default function StudentsList() {
     },
   });
 
+  const setStatus_ = useMutation({
+    mutationFn: (v: { id: number; status: 'Active' | 'Inactive' }) => api.post(`/students/${v.id}/set-status`, { status: v.status }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['students'] }),
+  });
+
   const total = data?.total || 0;
   const pages = Math.ceil(total / 15) || 1;
 
@@ -49,14 +56,13 @@ export default function StudentsList() {
           <option value="">All statuses</option>
           <option>Active</option>
           <option>Inactive</option>
-          <option>SP-Active</option>
         </select>
       </div>
 
       <Section title={`${total} students`}>
         {isLoading ? <Spinner /> : (
           <>
-            <Table head={['Form', 'Name', 'Grade', 'Board', 'School', 'Status', 'Parent Mobile']}>
+            <Table head={['Form', 'Name', 'Grade', 'Board', 'School', 'Status', 'Parent Mobile', '']}>
               {data.data.map((s: any) => (
                 <tr key={s.id}>
                   <td className="table-td font-mono">{s.form_no}</td>
@@ -66,6 +72,23 @@ export default function StudentsList() {
                   <td className="table-td">{s.school_name || '—'}</td>
                   <td className="table-td"><StatusBadge status={s.status} /></td>
                   <td className="table-td whitespace-nowrap">{s.parent_mobile || '—'}</td>
+                  <td className="table-td">
+                    {s.status === 'Active' ? (
+                      <button
+                        className="!py-1 !px-2.5 text-xs rounded-lg border border-red-500/30 text-red-600 hover:bg-red-500/10 transition-colors whitespace-nowrap"
+                        onClick={() => setConfirm({ id: s.id, name: s.full_name, next: 'Inactive' })}
+                      >
+                        Deactivate
+                      </button>
+                    ) : (
+                      <button
+                        className="!py-1 !px-2.5 text-xs rounded-lg border border-emerald-500/30 text-emerald-600 hover:bg-emerald-500/10 transition-colors whitespace-nowrap"
+                        onClick={() => setConfirm({ id: s.id, name: s.full_name, next: 'Active' })}
+                      >
+                        Activate
+                      </button>
+                    )}
+                  </td>
                 </tr>
               ))}
             </Table>
@@ -101,7 +124,7 @@ export default function StudentsList() {
                 ['nationality', 'Nationality'],
                 ['student_mobile', 'Student Mobile'],
                 ['parent_mobile', 'Parent Mobile'],
-                ['fees_received', 'Fees Received (₹)'],
+                ['fees_received', 'Fees Received (AED)'],
               ].map(([name, label]) => (
                 <div key={name}>
                   <label className="text-xs font-medium muted">{label}</label>
@@ -113,7 +136,6 @@ export default function StudentsList() {
                 <select className="input mt-1" {...register('status')} defaultValue="Active">
                   <option>Active</option>
                   <option>Inactive</option>
-                  <option>SP-Active</option>
                 </select>
               </div>
               <div>
@@ -131,6 +153,18 @@ export default function StudentsList() {
             </form>
           </div>
         </div>
+      )}
+
+      {confirm && (
+        <ConfirmModal
+          title={confirm.next === 'Inactive' ? 'Deactivate student' : 'Activate student'}
+          message={`${confirm.next === 'Inactive' ? 'Deactivate' : 'Activate'} ${confirm.name}?`}
+          confirmLabel={confirm.next === 'Inactive' ? 'Deactivate' : 'Activate'}
+          danger={confirm.next === 'Inactive'}
+          busy={setStatus_.isPending}
+          onConfirm={() => { setStatus_.mutate({ id: confirm.id, status: confirm.next }); setConfirm(null); }}
+          onClose={() => setConfirm(null)}
+        />
       )}
     </div>
   );

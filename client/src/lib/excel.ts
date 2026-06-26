@@ -26,7 +26,7 @@ const FIELD_ALIASES: Record<string, string[]> = {
   payment_source: ['source', 'paymentsource', 'mode', 'bank', 'paymentmode', 'paidvia', 'channel'],
   parent_name: ['parent', 'parentname', 'paidby', 'guardian', 'payee'],
   course_package_hours: ['packagehours', 'pkghrs', 'hours', 'coursepackagehours', 'pkghours'],
-  notes: ['notes', 'remark', 'remarks', 'note', 'description', 'comment'],
+  notes: ['notes', 'remark', 'remarks', 'note', 'description', 'comment', 'transaction', 'transactiondetails', 'narration', 'particulars'],
 };
 
 const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');

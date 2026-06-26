@@ -1,4 +1,5 @@
 import { ReactNode } from 'react';
+import { CalendarPicker } from './CalendarPicker';
 
 // Shared From/To date-range picker used across admin, faculty, student & parent.
 export function DateRangePicker({
@@ -17,12 +18,12 @@ export function DateRangePicker({
   return (
     <div className="card p-4 flex flex-wrap items-end gap-3">
       <div>
-        <label className="text-xs font-medium muted">From</label>
-        <input type="date" className="input mt-1" value={from} onChange={(e) => onFrom(e.target.value)} />
+        <label className="text-xs font-medium muted block mb-1">From</label>
+        <CalendarPicker value={from} onChange={onFrom} placeholder="From date" />
       </div>
       <div>
-        <label className="text-xs font-medium muted">To</label>
-        <input type="date" className="input mt-1" value={to} onChange={(e) => onTo(e.target.value)} />
+        <label className="text-xs font-medium muted block mb-1">To</label>
+        <CalendarPicker value={to} onChange={onTo} placeholder="To date" />
       </div>
       {children}
     </div>

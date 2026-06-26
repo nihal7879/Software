@@ -2,10 +2,12 @@ import { useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
-import { api, rs, hrs } from '../../api/client';
+import { api, rs, hrs, num } from '../../api/client';
 import { KpiCard, Section, StatusBadge, Table, HoursValue, Spinner } from '../../components/ui';
 import { DateRangePicker } from '../../components/DateRangePicker';
 import { StudentRegistrationForm } from '../../components/StudentRegistrationForm';
+import { Select } from '../../components/Select';
+import { AdjustHoursModal } from '../../components/AdjustHoursModal';
 
 // MANAGEMENT per-student report with a DATE RANGE.
 // Per-day lecture log (date, month, teacher, time in/out, hours, topic/subtopic/remark)
@@ -16,6 +18,8 @@ export default function StudentReport() {
   const [from, setFrom] = useState('2025-09-01');
   const [to, setTo] = useState('2026-08-31');
   const [editProfile, setEditProfile] = useState(false);
+  const [adjustHours, setAdjustHours] = useState(false);
+  const [lecTeacher, setLecTeacher] = useState('');
 
   const { data, isLoading } = useQuery({
     queryKey: ['student-report', id, from, to],
@@ -31,13 +35,12 @@ export default function StudentReport() {
   const teachers = useQuery({ queryKey: ['teachers'], queryFn: () => api.get('/teachers').then((r) => r.data.data) });
   const subjects = useQuery({ queryKey: ['subjects'], queryFn: () => api.get('/teachers/subjects').then((r) => r.data.data) });
 
-  const { register, handleSubmit, reset } = useForm();
+  const { register, handleSubmit, reset, watch, setValue } = useForm();
   const assign = useMutation({
     mutationFn: (b: any) => api.post('/teachers/assign', {
       student_id: Number(id),
       teacher_id: Number(b.teacher_id),
       subject_id: Number(b.subject_id),
-      package_hours: b.package_hours ? Number(b.package_hours) : 0,
     }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['teachers-of', id] }); qc.invalidateQueries({ queryKey: ['student-report', id] }); reset(); },
   });
@@ -70,42 +73,47 @@ export default function StudentReport() {
         <KpiCard label="Lectures in range" value={sum.lecture_count} accent="blue" />
         <KpiCard label="Hours in range" value={hrs(sum.hours_in_range)} accent="indigo" />
         <KpiCard label="Fees received (range)" value={rs(sum.fees_in_range)} accent="emerald" />
-        <KpiCard label="Hours left (overall)" value={<HoursValue value={s.hours_left ?? 0} />} accent={Number(s.hours_left) < 0 ? 'red' : 'emerald'} />
+        <KpiCard label="Hours left (overall)" value={<HoursValue value={s.hours_left ?? 0} />} accent={Number(s.hours_left) <= 0 ? 'red' : 'emerald'} />
+      </div>
+
+      <div>
+        <button className="btn-ghost !py-1.5 !px-3 text-sm" onClick={() => setAdjustHours(true)}>± Adjust Hours</button>
       </div>
 
       {/* Assigned teachers + assign form */}
       <Section title="Assigned Teachers">
-        <form onSubmit={handleSubmit((b) => assign.mutate(b))} className="grid grid-cols-1 sm:grid-cols-4 gap-3 items-end mb-4">
+        <form onSubmit={handleSubmit((b) => assign.mutate(b))} className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end mb-4">
           <div>
-            <label className="text-xs font-medium muted">Teacher</label>
-            <select className="input mt-1" {...register('teacher_id', { required: true })}>
-              <option value="">Select teacher…</option>
-              {(teachers.data || []).map((t: any) => <option key={t.id} value={t.id}>{t.name}</option>)}
-            </select>
+            <label className="text-xs font-medium muted block mb-1">Teacher</label>
+            <input type="hidden" {...register('teacher_id', { required: true })} />
+            <Select
+              value={watch('teacher_id') || ''}
+              onChange={(v) => setValue('teacher_id', v, { shouldValidate: true })}
+              options={(teachers.data || []).map((t: any) => ({ value: t.id, label: t.name }))}
+              placeholder="Select teacher…"
+            />
           </div>
           <div>
-            <label className="text-xs font-medium muted">Subject</label>
-            <select className="input mt-1" {...register('subject_id', { required: true })}>
-              <option value="">Select subject…</option>
-              {(subjects.data || []).map((s: any) => <option key={s.id} value={s.id}>{s.name}</option>)}
-            </select>
-          </div>
-          <div>
-            <label className="text-xs font-medium muted">Package hours</label>
-            <input className="input mt-1" placeholder="0" {...register('package_hours')} />
+            <label className="text-xs font-medium muted block mb-1">Subject</label>
+            <input type="hidden" {...register('subject_id', { required: true })} />
+            <Select
+              value={watch('subject_id') || ''}
+              onChange={(v) => setValue('subject_id', v, { shouldValidate: true })}
+              options={(subjects.data || []).map((s: any) => ({ value: s.id, label: s.name }))}
+              placeholder="Select subject…"
+            />
           </div>
           <button className="btn-primary" disabled={assign.isPending}>{assign.isPending ? 'Assigning…' : 'Assign Teacher'}</button>
         </form>
         {assign.isError && <div className="text-sm text-red-500 mb-3">Could not assign — please try again.</div>}
         {assigned.isLoading ? <Spinner /> : (
-          <Table head={['Teacher', 'Subject', 'Package Hours']}>
+          <Table head={['Teacher', 'Subject']}>
             {(assigned.data || []).length === 0 ? (
-              <tr><td className="table-td muted" colSpan={3}>No teachers assigned yet.</td></tr>
+              <tr><td className="table-td muted" colSpan={2}>No teachers assigned yet.</td></tr>
             ) : (assigned.data || []).map((t: any) => (
               <tr key={t.id}>
                 <td className="table-td font-medium">{t.teacher_name}</td>
                 <td className="table-td">{t.subject_name}</td>
-                <td className="table-td">{hrs(t.package_hours)}</td>
               </tr>
             ))}
           </Table>
@@ -113,11 +121,25 @@ export default function StudentReport() {
       </Section>
 
       {/* Per-day lecture log */}
-      <Section title="Lecture Log — per day">
-        <Table head={['Date', 'Month', 'Teacher', 'Subject', 'Time In', 'Time Out', 'No. of Hours', 'Topic', 'Subtopic', 'Remark', 'Venue']}>
-          {data.lectures.length === 0 ? (
-            <tr><td className="table-td muted" colSpan={11}>No lectures in this range.</td></tr>
-          ) : data.lectures.map((l: any, i: number) => (
+      <Section
+        title="Lecture Log — per day"
+        action={
+          <div className="w-56">
+            <Select
+              value={lecTeacher}
+              onChange={setLecTeacher}
+              options={[{ value: '', label: 'All teachers' }, ...Array.from(new Set((data.lectures || []).map((l: any) => l.teacher_name).filter(Boolean))).map((n: any) => ({ value: n, label: n }))]}
+              placeholder="All teachers"
+            />
+          </div>
+        }
+      >
+        <Table head={['Date', 'Month', 'Teacher', 'Subject', 'Time In', 'Time Out', { label: 'No. of Hours', align: 'right' }, 'Topic', 'Subtopic', 'Remark', 'Venue']}>
+          {(() => {
+            const visible = (data.lectures || []).filter((l: any) => !lecTeacher || l.teacher_name === lecTeacher);
+            return visible.length === 0 ? (
+            <tr><td className="table-td muted" colSpan={11}>No lectures{lecTeacher ? ' for this teacher' : ' in this range'}.</td></tr>
+          ) : visible.map((l: any, i: number) => (
             <tr key={i}>
               <td className="table-td whitespace-nowrap">{l.session_date}</td>
               <td className="table-td">{l.month}</td>
@@ -125,35 +147,45 @@ export default function StudentReport() {
               <td className="table-td">{l.subject_name || '—'}</td>
               <td className="table-td">{l.time_in || '—'}</td>
               <td className="table-td">{l.time_out || '—'}</td>
-              <td className="table-td font-semibold">{hrs(l.no_of_hours)}</td>
+              <td className="table-td text-right font-semibold">{hrs(l.no_of_hours)}</td>
               <td className="table-td">{l.topic || '—'}</td>
               <td className="table-td">{l.subtopic || '—'}</td>
               <td className="table-td">{l.remark || '—'}</td>
               <td className="table-td">{l.venue || '—'}</td>
             </tr>
-          ))}
+          ));
+          })()}
         </Table>
       </Section>
 
       {/* Fee receipts */}
       <Section title="Fees Received — in range">
-        <Table head={['Date', 'Month', 'Amount', 'Paid By (Parent)', 'Source', 'Reference', 'Pkg Hrs', 'Notes']}>
+        <Table head={['Date', 'Month', { label: 'Amount (AED)', align: 'right' }, 'Paid By (Parent)', 'Source', 'Reference', { label: 'Pkg Hrs', align: 'right' }, 'Notes']}>
           {data.fees.length === 0 ? (
             <tr><td className="table-td muted" colSpan={8}>No fee receipts in this range.</td></tr>
           ) : data.fees.map((f: any, i: number) => (
             <tr key={i}>
               <td className="table-td whitespace-nowrap">{f.payment_date}</td>
               <td className="table-td">{f.month}</td>
-              <td className="table-td font-semibold text-emerald-600">{rs(f.amount)}</td>
+              <td className="table-td text-right font-semibold text-emerald-600">{num(f.amount)}</td>
               <td className="table-td">{f.parent_name || '—'}</td>
               <td className="table-td">{f.payment_source || '—'}</td>
               <td className="table-td font-mono text-xs">{f.transaction_reference || '—'}</td>
-              <td className="table-td">{f.course_package_hours ?? '—'}</td>
+              <td className="table-td text-right">{f.course_package_hours ?? '—'}</td>
               <td className="table-td max-w-[220px] truncate" title={f.notes}>{f.notes || '—'}</td>
             </tr>
           ))}
         </Table>
       </Section>
+
+      {adjustHours && (
+        <AdjustHoursModal
+          studentId={Number(id)}
+          studentName={s.full_name}
+          onClose={() => setAdjustHours(false)}
+          onSaved={() => qc.invalidateQueries({ queryKey: ['student-report', id] })}
+        />
+      )}
 
       {/* Edit / Complete Profile modal */}
       {editProfile && (

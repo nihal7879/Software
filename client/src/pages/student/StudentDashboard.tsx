@@ -61,7 +61,7 @@ export default function StudentDashboard() {
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <KpiCard label="Hours Purchased" value={hrs(l.total_hours_credited)} accent="blue" />
         <KpiCard label="Hours Consumed" value={hrs(l.total_hours_consumed)} accent="indigo" />
-        <KpiCard label="Hours Remaining" value={<HoursValue value={l.hours_left} />} accent={Number(l.hours_left) < 0 ? 'red' : 'emerald'} />
+        <KpiCard label="Hours Remaining" value={<HoursValue value={l.hours_left} />} accent={Number(l.hours_left) <= 0 ? 'red' : 'emerald'} />
       </div>
 
       <div className="flex flex-wrap gap-3">
@@ -96,14 +96,14 @@ export default function StudentDashboard() {
 
       <Section title="Recent Classes">
         {lectures.isLoading ? <Spinner /> : (
-          <Table head={['Date', 'Teacher', 'Subject', 'Topic', 'Hours', 'Venue']}>
+          <Table head={['Date', 'Teacher', 'Subject', 'Topic', { label: 'Hours', align: 'right' }, 'Venue']}>
             {recent.map((r: any) => (
               <tr key={r.id}>
                 <td className="table-td">{r.session_date}</td>
                 <td className="table-td">{r.teacher_name || '—'}</td>
                 <td className="table-td">{r.subject_name || '—'}</td>
                 <td className="table-td">{r.topic || '—'}</td>
-                <td className="table-td">{hrs(r.hours_consumed)}</td>
+                <td className="table-td text-right tabular-nums">{hrs(r.hours_consumed)}</td>
                 <td className="table-td">{r.venue || '—'}</td>
               </tr>
             ))}

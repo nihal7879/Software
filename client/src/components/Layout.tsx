@@ -1,12 +1,13 @@
 import { ReactNode, useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import {
-  LayoutDashboard, Users, ClipboardList, Clock, Wallet, GraduationCap, BarChart3,
-  BookOpen, CalendarDays, User, LogOut, Moon, Sun, ChevronLeft, Menu, LineChart,
+  LayoutDashboard, Users, Clock, Wallet, GraduationCap, BarChart3,
+  BookOpen, CalendarDays, User, LogOut, Moon, Sun, ChevronLeft, Menu, LineChart, Settings,
 } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
 import { useTheme } from '../theme/ThemeContext';
 import { roleLabel } from './MonthSelector';
+import { Toaster } from './Toast';
 
 type Item = { to: string; label: string; icon: any };
 
@@ -14,28 +15,33 @@ const NAV: Record<string, Item[]> = {
   admin: [
     { to: '/admin', label: 'Dashboard', icon: LayoutDashboard },
     { to: '/admin/students', label: 'Students', icon: Users },
-    { to: '/admin/ledger', label: 'Hours Ledger', icon: ClipboardList },
-    { to: '/admin/hours', label: 'Hours (Monthly)', icon: Clock },
+    { to: '/admin/hours', label: 'Student Hours', icon: Clock },
     { to: '/admin/finance', label: 'Finance', icon: Wallet },
     { to: '/admin/teachers', label: 'Teachers', icon: GraduationCap },
     { to: '/admin/pivots', label: 'Pivots', icon: BarChart3 },
+    { to: '/admin/settings', label: 'Settings', icon: Settings },
   ],
   faculty: [
     { to: '/faculty', label: 'Dashboard', icon: LayoutDashboard },
     { to: '/faculty/students', label: 'My Students', icon: Users },
     { to: '/faculty/lecture', label: 'Lecture Entry', icon: BookOpen },
+    { to: '/faculty/settings', label: 'Settings', icon: Settings },
   ],
   student: [
     { to: '/student', label: 'Dashboard', icon: LayoutDashboard },
     { to: '/student/tracker', label: 'Tracker', icon: LineChart },
     { to: '/student/lectures', label: 'Lecture History', icon: CalendarDays },
+    { to: '/student/hours', label: 'Hours Statement', icon: Clock },
     { to: '/student/profile', label: 'Profile', icon: User },
+    { to: '/student/settings', label: 'Settings', icon: Settings },
   ],
   parent: [
     { to: '/parent', label: 'Dashboard', icon: LayoutDashboard },
     { to: '/parent/tracker', label: 'Tracker', icon: LineChart },
     { to: '/parent/lectures', label: 'Lectures', icon: CalendarDays },
+    { to: '/parent/hours', label: 'Hours Statement', icon: Clock },
     { to: '/parent/fees', label: 'Fees', icon: Wallet },
+    { to: '/parent/settings', label: 'Settings', icon: Settings },
   ],
 };
 
@@ -154,6 +160,7 @@ export function Layout({ children }: { children: ReactNode }) {
 
         <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-[1440px] w-full">{children}</main>
       </div>
+      <Toaster />
     </div>
   );
 }

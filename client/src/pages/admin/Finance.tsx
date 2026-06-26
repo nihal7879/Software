@@ -1,28 +1,34 @@
 import { useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
-import { api, rs } from '../../api/client';
+import { api, rs, num } from '../../api/client';
 import { Section, Table, Spinner } from '../../components/ui';
-import { MonthSelector } from '../../components/MonthSelector';
+import { CalendarPicker, CalendarRangePicker } from '../../components/CalendarPicker';
+import { Select } from '../../components/Select';
+import { ConfirmModal } from '../../components/ConfirmModal';
+import { toast } from '../../components/Toast';
 import { parseFeeWorkbook } from '../../lib/excel';
 
 export default function Finance() {
   const qc = useQueryClient();
   const [drawer, setDrawer] = useState(false);
   const [editing, setEditing] = useState<any | null>(null); // tx being edited, or null = new
-  const [month, setMonth] = useState('');
+  const [fromDate, setFromDate] = useState(''); // date-range filter; '' = show all
+  const [toDate, setToDate] = useState('');
+  const [txSearch, setTxSearch] = useState('');
   const [importMsg, setImportMsg] = useState('');
   const [draftsOpen, setDraftsOpen] = useState(false);
+  const [confirm, setConfirm] = useState<{ title: string; message: string; confirmLabel: string; onConfirm: () => void } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  const tx = useQuery({ queryKey: ['transactions', month], queryFn: () => api.get('/fees/transactions', { params: { month } }).then((r) => r.data.data) });
+  const tx = useQuery({ queryKey: ['transactions'], queryFn: () => api.get('/fees/transactions').then((r) => r.data.data) });
   const students = useQuery({ queryKey: ['students-all'], queryFn: () => api.get('/students', { params: { limit: 100 } }).then((r) => r.data.data) });
   const drafts = useQuery({ queryKey: ['fee-drafts'], queryFn: () => api.get('/fees/drafts').then((r) => r.data.data) });
 
-  const { register, handleSubmit, reset } = useForm();
+  const { register, handleSubmit, reset, watch, setValue } = useForm();
 
-  const openAdd = () => { setEditing(null); reset({ student_id: '', amount: '', payment_date: '', payment_source: '', transaction_reference: '', parent_name: '', course_package_hours: '', notes: '' }); setDrawer(true); };
-  const openEdit = (t: any) => { setEditing(t); reset({ ...t, course_package_hours: t.course_package_hours ?? '' }); setDrawer(true); };
+  const openAdd = () => { setEditing(null); reset({ student_id: '', amount: '', payment_date: '', payment_source: '', transaction_reference: '', parent_name: '', course_package_hours: '', discount_hours: '', notes: '' }); setDrawer(true); };
+  const openEdit = (t: any) => { setEditing(t); reset({ ...t, course_package_hours: t.course_package_hours ?? '', discount_hours: t.discount_hours ?? '' }); setDrawer(true); };
   const closeDrawer = () => { setDrawer(false); setEditing(null); reset(); save.reset(); };
 
   const save = useMutation({
@@ -32,22 +38,29 @@ export default function Finance() {
         student_id: Number(b.student_id),
         amount: Number(b.amount),
         course_package_hours: b.course_package_hours ? Number(b.course_package_hours) : null,
+        discount_hours: b.discount_hours ? Number(b.discount_hours) : null,
       };
       return editing ? api.put(`/fees/transactions/${editing.id}`, payload) : api.post('/fees/transactions', payload);
     },
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['transactions'] }); closeDrawer(); },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['transactions'] });
+      toast(editing ? 'Payment updated' : 'Payment recorded');
+      closeDrawer();
+    },
+    onError: (e: any) => toast(e?.response?.data?.error || 'Could not save payment', 'error'),
   });
 
   const del = useMutation({
     mutationFn: (id: number) => api.delete(`/fees/transactions/${id}`),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['transactions'] }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['transactions'] }); toast('Payment deleted'); },
   });
 
-  const onDelete = (t: any) => {
-    if (window.confirm(`Delete the ${rs(t.amount)} payment from ${t.student_name} on ${t.payment_date}? This cannot be undone.`)) {
-      del.mutate(t.id);
-    }
-  };
+  const onDelete = (t: any) => setConfirm({
+    title: 'Delete payment',
+    message: `Delete the ${rs(t.amount)} payment from ${t.student_name} on ${t.payment_date}? This cannot be undone.`,
+    confirmLabel: 'Delete',
+    onConfirm: () => del.mutate(t.id),
+  });
 
   // ---- Excel import -------------------------------------------------------
   const importMut = useMutation({
@@ -72,7 +85,12 @@ export default function Finance() {
 
   const assign = useMutation({
     mutationFn: (b: { id: number; payload: any }) => api.post(`/fees/drafts/${b.id}/assign`, b.payload),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['transactions'] }); qc.invalidateQueries({ queryKey: ['fee-drafts'] }); },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['transactions'] });
+      qc.invalidateQueries({ queryKey: ['fee-drafts'] });
+      toast('Payment assigned to student');
+    },
+    onError: (e: any) => toast(e?.response?.data?.error || 'Could not assign payment', 'error'),
   });
   const discard = useMutation({
     mutationFn: (id: number) => api.delete(`/fees/drafts/${id}`),
@@ -81,12 +99,24 @@ export default function Finance() {
 
   const draftList = drafts.data || [];
 
+  // Filter the transactions by date range, student, and a free-text search.
+  const needle = txSearch.trim().toLowerCase();
+  const visibleTx = (tx.data || []).filter((t: any) => {
+    const d = String(t.payment_date).slice(0, 10);
+    if (fromDate && d < fromDate) return false;
+    if (toDate && d > toDate) return false;
+    if (needle) {
+      const hay = `${t.student_name || ''} ${t.form_no || ''} ${t.transaction_reference || ''} ${t.payment_source || ''} ${t.parent_name || ''} ${t.notes || ''}`.toLowerCase();
+      if (!hay.includes(needle)) return false;
+    }
+    return true;
+  });
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-bold">Finance Tracker</h1>
         <div className="flex items-center gap-2">
-          <MonthSelector value={month} onChange={setMonth} />
           <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={onFile} />
           <button className="btn-ghost" onClick={() => fileRef.current?.click()} disabled={importMut.isPending}>
             {importMut.isPending ? 'Importing…' : '⬆ Import Excel'}
@@ -114,12 +144,12 @@ export default function Finance() {
         >
           {draftsOpen && (
             <>
-              <p className="muted text-sm mb-3">These rows from your upload couldn't be auto-matched. Pick the student (fix amount/date if needed) and assign, or discard.</p>
+              <p className="muted text-sm mb-3">These rows from your upload couldn't be auto-matched. Pick the student (fix any field if needed), add a note, then assign — or discard.</p>
               <div className="overflow-x-auto">
                 <table className="w-full border-collapse">
                   <thead>
                     <tr>
-                      {['From sheet', 'Reason', 'Amount', 'Date', 'Assign to student', ''].map((h) => <th key={h} className="table-th">{h}</th>)}
+                      {['Date', 'Transaction', 'Reference', 'Credit', 'Source', 'Assign to student', 'Pkg Hrs', 'Disc Hrs', 'Note', ''].map((h) => <th key={h} className="table-th">{h}</th>)}
                     </tr>
                   </thead>
                   <tbody>
@@ -130,7 +160,7 @@ export default function Finance() {
                         students={students.data || []}
                         busy={assign.isPending || discard.isPending}
                         onAssign={(payload) => assign.mutate({ id: d.id, payload })}
-                        onDiscard={() => { if (window.confirm('Discard this draft row?')) discard.mutate(d.id); }}
+                        onDiscard={() => setConfirm({ title: 'Discard draft', message: 'Discard this draft row? This cannot be undone.', confirmLabel: 'Discard', onConfirm: () => discard.mutate(d.id) })}
                       />
                     ))}
                   </tbody>
@@ -141,38 +171,56 @@ export default function Finance() {
         </Section>
       )}
 
-      <Section title={`Fee Transactions (₹)${month ? ` · ${month}` : ''}`}>
-        {tx.isLoading ? <Spinner /> : (tx.data || []).length === 0 ? (
-          <p className="muted text-sm">No payments recorded{month ? ' for this month' : ''}.</p>
+      <Section
+        title="Fee Transactions (AED)"
+        action={
+          <div className="flex items-center gap-2">
+            <input
+              className="input w-[220px]"
+              placeholder="Search payments…"
+              value={txSearch}
+              onChange={(e) => setTxSearch(e.target.value)}
+            />
+            <CalendarRangePicker
+              from={fromDate}
+              to={toDate}
+              onChange={(f, t) => { setFromDate(f); setToDate(t); }}
+              placeholder="Filter by date / month"
+              align="right"
+            />
+            {(fromDate || toDate || txSearch) && (
+              <button className="btn-ghost !py-1.5 !px-3 text-sm whitespace-nowrap" onClick={() => { setFromDate(''); setToDate(''); setTxSearch(''); }}>
+                Show all
+              </button>
+            )}
+          </div>
+        }
+      >
+        {tx.isLoading ? <Spinner /> : (visibleTx.length === 0 ? (
+          <p className="muted text-sm">No payments recorded{fromDate || toDate || txSearch ? ' for this filter' : ''}.</p>
         ) : (
-          <Table head={['Date', 'Form', 'Student', 'Amount', 'Source', 'Reference', 'Parent', 'Pkg Hrs', 'Notes', '']}>
-            {tx.data.map((t: any) => (
+          <Table head={['Date', 'Form', 'Student', { label: 'Amount (AED)', align: 'right' }, 'Source', 'Reference', 'Parent', { label: 'Pkg Hrs', align: 'right' }, { label: 'Disc Hrs', align: 'right' }, 'Notes', '']}>
+            {visibleTx.map((t: any) => (
               <tr key={t.id}>
                 <td className="table-td whitespace-nowrap">{t.payment_date}</td>
                 <td className="table-td font-mono">{t.form_no}</td>
                 <td className="table-td font-medium">{t.student_name}</td>
-                <td className="table-td font-semibold text-emerald-600">{rs(t.amount)}</td>
+                <td className="table-td text-right font-semibold text-emerald-600">{num(t.amount)}</td>
                 <td className="table-td">{t.payment_source || '—'}</td>
                 <td className="table-td font-mono text-xs">{t.transaction_reference || '—'}</td>
                 <td className="table-td">{t.parent_name || '—'}</td>
-                <td className="table-td">{t.course_package_hours ?? '—'}</td>
+                <td className="table-td text-right">{t.course_package_hours ?? '—'}</td>
+                <td className="table-td text-right">{t.discount_hours ?? '—'}</td>
                 <td className="table-td max-w-[200px] truncate" title={t.notes}>{t.notes || '—'}</td>
                 <td className="table-td">
                   <div className="flex gap-1.5 whitespace-nowrap">
                     <button className="btn-ghost !py-1 !px-2.5 text-xs" onClick={() => openEdit(t)}>Edit</button>
-                    <button
-                      className="!py-1 !px-2.5 text-xs rounded-lg border border-red-500/30 text-red-600 hover:bg-red-500/10 transition-colors disabled:opacity-50"
-                      onClick={() => onDelete(t)}
-                      disabled={del.isPending}
-                    >
-                      Delete
-                    </button>
                   </div>
                 </td>
               </tr>
             ))}
           </Table>
-        )}
+        ))}
       </Section>
 
       {drawer && (
@@ -181,25 +229,34 @@ export default function Finance() {
             <h2 className="text-lg font-bold mb-4">{editing ? 'Edit Payment' : 'Record Payment'}</h2>
             <form onSubmit={handleSubmit((b) => save.mutate(b))} className="space-y-3">
               <div>
-                <label className="text-xs font-medium muted">Student *</label>
-                <select className="input mt-1" {...register('student_id', { required: true })}>
-                  <option value="">Select…</option>
-                  {students.data?.map((s: any) => <option key={s.id} value={s.id}>{s.form_no} — {s.full_name}</option>)}
-                </select>
+                <label className="text-xs font-medium muted block mb-1">Student *</label>
+                <input type="hidden" {...register('student_id', { required: true })} />
+                <Select
+                  value={watch('student_id') || ''}
+                  onChange={(v) => setValue('student_id', v, { shouldValidate: true })}
+                  options={(students.data || []).map((s: any) => ({ value: s.id, label: `${s.form_no} — ${s.full_name}` }))}
+                  placeholder="Select student…"
+                />
               </div>
               <div>
-                <label className="text-xs font-medium muted">Amount (₹) *</label>
+                <label className="text-xs font-medium muted">Amount (AED) *</label>
                 <input className="input mt-1" type="number" step="0.01" {...register('amount', { required: true })} />
               </div>
               <div>
-                <label className="text-xs font-medium muted">Payment Date *</label>
-                <input className="input mt-1" type="date" {...register('payment_date', { required: true })} />
+                <label className="text-xs font-medium muted block mb-1">Payment Date *</label>
+                <input type="hidden" {...register('payment_date', { required: true })} />
+                <CalendarPicker
+                  value={watch('payment_date') || ''}
+                  onChange={(d) => setValue('payment_date', d, { shouldValidate: true })}
+                  placeholder="Select payment date"
+                />
               </div>
               {[
                 ['payment_source', 'Payment Source'],
                 ['transaction_reference', 'Transaction Reference'],
                 ['parent_name', 'Parent Name'],
                 ['course_package_hours', 'Course Package Hours'],
+                ['discount_hours', 'Discount Hours'],
               ].map(([n, l]) => (
                 <div key={n}>
                   <label className="text-xs font-medium muted">{l}</label>
@@ -218,6 +275,17 @@ export default function Finance() {
             </form>
           </div>
         </div>
+      )}
+
+      {confirm && (
+        <ConfirmModal
+          title={confirm.title}
+          message={confirm.message}
+          confirmLabel={confirm.confirmLabel}
+          danger
+          onConfirm={() => { confirm.onConfirm(); setConfirm(null); }}
+          onClose={() => setConfirm(null)}
+        />
       )}
     </div>
   );
@@ -238,32 +306,54 @@ function DraftRow({
   onDiscard: () => void;
 }) {
   const [studentId, setStudentId] = useState<string>(draft.student_id ? String(draft.student_id) : '');
-  const [amount, setAmount] = useState<string>(draft.amount != null ? String(draft.amount) : '');
-  const [date, setDate] = useState<string>(draft.payment_date ? String(draft.payment_date).slice(0, 10) : '');
+  const [pkgHours, setPkgHours] = useState<string>(draft.course_package_hours != null ? String(draft.course_package_hours) : '');
+  const [discHours, setDiscHours] = useState<string>(draft.discount_hours != null ? String(draft.discount_hours) : '');
+  const [note, setNote] = useState<string>('');
 
+  // Imported fields are locked — only student / hours / note are editable.
+  const amount = draft.amount != null ? String(draft.amount) : '';
+  const date = draft.payment_date ? String(draft.payment_date).slice(0, 10) : '';
+  const reference = draft.transaction_reference || '';
+  const source = draft.payment_source || '';
+
+  const transaction = draft.notes || draft.guessed_student_name || '—';
   const canAssign = studentId && Number(amount) > 0 && date;
 
   return (
     <tr>
-      <td className="table-td">
-        <div className="font-medium">{draft.guessed_student_name || draft.matched_student_name || '—'}</div>
-        <div className="text-xs muted">{draft.guessed_form_no ? `Form ${draft.guessed_form_no}` : 'No form no'}{draft.payment_source ? ` · ${draft.payment_source}` : ''}</div>
+      <td className="table-td whitespace-nowrap text-sm">{date || '—'}</td>
+      <td className="table-td max-w-[260px]">
+        <div className="text-xs whitespace-pre-wrap break-words" title={transaction}>{transaction}</div>
       </td>
-      <td className="table-td"><span className="text-xs px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-600 whitespace-nowrap">{draft.reason}</span></td>
-      <td className="table-td"><input className="input !py-1 w-24" type="number" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} /></td>
-      <td className="table-td"><input className="input !py-1 w-36" type="date" value={date} onChange={(e) => setDate(e.target.value)} /></td>
-      <td className="table-td">
-        <select className="input !py-1 min-w-[200px]" value={studentId} onChange={(e) => setStudentId(e.target.value)}>
-          <option value="">Select student…</option>
-          {students.map((s: any) => <option key={s.id} value={s.id}>{s.form_no} — {s.full_name}</option>)}
-        </select>
+      <td className="table-td font-mono text-xs">{reference || '—'}</td>
+      <td className="table-td text-sm">{amount || '—'}</td>
+      <td className="table-td text-sm">{source || '—'}</td>
+      <td className="table-td min-w-[220px]">
+        <Select
+          value={studentId}
+          onChange={setStudentId}
+          options={students.map((s: any) => ({ value: s.id, label: `${s.form_no} — ${s.full_name}` }))}
+          placeholder="Select student…"
+        />
       </td>
+      <td className="table-td"><input className="input !py-1 w-24" type="number" step="0.01" value={pkgHours} onChange={(e) => setPkgHours(e.target.value)} placeholder="0" /></td>
+      <td className="table-td"><input className="input !py-1 w-24" type="number" step="0.01" value={discHours} onChange={(e) => setDiscHours(e.target.value)} placeholder="0" /></td>
+      <td className="table-td"><input className="input !py-1 w-40" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Add note…" /></td>
       <td className="table-td">
         <div className="flex gap-1.5 whitespace-nowrap">
           <button
             className="btn-primary !py-1 !px-2.5 text-xs"
             disabled={!canAssign || busy}
-            onClick={() => onAssign({ student_id: Number(studentId), amount: Number(amount), payment_date: date })}
+            onClick={() => onAssign({
+              student_id: Number(studentId),
+              amount: Number(amount),
+              payment_date: date,
+              transaction_reference: reference || null,
+              payment_source: source || null,
+              course_package_hours: pkgHours ? Number(pkgHours) : null,
+              discount_hours: discHours ? Number(discHours) : null,
+              notes: [transaction !== '—' ? transaction : '', note].filter(Boolean).join(' — ') || null,
+            })}
           >
             Assign
           </button>

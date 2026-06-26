@@ -14,7 +14,7 @@ const studentSchema = z.object({
   // form_no is system-assigned (= the student's DB id); never entered manually.
   form_no: z.string().optional(),
   date_of_joining: z.string().nullable().optional(),
-  status: z.enum(['Active', 'Inactive', 'SP-Active']).default('Active'),
+  status: z.enum(['Active', 'Inactive']).default('Active'),
   first_name: z.string().optional().nullable(),
   middle_name: z.string().optional().nullable(),
   last_name: z.string().optional().nullable(),
@@ -161,6 +161,19 @@ router.put(
       await query(`UPDATE students SET ${fields.join(', ')} WHERE id = ?`, params);
     }
     await audit(req.user!.userId, 'UPDATE', 'student', req.params.id, before, b);
+    res.json({ ok: true });
+  })
+);
+
+// Set status (Active / Inactive) — keeps is_active in sync. Admin only.
+router.post(
+  '/:id/set-status',
+  requireRole('admin'),
+  wrap(async (req, res) => {
+    const b = z.object({ status: z.enum(['Active', 'Inactive']) }).parse(req.body);
+    const isActive = b.status === 'Active';
+    await query('UPDATE students SET status = ?, is_active = ? WHERE id = ?', [b.status, isActive, req.params.id]);
+    await audit(req.user!.userId, 'SET_STATUS', 'student', req.params.id, null, { status: b.status });
     res.json({ ok: true });
   })
 );

@@ -22,7 +22,7 @@ export default function AdminDashboard() {
       <h1 className="text-2xl font-bold">Management Dashboard</h1>
 
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-        <KpiCard label="Students" value={o.students.total} sub={`${o.students.active} active · ${o.students.sp_active} SP`} accent="blue" />
+        <KpiCard label="Students" value={o.students.total} sub={`${o.students.active} active`} accent="blue" />
         <KpiCard label="Inactive" value={o.students.inactive} sub={`${o.students.new_admissions} new (30d)`} accent="purple" />
         <KpiCard label="Faculty" value={o.teachers.total} sub={`${o.teachers.active} active`} accent="emerald" />
         <KpiCard label="Revenue" value={rs(o.revenue.total_revenue)} sub={`${rs(o.revenue.month_revenue)} this month`} accent="orange" />
@@ -31,7 +31,7 @@ export default function AdminDashboard() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Section title="Revenue Trend (₹ / month)">
+        <Section title="Revenue Trend (AED / month)">
           <ResponsiveContainer width="100%" height={240}>
             <LineChart data={trend.data || []}>
               <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />

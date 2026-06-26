@@ -16,7 +16,9 @@ async function myTeacherId(req: Request): Promise<number | null> {
 }
 
 const lectureSchema = z.object({
-  session_date: z.string(),
+  // Must be a strict ISO date (YYYY-MM-DD). A free-form / locale date would either
+  // fail the DATE NOT NULL insert or store 0000-00-00 and vanish from every report.
+  session_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'session_date must be YYYY-MM-DD'),
   teacher_id: z.number().int().nullable().optional(),
   subject_id: z.number().int().nullable().optional(),
   time_in: z.string().optional().nullable(),

@@ -51,7 +51,6 @@ export function StatusBadge({ status }: { status: string }) {
   const map: Record<string, string> = {
     Active: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400',
     Inactive: 'bg-slate-500/15 text-slate-500',
-    'SP-Active': 'bg-amber-500/15 text-amber-600 dark:text-amber-400',
     'Payment Required': 'bg-red-500/15 text-red-600 dark:text-red-400',
   };
   return (
@@ -63,18 +62,26 @@ export function StatusBadge({ status }: { status: string }) {
 
 export function HoursValue({ value }: { value: number | string }) {
   const n = Number(value);
-  return <span className={`whitespace-nowrap ${n < 0 ? 'text-red-500 font-semibold' : ''}`}>{n.toFixed(2)} h</span>;
+  return <span className={`whitespace-nowrap tabular-nums ${n <= 0 ? 'text-red-500 font-semibold' : ''}`}>{n.toFixed(2)} h</span>;
 }
 
-export function Table({ head, children }: { head: string[]; children: ReactNode }) {
+// A column header is either a plain label (left-aligned) or an object that can
+// request right alignment — used for numeric / money / hours columns so the
+// figures (and the trailing "h") line up vertically, finance-app style.
+type Col = string | { label: string; align?: 'left' | 'right' | 'center' };
+const alignClass = (a?: 'left' | 'right' | 'center') => (a === 'right' ? 'text-right' : a === 'center' ? 'text-center' : '');
+
+export function Table({ head, children }: { head: Col[]; children: ReactNode }) {
   return (
     <div className="overflow-x-auto">
       <table className="w-full border-collapse">
         <thead>
           <tr>
-            {head.map((h) => (
-              <th key={h} className="table-th">{h}</th>
-            ))}
+            {head.map((h, i) => {
+              const label = typeof h === 'string' ? h : h.label;
+              const cls = typeof h === 'string' ? '' : alignClass(h.align);
+              return <th key={i} className={`table-th ${cls}`}>{label}</th>;
+            })}
           </tr>
         </thead>
         <tbody>{children}</tbody>

@@ -61,7 +61,11 @@ api.interceptors.response.use(
 );
 
 export const rs = (n: number | string | null | undefined) =>
-  `₹${Number(n ?? 0).toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
+  `AED ${Number(n ?? 0).toLocaleString('en-AE', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
+
+// Plain number (no currency prefix) — use when the column/label already says AED.
+export const num = (n: number | string | null | undefined) =>
+  Number(n ?? 0).toLocaleString('en-AE', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
 
 export const hrs = (n: number | string | null | undefined) =>
   `${Number(n ?? 0).toLocaleString('en-AE', { maximumFractionDigits: 2 })} h`;

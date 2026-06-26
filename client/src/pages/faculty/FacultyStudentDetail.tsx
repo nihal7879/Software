@@ -39,12 +39,12 @@ export default function FacultyStudentDetail() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <KpiCard label="Hours Purchased" value={hrs(s.total_hours_credited)} accent="blue" />
         <KpiCard label="Hours Consumed" value={hrs(s.total_hours_consumed)} accent="indigo" />
-        <KpiCard label="Hours Remaining" value={<HoursValue value={s.hours_left ?? 0} />} accent={Number(s.hours_left) < 0 ? 'red' : 'emerald'} />
+        <KpiCard label="Hours Remaining" value={<HoursValue value={s.hours_left ?? 0} />} accent={Number(s.hours_left) <= 0 ? 'red' : 'emerald'} />
         <KpiCard label="My hours (range)" value={hrs(sum.hours_in_range)} sub={`${sum.lecture_count} classes`} accent="orange" />
       </div>
 
       <Section title="Lecture Log — with you">
-        <Table head={['Date', 'Subject', 'Time In', 'Time Out', 'No. of Hours', 'Topic', 'Subtopic', 'Remark', 'Venue']}>
+        <Table head={['Date', 'Subject', 'Time In', 'Time Out', { label: 'No. of Hours', align: 'right' }, 'Topic', 'Subtopic', 'Remark', 'Venue']}>
           {data.lectures.length === 0 ? (
             <tr><td className="table-td muted" colSpan={9}>No lectures in this range.</td></tr>
           ) : data.lectures.map((l: any, i: number) => (
@@ -53,7 +53,7 @@ export default function FacultyStudentDetail() {
               <td className="table-td">{l.subject_name || '—'}</td>
               <td className="table-td">{l.time_in || '—'}</td>
               <td className="table-td">{l.time_out || '—'}</td>
-              <td className="table-td font-semibold">{hrs(l.no_of_hours)}</td>
+              <td className="table-td text-right tabular-nums font-semibold">{hrs(l.no_of_hours)}</td>
               <td className="table-td">{l.topic || '—'}</td>
               <td className="table-td">{l.subtopic || '—'}</td>
               <td className="table-td">{l.remark || '—'}</td>

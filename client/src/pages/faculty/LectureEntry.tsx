@@ -3,6 +3,9 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { api } from '../../api/client';
 import { Section, Spinner } from '../../components/ui';
+import { Select } from '../../components/Select';
+import { TimePicker } from '../../components/TimePicker';
+import { CalendarPicker } from '../../components/CalendarPicker';
 
 // Faculty creates a lecture record. Supports group lectures (multiple attendees).
 // Duration auto-calculates server-side from Time In / Time Out.
@@ -16,7 +19,7 @@ export default function LectureEntry() {
   const students = useQuery({ queryKey: ['me-students'], queryFn: () => api.get('/teachers/me/students').then((r) => r.data.data) });
   const subjects = useQuery({ queryKey: ['subjects'], queryFn: () => api.get('/teachers/subjects').then((r) => r.data.data) });
 
-  const { register, handleSubmit, reset } = useForm();
+  const { register, handleSubmit, reset, watch, setValue } = useForm<any>({ defaultValues: { venue: 'JLT' } });
   const create = useMutation({
     mutationFn: (b: any) => api.post('/lectures', {
       session_date: b.session_date,
@@ -53,29 +56,44 @@ export default function LectureEntry() {
         <form onSubmit={handleSubmit((b) => { if (!attendees.length) { setMsg('⚠️ Select at least one student.'); return; } create.mutate(b); })} className="space-y-3">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="text-xs font-medium muted">Date * (YYYY-MM-DD)</label>
-              <input className="input mt-1" {...register('session_date', { required: true })} placeholder="2026-06-19" />
+              <label className="text-xs font-medium muted block mb-1">Date *</label>
+              <input type="hidden" {...register('session_date', { required: true })} />
+              <CalendarPicker
+                value={watch('session_date') || ''}
+                onChange={(v) => setValue('session_date', v, { shouldValidate: true })}
+                placeholder="Select date…"
+              />
             </div>
             <div>
-              <label className="text-xs font-medium muted">Venue</label>
-              <select className="input mt-1" {...register('venue')}>
-                <option>JLT</option><option>Oud Metha</option><option>Online</option>
-              </select>
+              <label className="text-xs font-medium muted block mb-1">Venue</label>
+              <input type="hidden" {...register('venue')} />
+              <Select
+                value={watch('venue') || ''}
+                onChange={(v) => setValue('venue', v)}
+                options={['JLT', 'Oud Metha', 'Online'].map((v) => ({ value: v, label: v }))}
+                placeholder="Select venue…"
+                allowCustom
+              />
             </div>
             <div>
-              <label className="text-xs font-medium muted">Time In</label>
-              <input className="input mt-1" {...register('time_in')} placeholder="17:00:00" />
+              <label className="text-xs font-medium muted block mb-1">Time In</label>
+              <input type="hidden" {...register('time_in')} />
+              <TimePicker value={watch('time_in') || ''} onChange={(v) => setValue('time_in', v)} placeholder="Start time" />
             </div>
             <div>
-              <label className="text-xs font-medium muted">Time Out</label>
-              <input className="input mt-1" {...register('time_out')} placeholder="19:00:00" />
+              <label className="text-xs font-medium muted block mb-1">Time Out</label>
+              <input type="hidden" {...register('time_out')} />
+              <TimePicker value={watch('time_out') || ''} onChange={(v) => setValue('time_out', v)} placeholder="End time" />
             </div>
             <div className="sm:col-span-2">
-              <label className="text-xs font-medium muted">Subject</label>
-              <select className="input mt-1" {...register('subject_id')}>
-                <option value="">—</option>
-                {subjects.data?.map((s: any) => <option key={s.id} value={s.id}>{s.name}</option>)}
-              </select>
+              <label className="text-xs font-medium muted block mb-1">Subject</label>
+              <input type="hidden" {...register('subject_id')} />
+              <Select
+                value={watch('subject_id') || ''}
+                onChange={(v) => setValue('subject_id', v)}
+                options={(subjects.data || []).map((s: any) => ({ value: s.id, label: s.name }))}
+                placeholder="Select subject…"
+              />
             </div>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

@@ -1,14 +1,19 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { api, hrs } from '../../api/client';
 import { Section, Table, Spinner } from '../../components/ui';
+import { ConfirmModal } from '../../components/ConfirmModal';
 
 export default function Teachers() {
   const qc = useQueryClient();
   const [drawer, setDrawer] = useState(false);
   const [openTeacher, setOpenTeacher] = useState<{ id: number; name: string } | null>(null);
+  const rosterRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (openTeacher) rosterRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [openTeacher]);
   const teachers = useQuery({ queryKey: ['teachers'], queryFn: () => api.get('/teachers').then((r) => r.data.data) });
   const workload = useQuery({ queryKey: ['workload'], queryFn: () => api.get('/analytics/teacher-workload').then((r) => r.data.data) });
 
@@ -25,6 +30,25 @@ export default function Teachers() {
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['teachers'] }); qc.invalidateQueries({ queryKey: ['workload'] }); setDrawer(false); reset(); },
   });
 
+  // Subjects management
+  const subjects = useQuery({ queryKey: ['subjects'], queryFn: () => api.get('/teachers/subjects').then((r) => r.data.data) });
+  const [subjectName, setSubjectName] = useState('');
+  const addSubject = useMutation({
+    mutationFn: (name: string) => api.post('/teachers/subjects', { name }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['subjects'] }); setSubjectName(''); },
+  });
+  const delSubject = useMutation({
+    mutationFn: (id: number) => api.delete(`/teachers/subjects/${id}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['subjects'] }),
+  });
+
+  // Teacher activate/deactivate + a generic confirm dialog.
+  const setTeacherStatus = useMutation({
+    mutationFn: (v: { id: number; is_active: boolean }) => api.post(`/teachers/${v.id}/set-status`, { is_active: v.is_active }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['workload'] }),
+  });
+  const [confirm, setConfirm] = useState<{ title: string; message: string; confirmLabel: string; danger?: boolean; onConfirm: () => void } | null>(null);
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -32,34 +56,102 @@ export default function Teachers() {
         <button className="btn-primary" onClick={() => setDrawer(true)}>+ Add Teacher</button>
       </div>
 
+      <Section title="Subjects">
+        <p className="muted text-sm mb-3">Add the subjects taught here — they appear in the Subject dropdown when assigning teachers to students.</p>
+        <form
+          onSubmit={(e) => { e.preventDefault(); if (subjectName.trim()) addSubject.mutate(subjectName.trim()); }}
+          className="flex flex-wrap items-center gap-2 mb-3"
+        >
+          <input
+            className="input max-w-xs"
+            placeholder="New subject name…"
+            value={subjectName}
+            onChange={(e) => setSubjectName(e.target.value)}
+          />
+          <button className="btn-primary" disabled={addSubject.isPending || !subjectName.trim()}>
+            {addSubject.isPending ? 'Adding…' : '+ Add Subject'}
+          </button>
+        </form>
+        {addSubject.isError && (
+          <div className="text-sm text-red-500 mb-3">
+            {(addSubject.error as any)?.response?.data?.error || 'Could not add subject.'}
+          </div>
+        )}
+        {subjects.isLoading ? <Spinner /> : (
+          <div className="flex flex-wrap gap-2">
+            {(subjects.data || []).length === 0 ? (
+              <span className="muted text-sm">No subjects yet.</span>
+            ) : (subjects.data || []).map((s: any) => (
+              <span key={s.id} className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-sm" style={{ background: 'var(--color-card-alt)' }}>
+                {s.name}
+                <button
+                  className="text-red-500 hover:text-red-600 disabled:opacity-50"
+                  title="Remove subject"
+                  disabled={delSubject.isPending}
+                  onClick={() => setConfirm({ title: 'Remove subject', message: `Remove subject "${s.name}"?`, confirmLabel: 'Remove', danger: true, onConfirm: () => delSubject.mutate(s.id) })}
+                >
+                  ×
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
+      </Section>
+
       <Section title="Workload">
         <p className="muted text-sm mb-3">Click a teacher to see the students assigned to them. Assign teachers from a student's Report.</p>
         {workload.isLoading ? <Spinner /> : (
-          <Table head={['Teacher', 'Students', 'Total Hours Taught', 'This Month', '']}>
-            {workload.data.map((t: any) => (
+          <Table head={['Teacher', { label: 'Students', align: 'right' }, { label: 'Total Hours Taught', align: 'right' }, { label: 'This Month', align: 'right' }, 'Status', '']}>
+            {workload.data.map((t: any) => {
+              const active = Number(t.is_active) === 1;
+              return (
               <tr key={t.id}>
                 <td className="table-td font-medium">{t.name}</td>
-                <td className="table-td">{t.total_students}</td>
-                <td className="table-td">{hrs(t.total_hours_taught)}</td>
-                <td className="table-td">{hrs(t.month_hours)}</td>
+                <td className="table-td text-right tabular-nums">{t.total_students}</td>
+                <td className="table-td text-right tabular-nums">{hrs(t.total_hours_taught)}</td>
+                <td className="table-td text-right tabular-nums">{hrs(t.month_hours)}</td>
                 <td className="table-td">
-                  <button
-                    className="btn-ghost !py-1 !px-2.5 text-xs whitespace-nowrap"
-                    onClick={() => setOpenTeacher(openTeacher?.id === t.id ? null : { id: t.id, name: t.name })}
-                  >
-                    {openTeacher?.id === t.id ? 'Hide students' : 'View students'}
-                  </button>
+                  <span className={`text-xs px-2 py-0.5 rounded-full ${active ? 'bg-emerald-500/15 text-emerald-600' : 'bg-slate-500/15 text-slate-500'}`}>
+                    {active ? 'Active' : 'Inactive'}
+                  </span>
+                </td>
+                <td className="table-td">
+                  <div className="flex gap-1.5 whitespace-nowrap">
+                    <button
+                      className="btn-ghost !py-1 !px-2.5 text-xs"
+                      onClick={() => setOpenTeacher(openTeacher?.id === t.id ? null : { id: t.id, name: t.name })}
+                    >
+                      {openTeacher?.id === t.id ? 'Hide students' : 'View students'}
+                    </button>
+                    {active ? (
+                      <button
+                        className="!py-1 !px-2.5 text-xs rounded-lg border border-red-500/30 text-red-600 hover:bg-red-500/10 transition-colors"
+                        onClick={() => setConfirm({ title: 'Deactivate teacher', message: `Deactivate ${t.name}? They won't be able to log in.`, confirmLabel: 'Deactivate', danger: true, onConfirm: () => setTeacherStatus.mutate({ id: t.id, is_active: false }) })}
+                      >
+                        Deactivate
+                      </button>
+                    ) : (
+                      <button
+                        className="!py-1 !px-2.5 text-xs rounded-lg border border-emerald-500/30 text-emerald-600 hover:bg-emerald-500/10 transition-colors"
+                        onClick={() => setConfirm({ title: 'Activate teacher', message: `Activate ${t.name}?`, confirmLabel: 'Activate', onConfirm: () => setTeacherStatus.mutate({ id: t.id, is_active: true }) })}
+                      >
+                        Activate
+                      </button>
+                    )}
+                  </div>
                 </td>
               </tr>
-            ))}
+              );
+            })}
           </Table>
         )}
       </Section>
 
       {openTeacher && (
+        <div ref={rosterRef}>
         <Section title={`Students of ${openTeacher.name}`}>
           {students.isLoading ? <Spinner /> : (
-            <Table head={['Form', 'Student', 'Grade', 'Subject', 'Hours Taught', 'Assignment', 'Status', '']}>
+            <Table head={['Form', 'Student', 'Grade', 'Subject', { label: 'Hours Taught', align: 'right' }, 'Assignment', 'Status', '']}>
               {(students.data || []).length === 0 ? (
                 <tr><td className="table-td muted" colSpan={8}>No students taught or assigned to this teacher yet.</td></tr>
               ) : (students.data || []).map((s: any) => (
@@ -68,7 +160,7 @@ export default function Teachers() {
                   <td className="table-td font-medium">{s.full_name}</td>
                   <td className="table-td">{s.year_grade || '—'}</td>
                   <td className="table-td">{s.subjects || '—'}</td>
-                  <td className="table-td">{hrs(s.hours_with_teacher)}</td>
+                  <td className="table-td text-right tabular-nums">{hrs(s.hours_with_teacher)}</td>
                   <td className="table-td">
                     {Number(s.is_assigned) === 1
                       ? <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-600">Assigned</span>
@@ -81,6 +173,7 @@ export default function Teachers() {
             </Table>
           )}
         </Section>
+        </div>
       )}
 
       {drawer && (
@@ -118,6 +211,17 @@ export default function Teachers() {
             </form>
           </div>
         </div>
+      )}
+
+      {confirm && (
+        <ConfirmModal
+          title={confirm.title}
+          message={confirm.message}
+          confirmLabel={confirm.confirmLabel}
+          danger={confirm.danger}
+          onConfirm={() => { confirm.onConfirm(); setConfirm(null); }}
+          onClose={() => setConfirm(null)}
+        />
       )}
     </div>
   );
