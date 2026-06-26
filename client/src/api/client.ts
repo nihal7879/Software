@@ -69,3 +69,17 @@ export const num = (n: number | string | null | undefined) =>
 
 export const hrs = (n: number | string | null | undefined) =>
   `${Number(n ?? 0).toLocaleString('en-AE', { maximumFractionDigits: 2 })} h`;
+
+// Student dropdown option: main line = "Form — Name", sub line = Grade · Parent
+// (mobile). The parent + mobile disambiguate two same-name students in the same
+// class/school. Used as { value, label, sub } for the themed Select.
+export const studentOption = (s: any) => {
+  const parent = s.relationship === 'Mother' ? s.mother_name
+    : s.relationship === 'Father' ? s.father_name
+    : (s.father_name || s.mother_name);
+  const sub = [
+    s.year_grade || null,
+    parent ? `${parent}${s.parent_mobile ? ` · ${s.parent_mobile}` : ''}` : (s.parent_mobile || null),
+  ].filter(Boolean).join(' · ');
+  return { value: s.id, label: `${s.form_no} — ${s.full_name}`, sub: sub || undefined };
+};

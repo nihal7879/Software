@@ -75,7 +75,8 @@ export function AdminLectureEntryModal({
   const q = stuSearch.trim().toLowerCase();
   const visibleStudents = (students.data || []).filter((s: any) =>
     (!grade || s.year_grade === grade) &&
-    (!q || s.full_name?.toLowerCase().includes(q) || String(s.form_no).includes(q))
+    (!q || s.full_name?.toLowerCase().includes(q) || String(s.form_no).includes(q)
+      || String(s.parent_mobile || '').includes(q) || String(s.year_grade || '').toLowerCase().includes(q))
   );
   const visibleIds = visibleStudents.map((s: any) => s.id);
   const allVisibleSelected = visibleIds.length > 0 && visibleIds.every((id: number) => attendees.includes(id));
@@ -164,10 +165,13 @@ export function AdminLectureEntryModal({
                 <div className="muted text-sm p-2">{(students.data || []).length === 0 ? 'No students assigned to this teacher yet.' : 'No students match.'}</div>
               ) : visibleStudents.map((s: any) => (
                 <label key={s.id} className="flex items-center gap-2 text-sm px-2 py-1 rounded hover:bg-black/5 dark:hover:bg-white/5 cursor-pointer">
-                  <input type="checkbox" checked={attendees.includes(s.id)} onChange={() => toggle(s.id)} />
-                  <span className="font-mono text-xs">{s.form_no}</span> {s.full_name}
-                  {s.year_grade ? <span className="muted text-xs">· {s.year_grade}</span> : ''}
-                  {s.subject_name ? <span className="muted text-xs">· {s.subject_name}</span> : ''}
+                  <input type="checkbox" className="shrink-0" checked={attendees.includes(s.id)} onChange={() => toggle(s.id)} />
+                  <span className="min-w-0">
+                    <span className="block truncate"><span className="font-mono text-xs">{s.form_no}</span> {s.full_name}</span>
+                    {(s.year_grade || s.parent_mobile || s.subject_name) && (
+                      <span className="block truncate muted text-xs">{[s.year_grade, s.parent_mobile, s.subject_name].filter(Boolean).join(' · ')}</span>
+                    )}
+                  </span>
                 </label>
               ))}
             </div>

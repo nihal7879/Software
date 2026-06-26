@@ -342,7 +342,7 @@ router.get(
       if (Number(req.params.teacherId) !== tid) return res.status(403).json({ error: 'Forbidden: not your data' });
     }
     const rows = await query(
-      `SELECT DISTINCT s.id, s.form_no, s.full_name, s.year_grade, s.status, sub.name AS subject_name
+      `SELECT DISTINCT s.id, s.form_no, s.full_name, s.year_grade, s.status, s.parent_mobile, sub.name AS subject_name
        FROM student_teacher_mapping m
        JOIN students s ON s.id = m.student_id
        JOIN subjects sub ON sub.id = m.subject_id

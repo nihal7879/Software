@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
-import { api, rs, num } from '../../api/client';
+import { api, rs, num, studentOption } from '../../api/client';
 import { Section, Table, Spinner } from '../../components/ui';
 import { CalendarPicker, CalendarRangePicker } from '../../components/CalendarPicker';
 import { Select } from '../../components/Select';
@@ -241,7 +241,7 @@ export default function Finance() {
                 <Select
                   value={watch('student_id') || ''}
                   onChange={(v) => setValue('student_id', v, { shouldValidate: true })}
-                  options={(students.data || []).map((s: any) => ({ value: s.id, label: `${s.form_no} — ${s.full_name}` }))}
+                  options={(students.data || []).map((s: any) => studentOption(s))}
                   onSearch={setStudentSearch}
                   placeholder="Search student…"
                 />
@@ -342,7 +342,7 @@ function DraftRow({
         <Select
           value={studentId}
           onChange={setStudentId}
-          options={students.map((s: any) => ({ value: s.id, label: `${s.form_no} — ${s.full_name}` }))}
+          options={students.map((s: any) => studentOption(s))}
           onSearch={onStudentSearch}
           placeholder="Search student…"
         />

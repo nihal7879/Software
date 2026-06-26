@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { api, hrs, num } from '../../api/client';
+import { api, hrs, num, studentOption } from '../../api/client';
 import { Section, Table, Spinner, KpiCard, HoursValue, StatusBadge } from '../../components/ui';
 import { Select } from '../../components/Select';
 import { CalendarRangePicker } from '../../components/CalendarPicker';
@@ -28,7 +28,7 @@ export default function HoursMonthly() {
   const packages = useQuery({ queryKey: ['pkg', studentId], queryFn: () => api.get(`/fees/packages/${studentId}`).then((r) => r.data.data), enabled: !!studentId });
   const adjustments = useQuery({ queryKey: ['adjustments', studentId], queryFn: () => api.get(`/fees/adjustments/${studentId}`).then((r) => r.data.data), enabled: !!studentId });
 
-  const options = (students.data || []).map((s: any) => ({ value: s.id, label: `${s.form_no} — ${s.full_name}` }));
+  const options = (students.data || []).map((s: any) => studentOption(s));
 
   // Build a single chronological ledger of credit (+) and lecture (−) events,
   // carrying a running balance.

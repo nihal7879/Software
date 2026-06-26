@@ -56,8 +56,9 @@ router.get(
     const where: string[] = ['is_deleted = FALSE'];
     const params: any[] = [];
     if (search) {
-      where.push('(full_name LIKE ? OR form_no LIKE ? OR email LIKE ?)');
-      params.push(`%${search}%`, `%${search}%`, `%${search}%`);
+      where.push('(full_name LIKE ? OR form_no LIKE ? OR email LIKE ? OR parent_mobile LIKE ? OR student_mobile LIKE ? OR extra_mobile LIKE ? OR father_name LIKE ? OR mother_name LIKE ? OR year_grade LIKE ?)');
+      const like = `%${search}%`;
+      params.push(like, like, like, like, like, like, like, like, like);
     }
     if (status) { where.push('status = ?'); params.push(status); }
     if (grade) { where.push('year_grade = ?'); params.push(grade); }

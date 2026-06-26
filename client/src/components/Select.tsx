@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { ChevronDown, Check, Search } from 'lucide-react';
 
-export type Option = { value: string | number; label: string };
+export type Option = { value: string | number; label: string; sub?: string };
 
 // Custom themed dropdown — replaces native <select> so the option list matches
 // the app theme. The menu is position:fixed so it escapes any overflow/scroll
@@ -39,7 +39,7 @@ export function Select({
     if (onSearch) return options;
     if (!q.trim()) return options;
     const needle = q.toLowerCase();
-    return options.filter((o) => o.label.toLowerCase().includes(needle));
+    return options.filter((o) => o.label.toLowerCase().includes(needle) || (o.sub || '').toLowerCase().includes(needle));
   }, [q, options, onSearch]);
 
   // Position the fixed menu relative to the trigger; flip upward if needed.
@@ -133,7 +133,10 @@ export function Select({
                         ${isSel ? 'text-white font-semibold' : 'hover:bg-[var(--color-card-alt)]'}`}
                       style={isSel ? { background: 'var(--color-primary)' } : {}}
                     >
-                      <span className="truncate">{o.label}</span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate">{o.label}</span>
+                        {o.sub && <span className={`block truncate text-xs ${isSel ? 'text-white/80' : 'muted'}`}>{o.sub}</span>}
+                      </span>
                       {isSel && <Check size={15} className="shrink-0" />}
                     </button>
                   );
