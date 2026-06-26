@@ -46,10 +46,13 @@ export function MultiSelect({
   const reposition = () => {
     if (!btnRef.current) return;
     const r = btnRef.current.getBoundingClientRect();
+    // Clamp inside the viewport so the menu never causes horizontal scroll.
+    const width = Math.min(Math.max(r.width, 200), window.innerWidth - 16);
+    const left = Math.max(8, Math.min(r.left, window.innerWidth - width - 8));
     const spaceBelow = window.innerHeight - r.bottom;
     const MENU_MAX = 300;
-    if (spaceBelow < MENU_MAX && r.top > spaceBelow) setPos({ left: r.left, width: r.width, bottom: window.innerHeight - r.top + 4 });
-    else setPos({ left: r.left, width: r.width, top: r.bottom + 4 });
+    if (spaceBelow < MENU_MAX && r.top > spaceBelow) setPos({ left, width, bottom: window.innerHeight - r.top + 4 });
+    else setPos({ left, width, top: r.bottom + 4 });
   };
   useLayoutEffect(() => { if (open) reposition(); }, [open]);
   useEffect(() => {
@@ -81,12 +84,12 @@ export function MultiSelect({
       {open && (
         <>
           <div className="fixed inset-0 z-[60]" onClick={close} />
-          <div className="card p-1.5 fixed z-[61] flex flex-col" style={{ left: pos.left, width: Math.max(pos.width, 200), top: pos.top, bottom: pos.bottom, maxHeight: 300 }}>
+          <div className="card p-1.5 fixed z-[61] flex flex-col" style={{ left: pos.left, width: pos.width, top: pos.top, bottom: pos.bottom, maxHeight: 300 }}>
             <div className="flex items-center gap-2 px-2 py-1.5 mb-1 shrink-0" style={{ background: 'var(--color-card)' }}>
               <Search size={14} className="muted shrink-0" />
               <input autoFocus className="bg-transparent outline-none text-sm w-full" placeholder="Search…" value={q} onChange={(e) => setQ(e.target.value)} />
             </div>
-            <div className="overflow-y-auto thin-scroll">
+            <div className="flex-1 min-h-0 overflow-y-auto thin-scroll">
               {allowCustom && q.trim() && !options.some((o) => o.label.toLowerCase() === q.trim().toLowerCase()) && (
                 <button type="button" onClick={() => { toggle(q.trim()); setQ(''); }} className="w-full text-left px-3 py-2 rounded-lg text-sm hover:bg-[var(--color-card-alt)] transition">
                   Add “<span className="font-semibold">{q.trim()}</span>”

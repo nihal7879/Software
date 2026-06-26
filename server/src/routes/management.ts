@@ -24,7 +24,8 @@ router.get(
     const searchSql = search ? ' AND (s.full_name LIKE ? OR s.form_no LIKE ?)' : '';
     const searchParams = search ? [`%${search}%`, `%${search}%`] : [];
 
-    const rows = await query(
+    const [rows, totalRows] = await Promise.all([
+    query(
       `SELECT
          s.id, s.form_no, s.full_name, s.status, s.year_grade, s.exam_board, s.school_name,
          s.relationship, s.profile_completed, s.profile_submitted_at,
@@ -63,12 +64,13 @@ router.get(
        ORDER BY CAST(s.form_no AS UNSIGNED)
        LIMIT ? OFFSET ?`,
       [month, month, month, month, ...searchParams, limit, offset]
-    );
-    const [{ total }] = await query<any>(
+    ),
+    query<any>(
       `SELECT COUNT(*) AS total FROM students s WHERE s.is_deleted = FALSE${searchSql}`,
       searchParams
-    );
-    res.json({ data: rows.map(deriveHours), page, limit, total, month });
+    ),
+    ]);
+    res.json({ data: rows.map(deriveHours), page, limit, total: totalRows[0].total, month });
   })
 );
 
@@ -83,45 +85,45 @@ router.get(
     const from = (req.query.from as string) || '2000-01-01';
     const to = (req.query.to as string) || '2999-12-31';
 
-    const studentRow = await queryOne<any>(
-      `SELECT s.*,
-              ${CREDITED_EXPR} AS total_hours_credited,
-              ${CONSUMED_EXPR} AS total_hours_consumed,
-              ${PENDING_EXPR}  AS pending_fees,
-              COALESCE((SELECT MAX(rate_per_hour) FROM fee_packages WHERE student_id = s.id AND is_active = TRUE),0) AS rate_per_hour,
-              CASE s.relationship WHEN 'Mother' THEN s.mother_name WHEN 'Father' THEN s.father_name
-                   ELSE COALESCE(s.father_name, s.mother_name) END AS parent_name
-       FROM students s
-       WHERE s.id = ?`,
-      [id]
-    );
+    // Run the three independent reads concurrently — over a remote DB this is
+    // ~3x fewer round trips of waiting than awaiting them one by one.
+    const [studentRow, lectures, fees] = await Promise.all([
+      queryOne<any>(
+        `SELECT s.*,
+                ${CREDITED_EXPR} AS total_hours_credited,
+                ${CONSUMED_EXPR} AS total_hours_consumed,
+                ${PENDING_EXPR}  AS pending_fees,
+                COALESCE((SELECT MAX(rate_per_hour) FROM fee_packages WHERE student_id = s.id AND is_active = TRUE),0) AS rate_per_hour,
+                CASE s.relationship WHEN 'Mother' THEN s.mother_name WHEN 'Father' THEN s.father_name
+                     ELSE COALESCE(s.father_name, s.mother_name) END AS parent_name
+         FROM students s
+         WHERE s.id = ?`,
+        [id]
+      ),
+      query(
+        `SELECT l.session_date, l.month, l.time_in, l.time_out,
+                a.hours_consumed AS no_of_hours, t.name AS teacher_name,
+                sub.name AS subject_name, l.topic, l.subtopic, l.remark, l.venue,
+                a.attendance_status
+         FROM lecture_attendees a
+         JOIN lecture_sessions l ON l.id = a.lecture_id
+         LEFT JOIN teachers t ON t.id = l.teacher_id
+         LEFT JOIN subjects sub ON sub.id = l.subject_id
+         WHERE a.student_id = ? AND l.session_date BETWEEN ? AND ?
+         ORDER BY l.session_date, l.time_in`,
+        [id, from, to]
+      ),
+      query(
+        `SELECT payment_date, month, amount, parent_name, payment_source,
+                transaction_reference, course_package_hours, notes
+         FROM fee_transactions
+         WHERE student_id = ? AND is_deleted = FALSE AND payment_date BETWEEN ? AND ?
+         ORDER BY payment_date`,
+        [id, from, to]
+      ),
+    ]);
     if (!studentRow) return res.status(404).json({ error: 'Student not found' });
     const student = deriveHours(studentRow);
-
-    // Per-day lecture log within range
-    const lectures = await query(
-      `SELECT l.session_date, l.month, l.time_in, l.time_out,
-              a.hours_consumed AS no_of_hours, t.name AS teacher_name,
-              sub.name AS subject_name, l.topic, l.subtopic, l.remark, l.venue,
-              a.attendance_status
-       FROM lecture_attendees a
-       JOIN lecture_sessions l ON l.id = a.lecture_id
-       LEFT JOIN teachers t ON t.id = l.teacher_id
-       LEFT JOIN subjects sub ON sub.id = l.subject_id
-       WHERE a.student_id = ? AND l.session_date BETWEEN ? AND ?
-       ORDER BY l.session_date, l.time_in`,
-      [id, from, to]
-    );
-
-    // Fee receipts within range
-    const fees = await query(
-      `SELECT payment_date, month, amount, parent_name, payment_source,
-              transaction_reference, course_package_hours, notes
-       FROM fee_transactions
-       WHERE student_id = ? AND is_deleted = FALSE AND payment_date BETWEEN ? AND ?
-       ORDER BY payment_date`,
-      [id, from, to]
-    );
 
     const hoursInRange = lectures.reduce((a: number, l: any) => a + Number(l.no_of_hours), 0);
     const feesInRange = fees.reduce((a: number, f: any) => a + Number(f.amount), 0);

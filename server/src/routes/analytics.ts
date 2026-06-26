@@ -92,41 +92,90 @@ router.get(
   })
 );
 
-// Finance pivot — revenue per student per month
+// Shared pivot builder — paginates by student for one year, so we never load all
+// 3000 students at once. Returns the page's student rows, plus per-month totals
+// across ALL matching students (for the footer) and the student count.
+//   valueExpr: the SUM(...) aggregate; src: the FROM/JOIN chain reaching `month`
+//   and `s` (students); deletedSql: extra WHERE; monthCol: the month column.
+async function pivot(req: any, res: any, opts: {
+  valueExpr: string; valueAlias: string; src: string; where: string; monthCol: string;
+}) {
+  const { valueExpr, valueAlias, src, where, monthCol } = opts;
+  const search = (req.query.search as string) || '';
+  const page = Math.max(1, Number(req.query.page || 1));
+  const limit = Math.min(100, Number(req.query.limit || 20));
+  const offset = (page - 1) * limit;
+
+  // Years that actually have data (newest first).
+  const yearsRows = await query<any>(
+    `SELECT DISTINCT LEFT(${monthCol},4) AS y FROM ${src} WHERE ${where} AND ${monthCol} IS NOT NULL ORDER BY y DESC`
+  );
+  const years = yearsRows.map((r: any) => Number(r.y)).filter(Boolean);
+  const year = String(req.query.year || years[0] || new Date().getFullYear());
+  const yearLike = `${year}-%`;
+
+  const searchSql = search ? ' AND (s.full_name LIKE ? OR s.form_no LIKE ?)' : '';
+  const sp = search ? [`%${search}%`, `%${search}%`] : [];
+
+  // EXISTS: students who have data in this year (matching search), paginated.
+  const existsSql = `EXISTS (SELECT 1 FROM ${src} WHERE ${where} AND ${monthCol} LIKE ? AND student_id = s.id)`;
+  // These three are independent — run them in one concurrent batch.
+  const [pageStudents, totalRows, monthTotals] = await Promise.all([
+    query<any>(
+      `SELECT s.id, s.form_no, s.full_name AS student_name
+       FROM students s
+       WHERE ${existsSql}${searchSql}
+       ORDER BY CAST(s.form_no AS UNSIGNED)
+       LIMIT ? OFFSET ?`,
+      [yearLike, ...sp, limit, offset]
+    ),
+    query<any>(`SELECT COUNT(*) AS total FROM students s WHERE ${existsSql}${searchSql}`, [yearLike, ...sp]),
+    query(
+      `SELECT ${monthCol} AS month, ${valueExpr} AS ${valueAlias}
+       FROM ${src}
+       JOIN students s ON s.id = student_id
+       WHERE ${where} AND ${monthCol} LIKE ?${searchSql}
+       GROUP BY ${monthCol}`,
+      [yearLike, ...sp]
+    ),
+  ]);
+
+  let rows: any[] = [];
+  if (pageStudents.length) {
+    const ids = pageStudents.map((s: any) => s.id);
+    const ph = ids.map(() => '?').join(',');
+    rows = await query(
+      `SELECT s.form_no, s.full_name AS student_name, ${monthCol} AS month, ${valueExpr} AS ${valueAlias}
+       FROM ${src}
+       JOIN students s ON s.id = student_id
+       WHERE ${where} AND ${monthCol} LIKE ? AND student_id IN (${ph})
+       GROUP BY s.form_no, s.full_name, ${monthCol}`,
+      [yearLike, ...ids]
+    );
+  }
+
+  res.json({ rows, students: pageStudents, monthTotals, year: Number(year), years, page, limit, total: totalRows[0].total });
+}
+
+// Finance pivot — revenue per student per month (paginated by student)
 router.get(
   '/finance-pivot',
-  wrap(async (_req, res) => {
-    const rows = await query(
-      `SELECT s.form_no, s.full_name AS student_name, ft.month, SUM(ft.amount) AS amount
-       FROM fee_transactions ft JOIN students s ON s.id = ft.student_id
-       WHERE ft.is_deleted = FALSE
-       GROUP BY s.form_no, s.full_name, ft.month
-       ORDER BY CAST(s.form_no AS UNSIGNED), ft.month`
-    );
-    const months = await query<any>(
-      `SELECT DISTINCT month FROM fee_transactions WHERE is_deleted = FALSE ORDER BY month`
-    );
-    res.json({ rows, months: months.map((m: any) => m.month) });
-  })
+  wrap((req, res) => pivot(req, res, {
+    // Qualify is_deleted — the joined students table also has an is_deleted
+    // column, so an unqualified reference is ambiguous and errors.
+    valueExpr: 'SUM(amount)', valueAlias: 'amount',
+    src: 'fee_transactions', where: 'fee_transactions.is_deleted = FALSE', monthCol: 'month',
+  }))
 );
 
-// Hours pivot — hours consumed per student per month
+// Hours pivot — hours consumed per student per month (paginated by student)
 router.get(
   '/hours-pivot',
-  wrap(async (_req, res) => {
-    const rows = await query(
-      `SELECT s.form_no, s.full_name AS student_name, l.month, SUM(a.hours_consumed) AS hours
-       FROM lecture_attendees a
-       JOIN lecture_sessions l ON l.id = a.lecture_id
-       JOIN students s ON s.id = a.student_id
-       GROUP BY s.form_no, s.full_name, l.month
-       ORDER BY CAST(s.form_no AS UNSIGNED), l.month`
-    );
-    const months = await query<any>(
-      `SELECT DISTINCT month FROM lecture_sessions WHERE month IS NOT NULL ORDER BY month`
-    );
-    res.json({ rows, months: months.map((m: any) => m.month) });
-  })
+  wrap((req, res) => pivot(req, res, {
+    valueExpr: 'SUM(a.hours_consumed)', valueAlias: 'hours',
+    src: 'lecture_attendees a JOIN lecture_sessions l ON l.id = a.lecture_id',
+    where: '1=1', monthCol: 'l.month',
+  }))
 );
 
 // Collection trend (monthly revenue line)

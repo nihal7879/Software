@@ -48,7 +48,7 @@ export default function Register() {
   );
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4">
+    <div className="min-h-screen flex items-center justify-center p-4 overflow-x-hidden">
       <div className="card p-8 w-full max-w-lg">
         <div className="font-display font-extrabold text-2xl mb-1" style={{ color: 'var(--color-primary)' }}>🎓 Create your account</div>
         <p className="muted text-sm mb-5">Select your role to register.</p>

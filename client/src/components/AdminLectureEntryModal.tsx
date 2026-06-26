@@ -32,7 +32,17 @@ export function AdminLectureEntryModal({
   });
   const subjects = useQuery({ queryKey: ['subjects'], queryFn: () => api.get('/teachers/subjects').then((r) => r.data.data) });
 
-  const { register, handleSubmit, reset, watch, setValue } = useForm<any>({ defaultValues: { venue: 'JLT' } });
+  // Minimal-effort defaults: today's date, current time, +1 hour end.
+  const now = new Date();
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const today = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+  const nowTime = `${pad(now.getHours())}:${pad(now.getMinutes())}:00`;
+  const plusHour = new Date(now.getTime() + 60 * 60 * 1000);
+  const endTime = `${pad(plusHour.getHours())}:${pad(plusHour.getMinutes())}:00`;
+
+  const { register, handleSubmit, reset, watch, setValue } = useForm<any>({
+    defaultValues: { venue: 'JLT', session_date: today, time_in: nowTime, time_out: endTime },
+  });
   const create = useMutation({
     mutationFn: (b: any) => api.post('/lectures', {
       teacher_id: teacherId,

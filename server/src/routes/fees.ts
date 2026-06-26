@@ -40,17 +40,16 @@ router.get(
     const searchSql = search ? 'WHERE (s.full_name LIKE ? OR s.form_no LIKE ?)' : '';
     const searchParams = search ? [`%${search}%`, `%${search}%`] : [];
 
-    const rows = await query<any>(
-      `SELECT s.id AS student_id, s.form_no, s.full_name AS student_name, s.status, ${HOURS_COLUMNS}
-       FROM students s ${searchSql}
-       ORDER BY CAST(s.form_no AS UNSIGNED) LIMIT ? OFFSET ?`,
-      [...searchParams, limit, offset]
-    );
-    const [{ total }] = await query<any>(
-      `SELECT COUNT(*) AS total FROM students s ${searchSql}`,
-      searchParams
-    );
-    res.json({ data: rows.map(deriveHours), page, limit, total });
+    const [rows, totalRows] = await Promise.all([
+      query<any>(
+        `SELECT s.id AS student_id, s.form_no, s.full_name AS student_name, s.status, ${HOURS_COLUMNS}
+         FROM students s ${searchSql}
+         ORDER BY CAST(s.form_no AS UNSIGNED) LIMIT ? OFFSET ?`,
+        [...searchParams, limit, offset]
+      ),
+      query<any>(`SELECT COUNT(*) AS total FROM students s ${searchSql}`, searchParams),
+    ]);
+    res.json({ data: rows.map(deriveHours), page, limit, total: totalRows[0].total });
   })
 );
 
@@ -92,20 +91,22 @@ router.get(
     }
     const whereSql = `WHERE ${where.join(' AND ')}`;
 
-    const rows = await query(
-      `SELECT ft.*, s.full_name AS student_name, s.form_no
-       FROM fee_transactions ft JOIN students s ON s.id = ft.student_id
-       ${whereSql} ORDER BY ft.payment_date DESC, ft.id DESC
-       LIMIT ? OFFSET ?`,
-      [...params, limit, offset]
-    );
-    const [{ total }] = await query<any>(
-      `SELECT COUNT(*) AS total
-       FROM fee_transactions ft JOIN students s ON s.id = ft.student_id
-       ${whereSql}`,
-      params
-    );
-    res.json({ data: rows, page, limit, total });
+    const [rows, totalRows] = await Promise.all([
+      query(
+        `SELECT ft.*, s.full_name AS student_name, s.form_no
+         FROM fee_transactions ft JOIN students s ON s.id = ft.student_id
+         ${whereSql} ORDER BY ft.payment_date DESC, ft.id DESC
+         LIMIT ? OFFSET ?`,
+        [...params, limit, offset]
+      ),
+      query<any>(
+        `SELECT COUNT(*) AS total
+         FROM fee_transactions ft JOIN students s ON s.id = ft.student_id
+         ${whereSql}`,
+        params
+      ),
+    ]);
+    res.json({ data: rows, page, limit, total: totalRows[0].total });
   })
 );
 
