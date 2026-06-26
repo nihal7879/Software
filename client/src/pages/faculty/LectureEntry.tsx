@@ -65,6 +65,10 @@ export default function LectureEntry() {
 
   const toggle = (id: number) => setAttendees((a) => (a.includes(id) ? a.filter((x) => x !== id) : [...a, id]));
 
+  // Only show the subjects this teacher specializes in (fall back to all if none set).
+  const spec = String(me.data?.specialization || '').split(',').map((x: string) => x.trim().toLowerCase()).filter(Boolean);
+  const subjectList = (subjects.data || []).filter((s: any) => spec.length === 0 || spec.includes(String(s.name).toLowerCase()));
+
   // Grade options come from the students' own grades (from the DB).
   const grades = Array.from(new Set((students.data || []).map((s: any) => s.year_grade).filter(Boolean))).sort();
   const q = stuSearch.trim().toLowerCase();
@@ -128,7 +132,7 @@ export default function LectureEntry() {
               <Select
                 value={watch('subject_id') || ''}
                 onChange={(v) => setValue('subject_id', v)}
-                options={(subjects.data || []).map((s: any) => ({ value: s.id, label: s.name }))}
+                options={subjectList.map((s: any) => ({ value: s.id, label: s.name }))}
                 placeholder="Select subject…"
               />
             </div>

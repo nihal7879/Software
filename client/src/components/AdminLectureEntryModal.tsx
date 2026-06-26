@@ -14,10 +14,12 @@ import { toast } from './Toast';
 export function AdminLectureEntryModal({
   teacherId,
   teacherName,
+  specialization,
   onClose,
 }: {
   teacherId: number;
   teacherName: string;
+  specialization?: string;
   onClose: () => void;
 }) {
   const qc = useQueryClient();
@@ -70,6 +72,10 @@ export function AdminLectureEntryModal({
 
   const toggle = (id: number) => setAttendees((a) => (a.includes(id) ? a.filter((x) => x !== id) : [...a, id]));
 
+  // Only the teacher's specialization subjects (fall back to all if none set).
+  const spec = String(specialization || '').split(',').map((x) => x.trim().toLowerCase()).filter(Boolean);
+  const subjectList = (subjects.data || []).filter((s: any) => spec.length === 0 || spec.includes(String(s.name).toLowerCase()));
+
   // Grade options come from this teacher's students' grades (from the DB).
   const grades = Array.from(new Set((students.data || []).map((s: any) => s.year_grade).filter(Boolean))).sort();
   const q = stuSearch.trim().toLowerCase();
@@ -121,7 +127,7 @@ export function AdminLectureEntryModal({
           <div>
             <label className="text-xs font-medium muted block mb-1">Subject</label>
             <input type="hidden" {...register('subject_id')} />
-            <Select value={watch('subject_id') || ''} onChange={(v) => setValue('subject_id', v)} options={(subjects.data || []).map((s: any) => ({ value: s.id, label: s.name }))} placeholder="Select subject…" />
+            <Select value={watch('subject_id') || ''} onChange={(v) => setValue('subject_id', v)} options={subjectList.map((s: any) => ({ value: s.id, label: s.name }))} placeholder="Select subject…" />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
