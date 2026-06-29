@@ -2,7 +2,7 @@ import { ReactNode, useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, Users, Clock, Wallet, GraduationCap, BarChart3,
-  BookOpen, CalendarDays, User, LogOut, Moon, Sun, ChevronLeft, Menu, LineChart, Settings,
+  BookOpen, CalendarDays, User, LogOut, Moon, Sun, ChevronLeft, Menu, Settings,
 } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
 import { useTheme } from '../theme/ThemeContext';
@@ -29,18 +29,18 @@ const NAV: Record<string, Item[]> = {
   ],
   student: [
     { to: '/student', label: 'Dashboard', icon: LayoutDashboard },
-    { to: '/student/tracker', label: 'Tracker', icon: LineChart },
+    // { to: '/student/tracker', label: 'Tracker', icon: LineChart },
     { to: '/student/lectures', label: 'Lecture Info', icon: CalendarDays },
-    { to: '/student/hours', label: 'Hours Statement', icon: Clock },
+    // { to: '/student/hours', label: 'Hours Statement', icon: Clock },
     { to: '/student/fees', label: 'Fees Info', icon: Wallet },
     { to: '/student/profile', label: 'Profile', icon: User },
     { to: '/student/settings', label: 'Settings', icon: Settings },
   ],
   parent: [
     { to: '/parent', label: 'Dashboard', icon: LayoutDashboard },
-    { to: '/parent/tracker', label: 'Tracker', icon: LineChart },
+    // { to: '/parent/tracker', label: 'Tracker', icon: LineChart },
     { to: '/parent/lectures', label: 'Lecture Info', icon: CalendarDays },
-    { to: '/parent/hours', label: 'Hours Statement', icon: Clock },
+    // { to: '/parent/hours', label: 'Hours Statement', icon: Clock },
     { to: '/parent/fees', label: 'Fees Info', icon: Wallet },
     { to: '/parent/settings', label: 'Settings', icon: Settings },
   ],
