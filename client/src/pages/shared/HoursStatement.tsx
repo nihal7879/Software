@@ -107,7 +107,7 @@ export default function HoursStatement() {
                     ? <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-600 whitespace-nowrap">Package added</span>
                     : r.kind === 'adjustment'
                     ? <span className="whitespace-nowrap"><span className="text-xs px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-600">Hours adjusted</span>{r.reason ? <span className="muted"> · {r.reason}</span> : ''}</span>
-                    : <span className="whitespace-nowrap">{r.teacher || '—'}{r.subject ? ` · ${r.subject}` : ''}</span>}
+                    : <span className="whitespace-nowrap">{r.subject || 'Lecture'}</span>}
                 </td>
                 <td className="table-td">{r.time_in || '—'}</td>
                 <td className="table-td">{r.time_out || '—'}</td>

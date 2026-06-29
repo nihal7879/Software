@@ -30,17 +30,18 @@ const NAV: Record<string, Item[]> = {
   student: [
     { to: '/student', label: 'Dashboard', icon: LayoutDashboard },
     { to: '/student/tracker', label: 'Tracker', icon: LineChart },
-    { to: '/student/lectures', label: 'Lecture History', icon: CalendarDays },
+    { to: '/student/lectures', label: 'Lecture Info', icon: CalendarDays },
     { to: '/student/hours', label: 'Hours Statement', icon: Clock },
+    { to: '/student/fees', label: 'Fees Info', icon: Wallet },
     { to: '/student/profile', label: 'Profile', icon: User },
     { to: '/student/settings', label: 'Settings', icon: Settings },
   ],
   parent: [
     { to: '/parent', label: 'Dashboard', icon: LayoutDashboard },
     { to: '/parent/tracker', label: 'Tracker', icon: LineChart },
-    { to: '/parent/lectures', label: 'Lectures', icon: CalendarDays },
+    { to: '/parent/lectures', label: 'Lecture Info', icon: CalendarDays },
     { to: '/parent/hours', label: 'Hours Statement', icon: Clock },
-    { to: '/parent/fees', label: 'Fees', icon: Wallet },
+    { to: '/parent/fees', label: 'Fees Info', icon: Wallet },
     { to: '/parent/settings', label: 'Settings', icon: Settings },
   ],
 };

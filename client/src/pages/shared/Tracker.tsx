@@ -125,9 +125,9 @@ export default function Tracker() {
 
       {/* Full per-lecture log */}
       <Section title="Lecture Log">
-        <Table head={['Date', 'Month', 'Form No', 'Student Name', 'Subject', 'Topic', 'Subtopic', 'Time In', 'Time Out', { label: 'No. of Hrs', align: 'right' }, 'Teacher', 'Attendance']}>
+        <Table head={['Date', 'Month', 'Form No', 'Student Name', 'Subject', 'Topic', 'Subtopic', 'Time In', 'Time Out', { label: 'No. of Hrs', align: 'right' }, 'Attendance']}>
           {lecs.length === 0 ? (
-            <tr><td className="table-td muted" colSpan={12}>No lectures in this range.</td></tr>
+            <tr><td className="table-td muted" colSpan={11}>No lectures in this range.</td></tr>
           ) : lecs.map((r: any) => (
             <tr key={r.id}>
               <td className="table-td whitespace-nowrap">{r.session_date}</td>
@@ -140,7 +140,6 @@ export default function Tracker() {
               <td className="table-td">{r.time_in || '—'}</td>
               <td className="table-td">{r.time_out || '—'}</td>
               <td className="table-td text-right tabular-nums font-semibold">{hrs(r.hours_consumed)}</td>
-              <td className="table-td">{r.teacher_name || '—'}</td>
               <td className="table-td">
                 <span className={`text-xs px-2 py-0.5 rounded-full ${
                   r.attendance_status === 'Absent' ? 'bg-red-500/15 text-red-600'

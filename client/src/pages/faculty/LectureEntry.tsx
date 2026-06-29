@@ -95,6 +95,43 @@ export default function LectureEntry() {
 
       <Section title="New lecture">
         <form onSubmit={handleSubmit((b) => { if (!attendees.length) { setMsg('⚠️ Select at least one student.'); return; } create.mutate(b); })} className="space-y-3">
+          {/* Step 1 — pick the grade/level and the students attending */}
+          <div>
+            <label className="text-xs font-medium muted block mb-1">Grade (filter students)</label>
+            <Select
+              value={grade}
+              onChange={setGrade}
+              options={[{ value: '', label: 'All grades' }, ...grades.map((g: any) => ({ value: g, label: g }))]}
+              placeholder="All grades"
+            />
+          </div>
+
+          <div>
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <label className="text-xs font-medium muted">My students — attendees ({attendees.length} selected)</label>
+              <button type="button" className="btn-ghost !py-1 !px-2.5 text-xs" onClick={toggleAllVisible} disabled={visibleIds.length === 0}>
+                {allVisibleSelected ? 'Clear all' : `Select all (${visibleIds.length})`}
+              </button>
+            </div>
+            <input className="input mt-1" placeholder="Search student by name / form no…" value={stuSearch} onChange={(e) => setStuSearch(e.target.value)} />
+            <div className="card p-2 mt-1 max-h-48 overflow-y-auto grid grid-cols-1 sm:grid-cols-2 gap-1">
+              {students.isLoading ? <Spinner /> : visibleStudents.length === 0 ? (
+                <div className="muted text-sm p-2">{(students.data || []).length === 0 ? 'No students assigned to you yet. Your admin will assign students to you.' : 'No students match.'}</div>
+              ) : visibleStudents.map((s: any) => (
+                <label key={s.id} className="flex items-center gap-2 text-sm px-2 py-1 rounded hover:bg-black/5 dark:hover:bg-white/5 cursor-pointer">
+                  <input type="checkbox" className="shrink-0" checked={attendees.includes(s.id)} onChange={() => toggle(s.id)} />
+                  <span className="min-w-0">
+                    <span className="block truncate"><span className="font-mono text-xs muted">{s.form_no}</span> {s.full_name}</span>
+                  </span>
+                </label>
+              ))}
+            </div>
+          </div>
+
+          <div className="border-t pt-3" style={{ borderColor: 'var(--color-border)' }}>
+            <p className="text-xs font-semibold muted mb-2">Lecture details</p>
+          </div>
+
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="text-xs font-medium muted block mb-1">Date *</label>
@@ -154,41 +191,6 @@ export default function LectureEntry() {
           <div>
             <label className="text-xs font-medium muted">Meeting / Recording Link</label>
             <input className="input mt-1" {...register('meeting_link')} placeholder="Google Meet / Zoom URL" />
-          </div>
-
-          <div>
-            <label className="text-xs font-medium muted block mb-1">Grade (filter students)</label>
-            <Select
-              value={grade}
-              onChange={setGrade}
-              options={[{ value: '', label: 'All grades' }, ...grades.map((g: any) => ({ value: g, label: g }))]}
-              placeholder="All grades"
-            />
-          </div>
-
-          <div>
-            <div className="flex items-center justify-between gap-2 flex-wrap">
-              <label className="text-xs font-medium muted">My students — attendees ({attendees.length} selected)</label>
-              <button type="button" className="btn-ghost !py-1 !px-2.5 text-xs" onClick={toggleAllVisible} disabled={visibleIds.length === 0}>
-                {allVisibleSelected ? 'Clear all' : `Select all (${visibleIds.length})`}
-              </button>
-            </div>
-            <input className="input mt-1" placeholder="Search student by name / form no…" value={stuSearch} onChange={(e) => setStuSearch(e.target.value)} />
-            <div className="card p-2 mt-1 max-h-48 overflow-y-auto grid grid-cols-1 sm:grid-cols-2 gap-1">
-              {students.isLoading ? <Spinner /> : visibleStudents.length === 0 ? (
-                <div className="muted text-sm p-2">{(students.data || []).length === 0 ? 'No students assigned to you yet. Your admin will assign students to you.' : 'No students match.'}</div>
-              ) : visibleStudents.map((s: any) => (
-                <label key={s.id} className="flex items-center gap-2 text-sm px-2 py-1 rounded hover:bg-black/5 dark:hover:bg-white/5 cursor-pointer">
-                  <input type="checkbox" className="shrink-0" checked={attendees.includes(s.id)} onChange={() => toggle(s.id)} />
-                  <span className="min-w-0">
-                    <span className="block truncate"><span className="font-mono text-xs">{s.form_no}</span> {s.full_name}</span>
-                    {(s.year_grade || s.parent_mobile) && (
-                      <span className="block truncate muted text-xs">{[s.year_grade, s.parent_mobile].filter(Boolean).join(' · ')}</span>
-                    )}
-                  </span>
-                </label>
-              ))}
-            </div>
           </div>
 
           <button className="btn-primary w-full" disabled={create.isPending}>Save Lecture</button>

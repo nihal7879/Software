@@ -71,6 +71,7 @@ export default function App() {
       <Route path="/student/tracker" element={<Protected roles={['student']}><Tracker /></Protected>} />
       <Route path="/student/lectures" element={<Protected roles={['student']}><LectureHistory /></Protected>} />
       <Route path="/student/hours" element={<Protected roles={['student']}><HoursStatement /></Protected>} />
+      <Route path="/student/fees" element={<Protected roles={['student']}><StudentFees /></Protected>} />
       <Route path="/student/profile" element={<Protected roles={['student']}><StudentProfile /></Protected>} />
       <Route path="/student/settings" element={<Protected roles={['student']}><Settings /></Protected>} />
 

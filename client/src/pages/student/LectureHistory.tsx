@@ -54,7 +54,7 @@ export default function LectureHistory() {
 
   return (
     <div className="space-y-5">
-      <h1 className="text-2xl font-bold">Lecture History</h1>
+      <h1 className="text-2xl font-bold">Lecture Info</h1>
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <KpiCard label="This month — classes" value={monthLectures.length} accent="blue" />
@@ -124,16 +124,25 @@ export default function LectureHistory() {
         {shown.length === 0 ? (
           <p className="muted text-sm">No lectures {selectedDay ? 'on this day' : 'this month'}.</p>
         ) : (
-          <Table head={['Date', 'Teacher', 'Subject', 'Topic', 'Subtopic', 'Remark', { label: 'Duration', align: 'right' }, 'Venue', 'Link']}>
+          <Table head={['Date', 'Subject', 'Topic', 'Subtopic', 'Remark', 'Time In', 'Time Out', { label: 'Duration', align: 'right' }, 'Present', 'Venue', 'Link']}>
             {shown.map((r: any) => (
               <tr key={r.id}>
                 <td className="table-td whitespace-nowrap">{r.session_date}</td>
-                <td className="table-td">{r.teacher_name || '—'}</td>
                 <td className="table-td">{r.subject_name || '—'}</td>
                 <td className="table-td">{r.topic || '—'}</td>
                 <td className="table-td">{r.subtopic || '—'}</td>
                 <td className="table-td">{r.remark || '—'}</td>
+                <td className="table-td whitespace-nowrap">{r.time_in || '—'}</td>
+                <td className="table-td whitespace-nowrap">{r.time_out || '—'}</td>
                 <td className="table-td text-right tabular-nums">{hrs(r.hours_consumed)}</td>
+                <td className="table-td">
+                  <span className={`text-xs px-2 py-0.5 rounded-full ${
+                    r.attendance_status === 'Absent' ? 'bg-red-500/15 text-red-600'
+                    : r.attendance_status === 'Late' ? 'bg-amber-500/15 text-amber-600'
+                    : 'bg-emerald-500/15 text-emerald-600'}`}>
+                    {r.attendance_status || 'Present'}
+                  </span>
+                </td>
                 <td className="table-td">{r.venue || '—'}</td>
                 <td className="table-td">{r.meeting_link ? <a className="text-blue-500 underline" href={r.meeting_link} target="_blank">Link</a> : '—'}</td>
               </tr>
