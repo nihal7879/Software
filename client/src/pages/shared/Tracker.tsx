@@ -64,7 +64,6 @@ export default function Tracker() {
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center gap-3">
-        <h1 className="text-2xl font-bold">{isParent ? "My Child's Tracker" : 'My Tracker'}</h1>
         <StatusBadge status={l.status} />
         <span className="muted text-sm">{l.student_name} · Form {l.form_no}</span>
       </div>
