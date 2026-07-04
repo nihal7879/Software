@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { api } from '../api/client';
+import { useMasters } from '../api/masters';
 import { Select } from './Select';
 import { CalendarPicker } from './CalendarPicker';
 
@@ -31,6 +32,7 @@ export function StudentRegistrationForm({
 }) {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const masters = useMasters();
 
   const { register, handleSubmit, watch, setValue, formState: { errors } } = useForm<any>({ values: initial });
   const first = watch('first_name'); const middle = watch('middle_name'); const last = watch('last_name');
@@ -116,11 +118,11 @@ export function StudentRegistrationForm({
         <h4 className="font-display font-bold accent-underline mb-3">Academic</h4>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <SelectField name="year_grade" label="Year / Grade" placeholder="Select year / grade…"
-            options={['Y7', 'Y8', 'Y9', 'Y10', 'Y11', 'Y12', 'Y13']} />
+            options={masters.year_grades} />
           <SelectField name="school_name" label="School" placeholder="Select school…"
-            options={['GEMS', 'Dubai College', 'JESS', 'Kings School', 'Repton', 'Nord Anglia', 'DESC', 'GEMS Wellington', 'Jumeirah College', 'Other']} />
+            options={masters.schools} />
           <SelectField name="exam_board" label="Exam Board" placeholder="Select exam board…"
-            options={['IGCSE', 'IB', 'IAL', 'Edexcel', 'AQA', 'OCR', 'CAIE (Cambridge)', 'A-Level', 'CBSE']} />
+            options={masters.exam_boards} />
         </div>
       </section>
 

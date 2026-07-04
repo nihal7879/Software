@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { api } from '../../api/client';
+import { useMasters } from '../../api/masters';
 import { Section, Spinner } from '../../components/ui';
 import { Select } from '../../components/Select';
 import { TimePicker } from '../../components/TimePicker';
@@ -20,6 +21,7 @@ export default function LectureEntry() {
   const me = useQuery({ queryKey: ['teacher-me'], queryFn: () => api.get('/teachers/me').then((r) => r.data) });
   const students = useQuery({ queryKey: ['me-students'], queryFn: () => api.get('/teachers/me/students').then((r) => r.data.data) });
   const subjects = useQuery({ queryKey: ['subjects'], queryFn: () => api.get('/teachers/subjects').then((r) => r.data.data) });
+  const masters = useMasters();
 
   // Minimal-effort defaults captured when the page opens: today's date, the
   // current time as start, and +1 hour as end. The teacher can still change them.
@@ -148,7 +150,7 @@ export default function LectureEntry() {
               <Select
                 value={watch('venue') || ''}
                 onChange={(v) => setValue('venue', v)}
-                options={['JLT', 'Oud Metha', 'Online'].map((v) => ({ value: v, label: v }))}
+                options={masters.venues.map((v) => ({ value: v, label: v }))}
                 placeholder="Select venue…"
                 allowCustom
               />

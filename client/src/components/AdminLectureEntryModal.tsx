@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { api } from '../api/client';
+import { useMasters } from '../api/masters';
 import { Spinner } from './ui';
 import { Select } from './Select';
 import { TimePicker } from './TimePicker';
@@ -33,6 +34,7 @@ export function AdminLectureEntryModal({
     queryFn: () => api.get(`/teachers/${teacherId}/students`).then((r) => r.data.data),
   });
   const subjects = useQuery({ queryKey: ['subjects'], queryFn: () => api.get('/teachers/subjects').then((r) => r.data.data) });
+  const masters = useMasters();
 
   // Minimal-effort defaults: today's date, current time, +1 hour end.
   const now = new Date();
@@ -110,7 +112,7 @@ export function AdminLectureEntryModal({
           <div>
             <label className="text-xs font-medium muted block mb-1">Venue</label>
             <input type="hidden" {...register('venue')} />
-            <Select value={watch('venue') || ''} onChange={(v) => setValue('venue', v)} options={['JLT', 'Oud Metha', 'Online'].map((v) => ({ value: v, label: v }))} placeholder="Select venue…" allowCustom />
+            <Select value={watch('venue') || ''} onChange={(v) => setValue('venue', v)} options={masters.venues.map((v) => ({ value: v, label: v }))} placeholder="Select venue…" allowCustom />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
