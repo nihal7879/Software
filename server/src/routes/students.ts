@@ -50,7 +50,7 @@ router.get(
     const grade = req.query.grade as string;
     const board = req.query.board as string;
     const page = Math.max(1, Number(req.query.page || 1));
-    const limit = Math.min(100, Number(req.query.limit || 20));
+    const limit = Math.min(1000, Number(req.query.limit || 20));
     const offset = (page - 1) * limit;
 
     const where: string[] = ['is_deleted = FALSE'];

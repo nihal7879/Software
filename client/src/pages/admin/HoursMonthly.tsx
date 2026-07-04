@@ -22,7 +22,7 @@ export default function HoursMonthly() {
     queryFn: () => api.get('/fees/ledger', { params: { search: summarySearch, page: summaryPage, limit: 20 } }).then((r) => r.data),
   });
   const [studentSearch, setStudentSearch] = useState('');
-  const students = useQuery({ queryKey: ['students-pick', studentSearch], queryFn: () => api.get('/students', { params: { search: studentSearch, limit: 50 } }).then((r) => r.data.data) });
+  const students = useQuery({ queryKey: ['students-pick', studentSearch], queryFn: () => api.get('/students', { params: { search: studentSearch, limit: 1000 } }).then((r) => r.data.data) });
   const ledger = useQuery({ queryKey: ['ledger', studentId], queryFn: () => api.get(`/fees/ledger/${studentId}`).then((r) => r.data), enabled: !!studentId });
   const lectures = useQuery({ queryKey: ['lectures', studentId], queryFn: () => api.get('/lectures', { params: { studentId } }).then((r) => r.data.data), enabled: !!studentId });
   const packages = useQuery({ queryKey: ['pkg', studentId], queryFn: () => api.get(`/fees/packages/${studentId}`).then((r) => r.data.data), enabled: !!studentId });
