@@ -42,13 +42,13 @@ export const HOURS_COLUMNS = `
 `;
 
 // Derive hours_left + fee_status from the raw aggregates — same rule as the view:
-// Payment Required when pending fees > 0 OR hours_left <= 0.
+// Payment Required ONLY when hours_left <= 0. If the student still has remaining
+// hours (> 0) they are Active, regardless of any pending-fees figure.
 export function deriveHours<T extends Record<string, any>>(row: T): T & { hours_left: number; fee_status: string } {
   const credited = Number(row.total_hours_credited) || 0;
   const consumed = Number(row.total_hours_consumed) || 0;
-  const pending = Number(row.pending_fees) || 0;
   const hours_left = Math.round((credited - consumed) * 100) / 100;
-  const fee_status = pending > 0 || hours_left <= 0 ? 'Payment Required' : 'Active';
+  const fee_status = hours_left <= 0 ? 'Payment Required' : 'Active';
   return { ...row, hours_left, fee_status };
 }
 

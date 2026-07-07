@@ -405,7 +405,15 @@ router.get(
   '/packages/:id',
   ensureOwnStudent,
   wrap(async (req, res) => {
-    const rows = await query('SELECT * FROM fee_packages WHERE student_id = ?', [req.params.id]);
+    // Include the REAL amount actually paid (from the linked transaction) so the
+    // statement shows the true package fee, not a rate×hours estimate.
+    const rows = await query(
+      `SELECT p.*, t.amount AS paid_amount, t.payment_date AS paid_date
+         FROM fee_packages p
+         LEFT JOIN fee_transactions t ON t.id = p.transaction_id
+        WHERE p.student_id = ? AND p.is_deleted = FALSE`,
+      [req.params.id]
+    );
     res.json({ data: rows });
   })
 );

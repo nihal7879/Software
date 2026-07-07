@@ -34,7 +34,16 @@ export function StudentRegistrationForm({
   const [busy, setBusy] = useState(false);
   const masters = useMasters();
 
-  const { register, handleSubmit, watch, setValue, formState: { errors } } = useForm<any>({ values: initial });
+  // Pre-fill the contact email from the login the student registered with,
+  // but only if it's a real email (usernames like "akanksha" are ignored).
+  const initialValues = useMemo(() => {
+    if (!initial) return initial;
+    const loginEmail = initial.login_email;
+    const email = initial.email || (loginEmail && String(loginEmail).includes('@') ? loginEmail : '');
+    return { ...initial, email };
+  }, [initial]);
+
+  const { register, handleSubmit, watch, setValue, formState: { errors } } = useForm<any>({ values: initialValues });
   const first = watch('first_name'); const middle = watch('middle_name'); const last = watch('last_name');
   const dob = watch('dob');
   const fullName = useMemo(() => [first, middle, last].filter(Boolean).join(' '), [first, middle, last]);
@@ -120,7 +129,7 @@ export function StudentRegistrationForm({
           <SelectField name="year_grade" label="Year / Grade" placeholder="Select year / grade…"
             options={masters.year_grades} />
           <SelectField name="school_name" label="School" placeholder="Select school…"
-            options={masters.schools} />
+            options={masters.schools} required={false} />
           <SelectField name="exam_board" label="Exam Board" placeholder="Select exam board…"
             options={masters.exam_boards} />
         </div>
@@ -145,7 +154,7 @@ export function StudentRegistrationForm({
       <section>
         <h4 className="font-display font-bold accent-underline mb-3">Contact</h4>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          <F name="email" label="Email id" type="email" required />
+          <F name="email" label="Email id" />
           <F name="student_mobile" label="Student Mob No" required />
           <F name="parent_mobile" label="Parent Mob No" required />
           <F name="extra_mobile" label="Extra Mob No 2" />

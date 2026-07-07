@@ -94,7 +94,7 @@ export function AdminLectureEntryModal({
 
   return (
     <div className="fixed inset-0 bg-black/40 flex justify-end z-50" onClick={onClose}>
-      <div className="w-full max-w-md h-full p-6 overflow-y-auto" style={{ background: 'var(--color-card)' }} onClick={(e) => e.stopPropagation()}>
+      <div className="w-full max-w-2xl h-full p-6 overflow-y-auto" style={{ background: 'var(--color-card)' }} onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-1">
           <h2 className="text-lg font-bold">Log Lecture</h2>
           <button className="btn-ghost !py-1 !px-2.5 text-sm" onClick={onClose}>Close</button>
@@ -104,34 +104,71 @@ export function AdminLectureEntryModal({
         {msg && <div className="card p-3 text-sm text-red-500 mb-3">{msg}</div>}
 
         <form onSubmit={handleSubmit((b) => { if (!attendees.length) { setMsg('⚠️ Select at least one student.'); return; } setMsg(''); create.mutate(b); })} className="space-y-3">
+          {/* Step 1 — pick the grade/level and the students attending */}
           <div>
-            <label className="text-xs font-medium muted block mb-1">Date *</label>
-            <input type="hidden" {...register('session_date', { required: true })} />
-            <CalendarPicker value={watch('session_date') || ''} onChange={(v) => setValue('session_date', v, { shouldValidate: true })} placeholder="Select date…" />
+            <label className="text-xs font-medium muted block mb-1">Grade (filter students)</label>
+            <Select
+              value={grade}
+              onChange={setGrade}
+              options={[{ value: '', label: 'All grades' }, ...grades.map((g: any) => ({ value: g, label: g }))]}
+              placeholder="All grades"
+            />
           </div>
+
           <div>
-            <label className="text-xs font-medium muted block mb-1">Venue</label>
-            <input type="hidden" {...register('venue')} />
-            <Select value={watch('venue') || ''} onChange={(v) => setValue('venue', v)} options={masters.venues.map((v) => ({ value: v, label: v }))} placeholder="Select venue…" allowCustom />
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <label className="text-xs font-medium muted">{teacherName}'s students — attendees ({attendees.length} selected)</label>
+              <button type="button" className="btn-ghost !py-1 !px-2.5 text-xs" onClick={toggleAllVisible} disabled={visibleIds.length === 0}>
+                {allVisibleSelected ? 'Clear all' : `Select all (${visibleIds.length})`}
+              </button>
+            </div>
+            <input className="input mt-1" placeholder="Search student by name / form no…" value={stuSearch} onChange={(e) => setStuSearch(e.target.value)} />
+            <div className="card p-2 mt-1 max-h-48 overflow-y-auto grid grid-cols-1 sm:grid-cols-2 gap-1">
+              {students.isLoading ? <Spinner /> : visibleStudents.length === 0 ? (
+                <div className="muted text-sm p-2">{(students.data || []).length === 0 ? 'No students assigned to this teacher yet.' : 'No students match.'}</div>
+              ) : visibleStudents.map((s: any) => (
+                <label key={s.id} className="flex items-center gap-2 text-sm px-2 py-1 rounded hover:bg-black/5 dark:hover:bg-white/5 cursor-pointer">
+                  <input type="checkbox" className="shrink-0" checked={attendees.includes(s.id)} onChange={() => toggle(s.id)} />
+                  <span className="min-w-0">
+                    <span className="block truncate"><span className="font-mono text-xs muted">{s.form_no}</span> {s.full_name}</span>
+                  </span>
+                </label>
+              ))}
+            </div>
           </div>
-          <div className="grid grid-cols-2 gap-3">
+
+          <div className="border-t pt-3" style={{ borderColor: 'var(--color-border)' }}>
+            <p className="text-xs font-semibold muted mb-2">Lecture details</p>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs font-medium muted block mb-1">Date *</label>
+              <input type="hidden" {...register('session_date', { required: true })} />
+              <CalendarPicker value={watch('session_date') || ''} onChange={(v) => setValue('session_date', v, { shouldValidate: true })} placeholder="Select date…" />
+            </div>
+            <div>
+              <label className="text-xs font-medium muted block mb-1">Venue</label>
+              <input type="hidden" {...register('venue')} />
+              <Select value={watch('venue') || ''} onChange={(v) => setValue('venue', v)} options={masters.venues.map((v) => ({ value: v, label: v }))} placeholder="Select venue…" allowCustom />
+            </div>
             <div>
               <label className="text-xs font-medium muted block mb-1">Time In</label>
               <input type="hidden" {...register('time_in')} />
-              <TimePicker value={watch('time_in') || ''} onChange={(v) => setValue('time_in', v)} placeholder="Start" />
+              <TimePicker value={watch('time_in') || ''} onChange={(v) => setValue('time_in', v)} placeholder="Start time" />
             </div>
             <div>
               <label className="text-xs font-medium muted block mb-1">Time Out</label>
               <input type="hidden" {...register('time_out')} />
-              <TimePicker value={watch('time_out') || ''} onChange={(v) => setValue('time_out', v)} placeholder="End" />
+              <TimePicker value={watch('time_out') || ''} onChange={(v) => setValue('time_out', v)} placeholder="End time" />
+            </div>
+            <div className="sm:col-span-2">
+              <label className="text-xs font-medium muted block mb-1">Subject</label>
+              <input type="hidden" {...register('subject_id')} />
+              <Select value={watch('subject_id') || ''} onChange={(v) => setValue('subject_id', v)} options={subjectList.map((s: any) => ({ value: s.id, label: s.name }))} placeholder="Select subject…" />
             </div>
           </div>
-          <div>
-            <label className="text-xs font-medium muted block mb-1">Subject</label>
-            <input type="hidden" {...register('subject_id')} />
-            <Select value={watch('subject_id') || ''} onChange={(v) => setValue('subject_id', v)} options={subjectList.map((s: any) => ({ value: s.id, label: s.name }))} placeholder="Select subject…" />
-          </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="text-xs font-medium muted">Topic</label>
               <input className="input mt-1" {...register('topic')} placeholder="e.g. Organic Chemistry" />
@@ -148,41 +185,6 @@ export function AdminLectureEntryModal({
           <div>
             <label className="text-xs font-medium muted">Meeting / Recording Link</label>
             <input className="input mt-1" {...register('meeting_link')} placeholder="Google Meet / Zoom URL" />
-          </div>
-
-          <div>
-            <label className="text-xs font-medium muted block mb-1">Grade (filter students)</label>
-            <Select
-              value={grade}
-              onChange={setGrade}
-              options={[{ value: '', label: 'All grades' }, ...grades.map((g: any) => ({ value: g, label: g }))]}
-              placeholder="All grades"
-            />
-          </div>
-
-          <div>
-            <div className="flex items-center justify-between gap-2 flex-wrap">
-              <label className="text-xs font-medium muted">Students — attendees ({attendees.length} selected)</label>
-              <button type="button" className="btn-ghost !py-1 !px-2.5 text-xs" onClick={toggleAllVisible} disabled={visibleIds.length === 0}>
-                {allVisibleSelected ? 'Clear all' : `Select all (${visibleIds.length})`}
-              </button>
-            </div>
-            <input className="input mt-1" placeholder="Search student by name / form no…" value={stuSearch} onChange={(e) => setStuSearch(e.target.value)} />
-            <div className="card p-2 mt-1 max-h-48 overflow-y-auto grid grid-cols-1 gap-1">
-              {students.isLoading ? <Spinner /> : visibleStudents.length === 0 ? (
-                <div className="muted text-sm p-2">{(students.data || []).length === 0 ? 'No students assigned to this teacher yet.' : 'No students match.'}</div>
-              ) : visibleStudents.map((s: any) => (
-                <label key={s.id} className="flex items-center gap-2 text-sm px-2 py-1 rounded hover:bg-black/5 dark:hover:bg-white/5 cursor-pointer">
-                  <input type="checkbox" className="shrink-0" checked={attendees.includes(s.id)} onChange={() => toggle(s.id)} />
-                  <span className="min-w-0">
-                    <span className="block truncate"><span className="font-mono text-xs">{s.form_no}</span> {s.full_name}</span>
-                    {(s.year_grade || s.parent_mobile || s.subject_name) && (
-                      <span className="block truncate muted text-xs">{[s.year_grade, s.parent_mobile, s.subject_name].filter(Boolean).join(' · ')}</span>
-                    )}
-                  </span>
-                </label>
-              ))}
-            </div>
           </div>
 
           <button className="btn-primary w-full" disabled={create.isPending}>{create.isPending ? 'Saving…' : 'Save Lecture'}</button>

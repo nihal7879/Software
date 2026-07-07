@@ -33,8 +33,11 @@ export default function HoursStatement() {
       const credited = Number(p.package_hours || 0);
       const discount = Number(p.discount_hours || 0);
       const adjusted = Number(p.adjusted_hours || 0);
-      const date = String(p.start_date || p.created_at || '').slice(0, 10) || '—';
-      events.push({ kind: 'credit', date, fees: Number(p.rate_per_hour || 0) * credited, credited, discount, adjusted, totalCredited: credited + discount + adjusted });
+      const date = String(p.paid_date || p.start_date || p.created_at || '').slice(0, 10) || '—';
+      // Real fee actually paid (from the linked payment); fall back to rate×hours
+      // only if this package has no linked transaction.
+      const fees = p.paid_amount != null ? Number(p.paid_amount) : Number(p.rate_per_hour || 0) * credited;
+      events.push({ kind: 'credit', date, fees, credited, discount, adjusted, totalCredited: credited + discount + adjusted });
     }
     for (const l of lectures.data || []) {
       events.push({ kind: 'lecture', date: String(l.session_date).slice(0, 10), teacher: l.teacher_name, subject: l.subject_name, time_in: l.time_in, time_out: l.time_out, used: Number(l.hours_consumed || 0) });

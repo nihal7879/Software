@@ -180,8 +180,8 @@ export default function ManagementStudents() {
                   <div className="rounded-lg p-3 space-y-3" style={{ background: 'var(--color-card-alt)' }}>
                     <div className="text-xs font-semibold">🔑 Student login (share these with the student)</div>
                     <div>
-                      <label className="text-xs font-medium muted">Email *</label>
-                      <input className="input mt-1" type="email" autoComplete="off" {...register('email', { required: true })} />
+                      <label className="text-xs font-medium muted">Email or Username *</label>
+                      <input className="input mt-1" type="text" autoComplete="off" placeholder="e.g. aarav or aarav@email.com" {...register('email', { required: true })} />
                     </div>
                     <div>
                       <label className="text-xs font-medium muted">Password * (min 6)</label>
@@ -197,7 +197,7 @@ export default function ManagementStudents() {
                   </div>
                   {create.isError && (
                     <div className="text-sm text-red-500">
-                      {(create.error as any)?.response?.data?.error || 'Failed to create — the email may already be in use.'}
+                      {(create.error as any)?.response?.data?.error || 'Failed to create — the username/email may already be in use.'}
                     </div>
                   )}
                   <div className="flex gap-2 pt-2">

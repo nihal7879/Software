@@ -24,7 +24,8 @@ const studentSchema = z.object({
   father_name: z.string().optional().nullable(),
   mother_name: z.string().optional().nullable(),
   relationship: z.enum(['Father', 'Mother', 'Guardian']).optional(),
-  email: z.string().email().optional().nullable().or(z.literal('')),
+  // Contact email OR a plain username used as the student's login id.
+  email: z.string().min(1).optional().nullable().or(z.literal('')),
   dob: z.string().optional().nullable(),
   age: z.number().int().optional().nullable(),
   gender: z.enum(['Male', 'Female', 'Other']).optional().nullable(),
@@ -82,8 +83,14 @@ router.get(
   '/:id',
   ensureOwnStudent,
   wrap(async (req, res) => {
-    const student = await queryOne('SELECT * FROM students WHERE id = ?', [req.params.id]);
+    const student = await queryOne<any>('SELECT * FROM students WHERE id = ?', [req.params.id]);
     if (!student) return res.status(404).json({ error: 'Student not found' });
+    // Expose the login the student registered with, so the profile can pre-fill
+    // the Email field when no contact email was captured yet.
+    if (student.user_id) {
+      const u = await queryOne<any>('SELECT email FROM users WHERE id = ?', [student.user_id]);
+      student.login_email = u?.email ?? null;
+    }
     res.json(student);
   })
 );
@@ -101,7 +108,7 @@ router.post(
     let userId: number | null = null;
     if (b.email && creds.password) {
       const exists = await queryOne<any>('SELECT id FROM users WHERE email = ?', [b.email]);
-      if (exists) return res.status(409).json({ error: 'A user with this email already exists' });
+      if (exists) return res.status(409).json({ error: `This username/email "${b.email}" already exists — choose another` });
       const hash = await bcrypt.hash(creds.password, 10);
       const ctx = getReqCtx();
       const gps = ctx?.lat != null && ctx?.lng != null ? `${ctx.lat},${ctx.lng}` : null;

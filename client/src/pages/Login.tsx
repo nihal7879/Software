@@ -3,13 +3,6 @@ import { Link } from 'react-router-dom';
 import { GraduationCap } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
 
-const DEMO = [
-  ['Management', 'admin@tuition.ae'],
-  ['Faculty', 'sachin@tuition.ae'],
-  ['Student', 'sofia@tuition.ae'],
-  ['Parent', 'zelia@tuition.ae'],
-];
-
 export default function Login() {
   const { login } = useAuth();
   const [email, setEmail] = useState('');
@@ -77,7 +70,7 @@ export default function Login() {
           <form onSubmit={submit} className="space-y-4" autoComplete="off">
             <div>
               <label className="text-sm font-semibold">Username</label>
-              <input className="input mt-1.5" type="text" placeholder="Enter username" autoComplete="off"
+              <input className="input mt-1.5" type="text" placeholder="Enter username or email" autoComplete="off"
                 value={email} onChange={(e) => setEmail(e.target.value)} />
             </div>
             <div>
@@ -96,16 +89,6 @@ export default function Login() {
             </Link>
           </div>
 
-          <div className="mt-8 text-xs muted">
-            <div className="mb-2 font-semibold">Demo accounts · password <code className="px-1.5 py-0.5 rounded bg-[var(--color-card-alt)]">password123</code></div>
-            <div className="flex flex-wrap gap-2">
-              {DEMO.map(([role, em]) => (
-                <button key={em} className="btn-ghost !py-1.5 !px-3 text-xs" onClick={() => { setEmail(em); setPassword('password123'); }}>
-                  {role}
-                </button>
-              ))}
-            </div>
-          </div>
         </div>
       </div>
     </div>

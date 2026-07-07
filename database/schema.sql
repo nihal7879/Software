@@ -297,7 +297,7 @@ CREATE TABLE audit_logs (
 --   total_hours_credited = package_hours + discount_hours + adjusted_hours
 --   total_hours_consumed = SUM(lecture_attendees.hours_consumed)
 --   hours_left           = credited - consumed   (NOT clamped)
---   fee_status           = 'Payment Required' if pending_fees>0 OR hours_left<=0
+--   fee_status           = 'Payment Required' if hours_left<=0 (else Active)
 -- ============================================================================
 -- Manual hours adjustments (admin "Adjust Hours") — each a dated ledger event.
 CREATE TABLE IF NOT EXISTS hours_adjustments (
@@ -329,8 +329,7 @@ SELECT
   COALESCE(la.pending_fees,0)       AS pending_fees,
   COALESCE(la.extra_amount_left,0)  AS extra_amount_left,
   CASE
-    WHEN COALESCE(la.pending_fees,0) > 0
-      OR ((COALESCE(pk.package_hours,0)+COALESCE(pk.discount_hours,0)+COALESCE(pk.adjusted_hours,0)+COALESCE(adj.total,0)) - COALESCE(con.consumed,0)) <= 0
+    WHEN ((COALESCE(pk.package_hours,0)+COALESCE(pk.discount_hours,0)+COALESCE(pk.adjusted_hours,0)+COALESCE(adj.total,0)) - COALESCE(con.consumed,0)) <= 0
     THEN 'Payment Required' ELSE 'Active'
   END                               AS fee_status,
   con.last_lecture_date             AS last_attended_lecture

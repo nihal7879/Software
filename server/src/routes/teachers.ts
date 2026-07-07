@@ -204,7 +204,8 @@ router.delete(
 
 const teacherSchema = z.object({
   name: z.string().min(1),
-  email: z.string().email().optional().nullable().or(z.literal('')),
+  // Login id — may be an email OR a plain username (e.g. "sachin").
+  email: z.string().min(1).optional().nullable().or(z.literal('')),
   mobile: z.string().optional().nullable(),
   specialization: z.string().optional().nullable(),
   branch_id: z.number().int().optional().nullable(),
@@ -221,7 +222,7 @@ router.post(
     let userId: number | null = null;
     if (b.email && b.password) {
       const exists = await queryOne<any>('SELECT id FROM users WHERE email = ?', [b.email]);
-      if (exists) return res.status(409).json({ error: 'A user with this email already exists' });
+      if (exists) return res.status(409).json({ error: `This username/email "${b.email}" already exists — choose another` });
       const hash = await bcrypt.hash(b.password, 10);
       const ctx = getReqCtx();
       const gps = ctx?.lat != null && ctx?.lng != null ? `${ctx.lat},${ctx.lng}` : null;
@@ -342,11 +343,15 @@ router.get(
       if (Number(req.params.teacherId) !== tid) return res.status(403).json({ error: 'Forbidden: not your data' });
     }
     const rows = await query(
-      `SELECT DISTINCT s.id, s.form_no, s.full_name, s.year_grade, s.status, s.parent_mobile, sub.name AS subject_name
+      // Group by student so a student assigned for multiple subjects appears
+      // ONCE (subjects concatenated) — matches /me/students, avoids duplicates.
+      `SELECT s.id, s.form_no, s.full_name, s.year_grade, s.status, s.parent_mobile,
+              GROUP_CONCAT(DISTINCT sub.name SEPARATOR ', ') AS subject_name
        FROM student_teacher_mapping m
        JOIN students s ON s.id = m.student_id
        JOIN subjects sub ON sub.id = m.subject_id
        WHERE m.teacher_id = ?
+       GROUP BY s.id, s.form_no, s.full_name, s.year_grade, s.status, s.parent_mobile
        ORDER BY s.full_name`,
       [req.params.teacherId]
     );
