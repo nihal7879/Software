@@ -79,7 +79,7 @@ export default function HoursStatement() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-        <KpiCard label="Total Hours" value={hrs(l?.total_hours_credited)} accent="blue" />
+        <KpiCard label="Purchased Hours" value={hrs(l?.total_hours_credited)} accent="blue" />
         <KpiCard label="Used Hours" value={hrs(l?.total_hours_consumed)} accent="indigo" />
         <KpiCard label="Remaining Hours" value={<HoursValue value={l?.hours_left ?? 0} />} accent={Number(l?.hours_left) <= 0 ? 'red' : 'emerald'} />
       </div>

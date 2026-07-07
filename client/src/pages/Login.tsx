@@ -7,6 +7,7 @@ export default function Login() {
   const { login } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const timedOut = new URLSearchParams(window.location.search).get('reason') === 'timeout';
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
@@ -67,6 +68,11 @@ export default function Login() {
           <h2 className="font-display text-3xl font-semibold mb-1.5">Sign in to <span className="accent-word">Classroom</span></h2>
           <p className="muted text-sm mb-8">Access your dashboard to continue.</p>
 
+          {timedOut && (
+            <div className="mb-4 text-sm rounded-lg px-3 py-2 bg-amber-500/15 text-amber-700 dark:text-amber-400">
+              You were signed out after 20 minutes of inactivity. Please sign in again.
+            </div>
+          )}
           <form onSubmit={submit} className="space-y-4" autoComplete="off">
             <div>
               <label className="text-sm font-semibold">Username</label>

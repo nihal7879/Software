@@ -145,3 +145,23 @@ aside ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.2); }
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 .animate-slide-in { animation: slideInLeft 0.25s ease-out; }
 .animate-fade-in { animation: fadeIn 0.2s ease-out; }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

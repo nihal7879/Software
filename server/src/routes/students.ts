@@ -181,6 +181,8 @@ router.post(
     const b = z.object({ status: z.enum(['Active', 'Inactive']) }).parse(req.body);
     const isActive = b.status === 'Active';
     await query('UPDATE students SET status = ?, is_active = ? WHERE id = ?', [b.status, isActive, req.params.id]);
+    // Keep the student's login in sync — an Inactive student can't sign in.
+    await query('UPDATE users SET is_active = ? WHERE id = (SELECT user_id FROM students WHERE id = ?)', [isActive, req.params.id]);
     await audit(req.user!.userId, 'SET_STATUS', 'student', req.params.id, null, { status: b.status });
     res.json({ ok: true });
   })
@@ -192,6 +194,7 @@ router.post(
   requireRole('admin'),
   wrap(async (req, res) => {
     await query("UPDATE students SET status = 'Inactive', is_active = FALSE WHERE id = ?", [req.params.id]);
+    await query('UPDATE users SET is_active = FALSE WHERE id = (SELECT user_id FROM students WHERE id = ?)', [req.params.id]);
     await audit(req.user!.userId, 'ARCHIVE', 'student', req.params.id, null, null);
     res.json({ ok: true });
   })

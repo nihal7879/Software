@@ -1,5 +1,8 @@
-import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import { createContext, useContext, useEffect, useRef, useState, ReactNode } from 'react';
 import { api, ensureLocation } from '../api/client';
+
+// Auto-logout after this many minutes of no user interaction.
+const IDLE_LIMIT_MS = 20 * 60 * 1000;
 
 export type Role = 'student' | 'parent' | 'faculty' | 'admin';
 export interface AuthUser {
@@ -57,6 +60,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
     location.href = '/login';
   };
+
+  // Auto sign-out after 20 minutes of inactivity (only while logged in).
+  const idleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (!user) return;
+    const signOutIdle = () => {
+      localStorage.removeItem('token');
+      setUser(null);
+      location.href = '/login?reason=timeout';
+    };
+    const reset = () => {
+      if (idleTimer.current) clearTimeout(idleTimer.current);
+      idleTimer.current = setTimeout(signOutIdle, IDLE_LIMIT_MS);
+    };
+    const events = ['mousemove', 'mousedown', 'keydown', 'scroll', 'touchstart', 'click', 'visibilitychange'];
+    events.forEach((e) => window.addEventListener(e, reset, { passive: true }));
+    reset(); // start the countdown
+    return () => {
+      if (idleTimer.current) clearTimeout(idleTimer.current);
+      events.forEach((e) => window.removeEventListener(e, reset));
+    };
+  }, [user]);
 
   return <Ctx.Provider value={{ user, loading, login, register, logout }}>{children}</Ctx.Provider>;
 }

@@ -54,6 +54,24 @@ export default function Teachers() {
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['teachers'] }); qc.invalidateQueries({ queryKey: ['workload'] }); setDrawer(false); reset(); },
   });
 
+  // Edit an existing teacher (name / mobile / specialization).
+  const [editTeacher, setEditTeacher] = useState<any>(null);
+  const editForm = useForm();
+  const update = useMutation({
+    mutationFn: (b: any) => api.put(`/teachers/${editTeacher.id}`, {
+      name: b.name, mobile: b.mobile || null, specialization: b.specialization || null,
+    }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['teachers'] });
+      qc.invalidateQueries({ queryKey: ['workload'] });
+      setEditTeacher(null);
+    },
+  });
+  const openEdit = (t: any) => {
+    setEditTeacher(t);
+    editForm.reset({ name: t.name, mobile: t.mobile || '', specialization: t.specialization || '' });
+  };
+
   // Subjects management
   const subjects = useQuery({ queryKey: ['subjects'], queryFn: () => api.get('/teachers/subjects').then((r) => r.data.data) });
   const [subjectName, setSubjectName] = useState('');
@@ -163,6 +181,12 @@ export default function Teachers() {
                       {openTeacher?.id === t.id ? 'Hide students' : 'View students'}
                     </button>
                     <button
+                      className="!py-1 !px-2.5 text-xs rounded-lg border border-slate-500/30 text-slate-600 hover:bg-slate-500/10 transition-colors"
+                      onClick={() => openEdit(t)}
+                    >
+                      Edit
+                    </button>
+                    <button
                       className="!py-1 !px-2.5 text-xs rounded-lg border border-blue-500/30 text-blue-600 hover:bg-blue-500/10 transition-colors whitespace-nowrap"
                       onClick={() => setLectureFor({ id: t.id, name: t.name, spec: t.specialization })}
                     >
@@ -265,6 +289,69 @@ export default function Teachers() {
                 <button type="button" className="btn-ghost" onClick={() => setDrawer(false)}>Cancel</button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {editTeacher && (
+        <div className="fixed inset-0 bg-black/40 flex justify-end z-50" onClick={() => setEditTeacher(null)}>
+          <div className="w-full max-w-md h-full p-6 overflow-y-auto" style={{ background: 'var(--color-card)' }} onClick={(e) => e.stopPropagation()}>
+            <h2 className="text-lg font-bold mb-1">Edit Teacher</h2>
+            <p className="muted text-sm mb-4">Update the teacher's details. Specialization controls which subjects show for them in Lecture Entry &amp; assignment.</p>
+            <form onSubmit={editForm.handleSubmit((b) => update.mutate(b))} className="space-y-3">
+              <div>
+                <label className="text-xs font-medium muted">Name *</label>
+                <input className="input mt-1" {...editForm.register('name', { required: true })} />
+              </div>
+              <div>
+                <label className="text-xs font-medium muted">Mobile</label>
+                <input className="input mt-1" {...editForm.register('mobile')} />
+              </div>
+              <div>
+                <label className="text-xs font-medium muted block mb-1">Specialization</label>
+                <input type="hidden" {...editForm.register('specialization')} />
+                <MultiSelect
+                  value={editForm.watch('specialization') || ''}
+                  onChange={(v) => editForm.setValue('specialization', v)}
+                  options={(subjects.data || []).map((s: any) => ({ value: s.name, label: s.name }))}
+                  placeholder="Select subject(s)…"
+                  allowCustom
+                />
+              </div>
+              {update.isError && (
+                <div className="text-sm text-red-500">
+                  {(update.error as any)?.response?.data?.error || 'Could not save changes.'}
+                </div>
+              )}
+              <div className="flex gap-2 pt-2">
+                <button className="btn-primary flex-1" disabled={update.isPending}>{update.isPending ? 'Saving…' : 'Save'}</button>
+                <button type="button" className="btn-ghost" onClick={() => setEditTeacher(null)}>Cancel</button>
+              </div>
+            </form>
+
+            {/* Account status — activate / deactivate the teacher's login */}
+            <div className="border-t mt-5 pt-4" style={{ borderColor: 'var(--color-border)' }}>
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <div className="text-sm font-semibold">Account status</div>
+                  <span className={`text-xs px-2 py-0.5 rounded-full ${Number(editTeacher.is_active) === 1 ? 'bg-emerald-500/15 text-emerald-600' : 'bg-slate-500/15 text-slate-500'}`}>
+                    {Number(editTeacher.is_active) === 1 ? 'Active' : 'Inactive'}
+                  </span>
+                </div>
+                {Number(editTeacher.is_active) === 1 ? (
+                  <button type="button" className="!py-1.5 !px-3 text-sm rounded-lg border border-red-500/30 text-red-600 hover:bg-red-500/10 transition-colors"
+                    onClick={() => setConfirm({ title: 'Deactivate teacher', message: `Deactivate ${editTeacher.name}? They won't be able to log in.`, confirmLabel: 'Deactivate', danger: true,
+                      onConfirm: () => { setTeacherStatus.mutate({ id: editTeacher.id, is_active: false }); setEditTeacher({ ...editTeacher, is_active: 0 }); } })}>
+                    Deactivate
+                  </button>
+                ) : (
+                  <button type="button" className="!py-1.5 !px-3 text-sm rounded-lg border border-emerald-500/30 text-emerald-600 hover:bg-emerald-500/10 transition-colors"
+                    onClick={() => { setTeacherStatus.mutate({ id: editTeacher.id, is_active: true }); setEditTeacher({ ...editTeacher, is_active: 1 }); }}>
+                    Activate
+                  </button>
+                )}
+              </div>
+            </div>
           </div>
         </div>
       )}

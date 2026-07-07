@@ -43,6 +43,34 @@ router.get(
   })
 );
 
+// Faculty updates their OWN profile (mobile / specialization / name).
+router.patch(
+  '/me',
+  requireRole('faculty', 'admin'),
+  wrap(async (req, res) => {
+    const tid = await myTeacherId(req);
+    if (!tid) return res.status(404).json({ error: 'No teacher record linked to this account' });
+    const b = z
+      .object({
+        name: z.string().min(1).optional(),
+        mobile: z.string().optional().nullable(),
+        specialization: z.string().optional().nullable(),
+      })
+      .parse(req.body);
+    const before = await queryOne<any>('SELECT * FROM teachers WHERE id = ?', [tid]);
+    const fields: string[] = [];
+    const params: any[] = [];
+    for (const [k, v] of Object.entries(b)) { fields.push(`${k} = ?`); params.push(v); }
+    if (fields.length) {
+      params.push(tid);
+      await query(`UPDATE teachers SET ${fields.join(', ')} WHERE id = ?`, params);
+      if (b.name && before?.user_id) await query('UPDATE users SET display_name = ? WHERE id = ?', [b.name, before.user_id]);
+    }
+    await audit(req.user!.userId, 'UPDATE', 'teacher', tid, before, b);
+    res.json({ ok: true });
+  })
+);
+
 // My assigned students (only mine)
 router.get(
   '/me/students',
@@ -256,6 +284,35 @@ router.post(
       [b.is_active, req.params.id]
     );
     await audit(req.user!.userId, 'SET_STATUS', 'teacher', req.params.id, null, { is_active: b.is_active });
+    res.json({ ok: true });
+  })
+);
+
+// Edit a teacher's details (name / mobile / specialization). ADMIN ONLY.
+router.put(
+  '/:id',
+  requireRole('admin'),
+  wrap(async (req, res) => {
+    const b = z
+      .object({
+        name: z.string().min(1).optional(),
+        mobile: z.string().optional().nullable(),
+        specialization: z.string().optional().nullable(),
+      })
+      .parse(req.body);
+    const before = await queryOne<any>('SELECT * FROM teachers WHERE id = ?', [req.params.id]);
+    if (!before) return res.status(404).json({ error: 'Teacher not found' });
+
+    const fields: string[] = [];
+    const params: any[] = [];
+    for (const [k, v] of Object.entries(b)) { fields.push(`${k} = ?`); params.push(v); }
+    if (fields.length) {
+      params.push(req.params.id);
+      await query(`UPDATE teachers SET ${fields.join(', ')} WHERE id = ?`, params);
+      // Keep the linked login's display name in sync with the teacher name.
+      if (b.name) await query('UPDATE users SET display_name = ? WHERE id = ?', [b.name, before.user_id]);
+    }
+    await audit(req.user!.userId, 'UPDATE', 'teacher', req.params.id, before, b);
     res.json({ ok: true });
   })
 );

@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { api, rs, hrs } from '../../api/client';
+import { api, num, hrs } from '../../api/client';
 import { KpiCard, Section, Spinner } from '../../components/ui';
 import {
   Bar, BarChart, CartesianGrid, Cell, Legend, Line, LineChart, Pie, PieChart,
@@ -25,8 +25,8 @@ export default function AdminDashboard() {
         <KpiCard label="Students" value={o.students.total} sub={`${o.students.active} active`} accent="blue" />
         <KpiCard label="Inactive" value={o.students.inactive} sub={`${o.students.new_admissions} new (30d)`} accent="purple" />
         <KpiCard label="Faculty" value={o.teachers.total} sub={`${o.teachers.active} active`} accent="emerald" />
-        <KpiCard label="Revenue" value={rs(o.revenue.total_revenue)} sub={`${rs(o.revenue.month_revenue)} this month`} accent="orange" />
-        <KpiCard label="Pending Fees" value={rs(o.pending.outstanding)} sub={`${o.pending.payment_required_count} need payment`} accent="red" />
+        <KpiCard label="Revenue" value={num(o.revenue.total_revenue)} sub={`${num(o.revenue.month_revenue)} this month`} accent="orange" />
+        <KpiCard label="Pending Fees" value={num(o.pending.outstanding)} sub={`${o.pending.payment_required_count} need payment`} accent="red" />
         <KpiCard label="Hours Consumed" value={hrs(o.hours.consumed)} sub={`${hrs(o.hours.remaining)} remaining`} accent="indigo" />
       </div>
 

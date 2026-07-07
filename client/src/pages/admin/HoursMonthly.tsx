@@ -159,7 +159,7 @@ export default function HoursMonthly() {
       ) : (
         <>
           <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-            <KpiCard label="Total Hours" value={hrs(l?.total_hours_credited)} accent="blue" />
+            <KpiCard label="Purchased Hours" value={hrs(l?.total_hours_credited)} accent="blue" />
             <KpiCard label="Used Hours" value={hrs(l?.total_hours_consumed)} accent="indigo" />
             <KpiCard label="Remaining Hours" value={<HoursValue value={l?.hours_left ?? 0} />} accent={Number(l?.hours_left) <= 0 ? 'red' : 'emerald'} />
             <KpiCard label="Fee Status" value={<StatusBadge status={l?.fee_status || '—'} />} accent="purple" />
