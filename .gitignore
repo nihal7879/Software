@@ -1,0 +1,4 @@
+
+# local migration artifacts (contain PII / hashes)
+server/scripts/*-backup.json
+server/scripts/username-preview.json

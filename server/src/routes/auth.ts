@@ -38,7 +38,8 @@ router.get(
 );
 
 const loginSchema = z.object({
-  email: z.string().email(),
+  // Accepts a username (e.g. "sohel") or a full email — logins are usernames now.
+  email: z.string().min(1),
   password: z.string().min(1),
 });
 

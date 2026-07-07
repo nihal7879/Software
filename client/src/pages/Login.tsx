@@ -76,8 +76,8 @@ export default function Login() {
 
           <form onSubmit={submit} className="space-y-4" autoComplete="off">
             <div>
-              <label className="text-sm font-semibold">Email</label>
-              <input className="input mt-1.5" type="email" placeholder="Enter email" autoComplete="off"
+              <label className="text-sm font-semibold">Username</label>
+              <input className="input mt-1.5" type="text" placeholder="Enter username" autoComplete="off"
                 value={email} onChange={(e) => setEmail(e.target.value)} />
             </div>
             <div>
