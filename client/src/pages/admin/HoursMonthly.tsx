@@ -103,6 +103,12 @@ export default function HoursMonthly() {
   );
 
   const l = ledger.data;
+  // Most recent recharge (package added) date for this student.
+  const lastRecharge = (packages.data || [])
+    .map((p: any) => String(p.start_date || p.created_at || '').slice(0, 10))
+    .filter(Boolean)
+    .sort()
+    .pop() || '';
 
   return (
     <div className="space-y-5">
@@ -159,11 +165,11 @@ export default function HoursMonthly() {
       ) : (
         <>
           <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-            <KpiCard label="Purchased Hours" value={hrs(l?.total_hours_credited)} accent="blue" />
+            <KpiCard label="Recharge Hours" value={hrs(l?.total_hours_credited)} accent="blue" />
             <KpiCard label="Used Hours" value={hrs(l?.total_hours_consumed)} accent="indigo" />
             <KpiCard label="Remaining Hours" value={<HoursValue value={l?.hours_left ?? 0} />} accent={Number(l?.hours_left) <= 0 ? 'red' : 'emerald'} />
             <KpiCard label="Fee Status" value={<StatusBadge status={l?.fee_status || '—'} />} accent="purple" />
-            <KpiCard label="Last Lecture" value={<span className="text-base">{l?.last_attended_lecture || '—'}</span>} accent="blue" />
+            <KpiCard label="Last Recharge" value={<span className="text-base">{lastRecharge || '—'}</span>} accent="blue" />
           </div>
 
           <div>

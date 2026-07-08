@@ -62,10 +62,10 @@ export default function Login() {
       <div className="flex items-center justify-center p-6">
         <div className="w-full max-w-md">
           <div className="lg:hidden flex items-center gap-2 text-2xl font-display font-bold mb-6" style={{ color: 'var(--color-primary)' }}>
-            <GraduationCap size={24} /> Classroom
+            <GraduationCap size={24} /> STEM Vision
           </div>
           <div className="eyebrow mb-2">Welcome Back</div>
-          <h2 className="font-display text-3xl font-semibold mb-1.5">Sign in to <span className="accent-word">Classroom</span></h2>
+          <h2 className="font-display text-3xl font-semibold mb-1.5">Sign in to <span className="accent-word">STEM Vision</span></h2>
           <p className="muted text-sm mb-8">Access your dashboard to continue.</p>
 
           {timedOut && (

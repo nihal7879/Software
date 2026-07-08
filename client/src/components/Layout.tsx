@@ -29,20 +29,15 @@ const NAV: Record<string, Item[]> = {
   ],
   student: [
     { to: '/student', label: 'Dashboard', icon: LayoutDashboard },
-    // { to: '/student/tracker', label: 'Tracker', icon: LineChart },
-    { to: '/student/lectures', label: 'Lecture Info', icon: CalendarDays },
-    // { to: '/student/hours', label: 'Hours Statement', icon: Clock },
-    { to: '/student/fees', label: 'Fees Info', icon: Wallet },
+    // Lecture calendar + hours summary now live on the dashboard.
+    // Change-password + personal info now live under Profile (Settings removed).
     { to: '/student/profile', label: 'Profile', icon: User },
-    { to: '/student/settings', label: 'Settings', icon: Settings },
   ],
   parent: [
     { to: '/parent', label: 'Dashboard', icon: LayoutDashboard },
-    // { to: '/parent/tracker', label: 'Tracker', icon: LineChart },
-    { to: '/parent/lectures', label: 'Lecture Info', icon: CalendarDays },
-    // { to: '/parent/hours', label: 'Hours Statement', icon: Clock },
-    { to: '/parent/fees', label: 'Fees Info', icon: Wallet },
-    { to: '/parent/settings', label: 'Settings', icon: Settings },
+    // Lecture calendar + hours summary now live on the dashboard.
+    { to: '/parent/hours', label: 'Fees Info', icon: Wallet },
+    { to: '/parent/profile', label: 'Profile', icon: User },
   ],
 };
 
@@ -154,7 +149,7 @@ export function Layout({ children }: { children: ReactNode }) {
         <header className="md:hidden flex items-center justify-between p-4 border-b sticky top-0 z-30" style={{ background: 'var(--color-card)', borderColor: 'var(--color-border)' }}>
           <button onClick={() => setOpen(true)} aria-label="Open menu"><Menu /></button>
           <span className="font-display font-bold flex items-center gap-1.5" style={{ color: 'var(--color-primary)' }}>
-            <GraduationCap size={18} /> Classroom
+            <GraduationCap size={18} /> STEM Vision
           </span>
           <button onClick={toggle}>{dark ? <Sun size={20} /> : <Moon size={20} />}</button>
         </header>

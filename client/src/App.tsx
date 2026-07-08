@@ -22,6 +22,7 @@ import LectureHistory from './pages/student/LectureHistory';
 import StudentFees from './pages/student/StudentFees';
 import StudentProfile from './pages/student/StudentProfile';
 import ParentDashboard from './pages/parent/ParentDashboard';
+import ParentProfile from './pages/parent/ParentProfile';
 import Tracker from './pages/shared/Tracker';
 import Settings from './pages/shared/Settings';
 
@@ -80,8 +81,7 @@ export default function App() {
       <Route path="/parent/tracker" element={<Protected roles={['parent']}><Tracker /></Protected>} />
       <Route path="/parent/lectures" element={<Protected roles={['parent']}><LectureHistory /></Protected>} />
       <Route path="/parent/hours" element={<Protected roles={['parent']}><HoursStatement /></Protected>} />
-      <Route path="/parent/fees" element={<Protected roles={['parent']}><StudentFees /></Protected>} />
-      <Route path="/parent/settings" element={<Protected roles={['parent']}><Settings /></Protected>} />
+      <Route path="/parent/profile" element={<Protected roles={['parent']}><ParentProfile /></Protected>} />
 
       <Route path="*" element={<Navigate to={user ? HOME[user.role] : '/login'} replace />} />
     </Routes>

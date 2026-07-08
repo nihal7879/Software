@@ -3,6 +3,9 @@ import { api, ensureLocation } from '../api/client';
 
 // Auto-logout after this many minutes of no user interaction.
 const IDLE_LIMIT_MS = 20 * 60 * 1000;
+// localStorage key holding the timestamp (ms) of the last user activity.
+// Persisted so idle time is honoured even across full browser close/reopen.
+const LAST_ACTIVITY_KEY = 'lastActivity';
 
 export type Role = 'student' | 'parent' | 'faculty' | 'admin';
 export interface AuthUser {
@@ -32,6 +35,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const token = localStorage.getItem('token');
     if (!token) { setLoading(false); return; }
+
+    // If the browser was closed (or the tab left idle) for longer than the idle
+    // limit, treat it as an expired session — don't silently log the user back in.
+    const last = Number(localStorage.getItem(LAST_ACTIVITY_KEY));
+    if (last && Date.now() - last > IDLE_LIMIT_MS) {
+      localStorage.removeItem('token');
+      localStorage.removeItem(LAST_ACTIVITY_KEY);
+      setLoading(false);
+      return;
+    }
+
     api
       .get('/auth/me')
       .then((r) => setUser(r.data))
@@ -57,6 +71,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     ensureLocation();
     try { await api.post('/auth/logout'); } catch { /* token may be expired — ignore */ }
     localStorage.removeItem('token');
+    localStorage.removeItem(LAST_ACTIVITY_KEY);
     setUser(null);
     location.href = '/login';
   };
@@ -67,10 +82,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!user) return;
     const signOutIdle = () => {
       localStorage.removeItem('token');
+      localStorage.removeItem(LAST_ACTIVITY_KEY);
       setUser(null);
       location.href = '/login?reason=timeout';
     };
     const reset = () => {
+      localStorage.setItem(LAST_ACTIVITY_KEY, String(Date.now()));
       if (idleTimer.current) clearTimeout(idleTimer.current);
       idleTimer.current = setTimeout(signOutIdle, IDLE_LIMIT_MS);
     };
