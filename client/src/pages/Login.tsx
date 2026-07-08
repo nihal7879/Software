@@ -39,7 +39,7 @@ export default function Login() {
             <span className="grid place-items-center w-11 h-11 rounded-xl" style={{ background: '#f97316' }}>
               <GraduationCap size={24} />
             </span>
-            Class<span style={{ color: '#fdba74' }}>room</span>
+            STEM<span style={{ color: '#fdba74' }}>Vision</span>
           </div>
           <h1 className="font-display text-[2.75rem] font-semibold leading-[1.1] mb-5">
             Empowering Education<br />through <span style={{ color: '#fdba74' }}>Innovation</span>
