@@ -66,7 +66,7 @@ export function Layout({ children }: { children: ReactNode }) {
         </button>
         {!mini && (
           <button onClick={goHome} className="flex-1 min-w-0 text-left" title="Go to dashboard">
-            <div className="font-display font-bold leading-tight truncate">Class<span style={{ color: 'var(--color-primary)' }}>room</span></div>
+            <div className="font-display font-bold leading-tight truncate">STEM <span style={{ color: 'var(--color-primary)' }}>Vision</span></div>
             <div className="text-[10px] uppercase tracking-[0.15em] muted truncate">Institute Management</div>
           </button>
         )}
