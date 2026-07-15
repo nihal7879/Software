@@ -19,7 +19,7 @@ export default function AdminDashboard() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold">Management Dashboard</h1>
+      <h1 className="text-2xl font-bold">Dashboard</h1>
 
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
         <KpiCard label="Students" value={o.students.total} sub={`${o.students.active} active`} accent="blue" />

@@ -17,16 +17,15 @@ export default function FacultyStudents() {
 
       <Section title={`${(mine.data || []).length} students`}>
         {mine.isLoading ? <Spinner /> : (
-          <Table head={['Form', 'Student', 'Grade', 'Subjects', 'Parent Mobile', { label: 'Hours Left', align: 'right' }, 'Status', '']}>
+          <Table head={['Form', 'Student', 'Grade', 'Subjects', { label: 'Hours Left', align: 'right' }, 'Status', '']}>
             {(mine.data || []).length === 0 ? (
-              <tr><td className="table-td muted" colSpan={8}>No students assigned to you yet. Your admin will assign students to you.</td></tr>
+              <tr><td className="table-td muted" colSpan={7}>No students assigned to you yet. Your admin will assign students to you.</td></tr>
             ) : mine.data.map((s: any) => (
               <tr key={s.id}>
                 <td className="table-td font-mono">{s.form_no}</td>
                 <td className="table-td font-medium">{s.full_name}</td>
                 <td className="table-td">{s.year_grade || '—'}</td>
                 <td className="table-td">{s.subjects || '—'}</td>
-                <td className="table-td whitespace-nowrap">{s.parent_mobile || '—'}</td>
                 <td className="table-td text-right tabular-nums">{s.hours_left != null ? <HoursValue value={s.hours_left} /> : '—'}</td>
                 <td className="table-td"><StatusBadge status={s.status} /></td>
                 <td className="table-td"><Link to={`/faculty/student/${s.id}`} className="btn-ghost !py-1 !px-2.5 text-xs whitespace-nowrap">View →</Link></td>

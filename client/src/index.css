@@ -133,11 +133,11 @@ h3 { font-size: 1.05rem; line-height: 1.35; font-weight: 500; }
   background: var(--color-accent);
 }
 
-::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-thumb { background: var(--color-border); border-radius: 999px; }
 
 /* sidebar scrollbar (over the navy gradient) */
-aside ::-webkit-scrollbar { width: 8px; }
+aside ::-webkit-scrollbar { width: 5px; }
 aside ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.2); }
 
 /* mobile drawer animations — slides in from the left */

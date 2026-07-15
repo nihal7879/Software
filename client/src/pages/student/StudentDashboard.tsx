@@ -38,7 +38,7 @@ export default function StudentDashboard() {
           <div className="card w-full max-w-md p-6 text-center" onClick={(e) => e.stopPropagation()}>
             <div className="text-4xl mb-2">👋</div>
             <h2 className="font-display text-xl font-extrabold mb-1">Complete your profile</h2>
-            <p className="muted text-sm mb-5">Welcome! Please fill in your registration details so Management has your full record.</p>
+            <p className="muted text-sm mb-5">Welcome! Please fill in your registration details so the institute has your full record.</p>
             <div className="flex gap-2">
               <button className="btn-primary flex-1" onClick={goProfile}>Complete now →</button>
               <button className="btn-ghost" onClick={() => setShowPopup(false)}>Later</button>

@@ -46,7 +46,7 @@ export default function StudentProfile() {
     <div className="space-y-5">
       <div>
         <h1 className="text-2xl font-bold">Profile</h1>
-        <p className="muted text-sm">Manage your personal information and account security.</p>
+        <p className="muted text-sm">Your personal information and account security.</p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-[300px_1fr] gap-5 items-start">
@@ -89,14 +89,14 @@ export default function StudentProfile() {
             <div className="card p-6">
               <div className="mb-4">
                 <h2 className="font-bold text-lg">Registration / My Details</h2>
-                <p className="muted text-sm">Fill in your details and submit — it goes to Management.</p>
+                <p className="muted text-sm">Fill in your details and submit — it goes to the institute.</p>
               </div>
               {!s.profile_completed && (
                 <div className="card p-3 mb-4 text-sm font-medium" style={{ borderColor: 'var(--color-accent)' }}>
                   ⚠️ Your profile is incomplete. Please complete the form below.
                 </div>
               )}
-              {saved && <div className="card p-3 mb-4 text-sm text-emerald-600">✅ Saved & submitted to Management.</div>}
+              {saved && <div className="card p-3 mb-4 text-sm text-emerald-600">✅ Saved & submitted to the institute.</div>}
               <StudentRegistrationForm
                 studentId={id}
                 initial={s}

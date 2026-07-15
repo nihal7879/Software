@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { ChevronLeft, ChevronRight, CalendarDays, Clock, BookOpen } from 'lucide-react';
-import { hrs } from '../api/client';
+import { hrs, fmtDate } from '../api/client';
 
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
@@ -151,7 +151,7 @@ export default function LectureCalendar({ lectures }: { lectures: any[] }) {
                   </div>
 
                   <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2 pt-2 border-t text-[11px] muted" style={{ borderColor: 'var(--color-border)' }}>
-                    {!selectedDay && <span>{r.session_date}</span>}
+                    {!selectedDay && <span>{fmtDate(r.session_date)}</span>}
                     {(r.time_in || r.time_out) && <span>{r.time_in || '—'} – {r.time_out || '—'}</span>}
                     {r.venue && <span>📍 {r.venue}</span>}
                     <span className={`px-1.5 py-0.5 rounded-full font-semibold ${

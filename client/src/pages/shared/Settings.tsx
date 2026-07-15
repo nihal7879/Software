@@ -71,7 +71,7 @@ export default function Settings() {
     <div className="space-y-5">
       <div>
         <h1 className="text-2xl font-bold">Profile Settings</h1>
-        <p className="muted text-sm">Manage your personal information and account security.</p>
+        <p className="muted text-sm">Your personal information and account security.</p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-[300px_1fr] gap-5 items-start">
@@ -87,7 +87,6 @@ export default function Settings() {
           <div className="w-full border-t mt-4 pt-4 space-y-2 text-sm text-left" style={{ borderColor: 'var(--color-border)' }}>
             <div className="flex items-center gap-2 muted"><Mail size={15} /> <span className="truncate">{email || 'Not set'}</span></div>
             <div className="flex items-center gap-2 muted"><Phone size={15} /> <span>{mobile || 'Not set'}</span></div>
-            <div className="flex items-center gap-2 muted"><Shield size={15} /> <span>{roleLabel}</span></div>
           </div>
         </div>
 

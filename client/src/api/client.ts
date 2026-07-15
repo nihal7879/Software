@@ -70,6 +70,16 @@ export const num = (n: number | string | null | undefined) =>
 export const hrs = (n: number | string | null | undefined) =>
   `${Number(n ?? 0).toLocaleString('en-AE', { maximumFractionDigits: 2 })} h`;
 
+// Format a date as dd-mm-yy. Accepts a 'YYYY-MM-DD' string or Date; returns the
+// input unchanged if it can't be parsed.
+export const fmtDate = (d: string | Date | null | undefined) => {
+  if (!d) return '—';
+  const s = String(d);
+  const m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (m) return `${m[3]}-${m[2]}-${m[1].slice(2)}`;
+  return s;
+};
+
 // Student dropdown option: main line = "Form — Name", sub line = Grade · Parent
 // (mobile). The parent + mobile disambiguate two same-name students in the same
 // class/school. Used as { value, label, sub } for the themed Select.

@@ -126,7 +126,7 @@ export default function ParentProfile() {
                 <h2 className="font-bold text-lg">Student Profile</h2>
                 <p className="muted text-sm">Your child's registered details{s.full_name ? ` — ${s.full_name}` : ''}</p>
               </div>
-              {saved && <div className="card p-3 mb-4 text-sm text-emerald-600">✅ Saved & submitted to Management.</div>}
+              {saved && <div className="card p-3 mb-4 text-sm text-emerald-600">✅ Saved & submitted to the institute.</div>}
               <StudentRegistrationForm
                 studentId={id}
                 initial={s}

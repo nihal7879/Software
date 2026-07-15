@@ -11,7 +11,7 @@ type Role = 'student' | 'parent' | 'teacher';
 const ROLES: { key: Role; label: string; icon: string; desc: string }[] = [
   { key: 'student', label: 'Student', icon: '🎓', desc: 'Track my hours & lectures' },
   { key: 'parent', label: 'Parent', icon: '👪', desc: "Follow my child's progress" },
-  { key: 'teacher', label: 'Teacher', icon: '📚', desc: 'Manage my students & lectures' },
+  { key: 'teacher', label: 'Teacher', icon: '📚', desc: 'My students & lectures' },
 ];
 const HOME: Record<Role, string> = { student: '/student', parent: '/parent', teacher: '/faculty' };
 

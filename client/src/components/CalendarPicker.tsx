@@ -1,5 +1,6 @@
 import { RefObject, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { CalendarDays, ChevronDown } from 'lucide-react';
+import { fmtDate } from '../api/client';
 
 // Reusable single-date calendar popover — the same look used in the student
 // Lecture History. Pass value as 'YYYY-MM-DD' ('' = none). `highlight` is an
@@ -71,7 +72,7 @@ export function CalendarPicker({
     <div className={`relative inline-block ${className}`}>
       <button ref={btnRef} type="button" className="btn-ghost flex items-center gap-2 whitespace-nowrap" onClick={() => setOpen((o) => !o)}>
         <CalendarDays size={16} className="muted shrink-0" />
-        <span className="font-medium whitespace-nowrap">{value || placeholder}</span>
+        <span className="font-medium whitespace-nowrap">{value ? fmtDate(value) : placeholder}</span>
         <ChevronDown size={15} className="muted shrink-0" />
       </button>
 
@@ -169,7 +170,7 @@ export function CalendarRangePicker({
     setOpen(false);
   };
 
-  const label = from ? (to ? `${from} → ${to}` : `${from} → …`) : placeholder;
+  const label = from ? (to ? `${fmtDate(from)} → ${fmtDate(to)}` : `${fmtDate(from)} → …`) : placeholder;
 
   return (
     <div className={`relative inline-block ${className}`}>

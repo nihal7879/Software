@@ -67,7 +67,7 @@ export function Layout({ children }: { children: ReactNode }) {
         {!mini && (
           <button onClick={goHome} className="flex-1 min-w-0 text-left" title="Go to dashboard">
             <div className="font-display font-bold leading-tight truncate">STEM <span style={{ color: 'var(--color-primary)' }}>Vision</span></div>
-            <div className="text-[10px] uppercase tracking-[0.15em] muted truncate">Institute Management</div>
+            <div className="text-[10px] uppercase tracking-[0.15em] muted truncate">Institute</div>
           </button>
         )}
         {!mini && (
@@ -160,6 +160,10 @@ export function Layout({ children }: { children: ReactNode }) {
     </div>
   );
 }
+
+
+
+
 
 
 

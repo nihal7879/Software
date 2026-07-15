@@ -15,4 +15,4 @@ export function MonthSelector({ value, onChange }: { value: string; onChange: (m
 }
 
 export const roleLabel = (role: string) =>
-  role === 'admin' ? 'Management' : role.charAt(0).toUpperCase() + role.slice(1);
+  role === 'admin' ? 'Admin' : role.charAt(0).toUpperCase() + role.slice(1);

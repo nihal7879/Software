@@ -23,7 +23,7 @@ export function StudentRegistrationForm({
   studentId,
   initial,
   onSaved,
-  submitLabel = 'Save & Submit to Management',
+  submitLabel = 'Save & Submit to the Institute',
 }: {
   studentId: number;
   initial?: any;

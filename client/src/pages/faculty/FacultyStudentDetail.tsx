@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { api, hrs } from '../../api/client';
+import { api, hrs, fmtDate } from '../../api/client';
 import { Section, StatusBadge, Table, Spinner } from '../../components/ui';
 import { DateRangePicker } from '../../components/DateRangePicker';
 
@@ -31,9 +31,7 @@ export default function FacultyStudentDetail() {
         <span className="muted text-sm">Form {s.form_no} · {s.year_grade || '—'} · {s.exam_board || '—'}</span>
       </div>
 
-      <DateRangePicker from={from} to={to} onFrom={setFrom} onTo={setTo}>
-        <div className="muted text-sm pb-2">Parent mobile: <b>{s.parent_mobile || '—'}</b></div>
-      </DateRangePicker>
+      <DateRangePicker from={from} to={to} onFrom={setFrom} onTo={setTo} />
 
       <Section title="Lecture Log — with you">
         <Table head={['Date', 'Subject', 'Time In', 'Time Out', { label: 'No. of Hours', align: 'right' }, 'Topic', 'Subtopic', 'Remark', 'Venue']}>
@@ -43,7 +41,7 @@ export default function FacultyStudentDetail() {
             <>
               {data.lectures.map((l: any, i: number) => (
                 <tr key={i}>
-                  <td className="table-td whitespace-nowrap">{l.session_date}</td>
+                  <td className="table-td whitespace-nowrap">{fmtDate(l.session_date)}</td>
                   <td className="table-td">{l.subject_name || '—'}</td>
                   <td className="table-td">{l.time_in || '—'}</td>
                   <td className="table-td">{l.time_out || '—'}</td>

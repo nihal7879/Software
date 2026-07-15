@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
-import { api, rs, hrs, num } from '../../api/client';
+import { api, rs, hrs, num, fmtDate } from '../../api/client';
 import { KpiCard, Section, StatusBadge, Table, HoursValue, Spinner } from '../../components/ui';
 import { toast } from '../../components/Toast';
 import { DateRangePicker } from '../../components/DateRangePicker';
@@ -184,7 +184,7 @@ export default function StudentReport() {
             <tr><td className="table-td muted" colSpan={11}>No lectures{lecTeacher ? ' for this teacher' : ' in this range'}.</td></tr>
           ) : visible.map((l: any, i: number) => (
             <tr key={i}>
-              <td className="table-td whitespace-nowrap">{l.session_date}</td>
+              <td className="table-td whitespace-nowrap">{fmtDate(l.session_date)}</td>
               <td className="table-td">{l.month}</td>
               <td className="table-td">{l.teacher_name || '—'}</td>
               <td className="table-td">{l.subject_name || '—'}</td>

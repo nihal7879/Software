@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '../../auth/AuthContext';
-import { api, hrs } from '../../api/client';
+import { api, hrs, fmtDate } from '../../api/client';
 import { CalendarDays, ChevronDown } from 'lucide-react';
 import { Section, Table, Spinner, KpiCard } from '../../components/ui';
 
@@ -127,7 +127,7 @@ export default function LectureHistory() {
           <Table head={['Date', 'Subject', 'Topic', 'Subtopic', 'Remark', 'Time In', 'Time Out', { label: 'Duration', align: 'right' }, 'Present', 'Venue', 'Link']}>
             {shown.map((r: any) => (
               <tr key={r.id}>
-                <td className="table-td whitespace-nowrap">{r.session_date}</td>
+                <td className="table-td whitespace-nowrap">{fmtDate(r.session_date)}</td>
                 <td className="table-td">{r.subject_name || '—'}</td>
                 <td className="table-td">{r.topic || '—'}</td>
                 <td className="table-td">{r.subtopic || '—'}</td>

@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '../../auth/AuthContext';
-import { api, rs, hrs, num } from '../../api/client';
+import { api, rs, hrs, num, fmtDate } from '../../api/client';
 import { KpiCard, Section, StatusBadge, Table, HoursValue, Spinner } from '../../components/ui';
 import { DateRangePicker } from '../../components/DateRangePicker';
 
@@ -129,7 +129,7 @@ export default function Tracker() {
             <tr><td className="table-td muted" colSpan={11}>No lectures in this range.</td></tr>
           ) : lecs.map((r: any) => (
             <tr key={r.id}>
-              <td className="table-td whitespace-nowrap">{r.session_date}</td>
+              <td className="table-td whitespace-nowrap">{fmtDate(r.session_date)}</td>
               <td className="table-td whitespace-nowrap">{fmtMonth(r.month)}</td>
               <td className="table-td font-mono">{r.form_no}</td>
               <td className="table-td">{r.student_name}</td>
