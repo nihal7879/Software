@@ -136,7 +136,7 @@ export default function HoursStatement() {
                 </div>
                 <div className="rounded-xl p-3" style={{ background: 'var(--color-card-alt)' }}>
                   <div className="text-lg font-bold">{hrs(used)}</div>
-                  <div className="text-[11px] muted">Used</div>
+                  <div className="text-[11px] muted">Utilised</div>
                 </div>
                 <div className="rounded-xl p-3" style={{ background: 'var(--color-card-alt)' }}>
                   <div className="text-lg font-bold" style={{ color: lowOnHours ? 'var(--color-accent)' : 'var(--color-primary)' }}><HoursValue value={left} /></div>
@@ -144,7 +144,7 @@ export default function HoursStatement() {
                 </div>
               </div>
               <div>
-                <div className="flex justify-between text-xs muted mb-1"><span>{hrs(used)} used</span><span>{Math.round(usedPct)}%</span></div>
+                <div className="flex justify-between text-xs muted mb-1"><span>{hrs(used)} utilised</span><span>{Math.round(usedPct)}%</span></div>
                 <div className="h-2.5 rounded-full overflow-hidden" style={{ background: 'var(--color-card-alt)' }}>
                   <div className="h-full rounded-full transition-all" style={{ width: `${usedPct}%`, background: lowOnHours ? 'var(--color-accent)' : 'var(--color-primary)' }} />
                 </div>
@@ -196,7 +196,7 @@ export default function HoursStatement() {
         ) : visibleRows.length === 0 ? (
           <p className="muted text-sm">No entries in this date range.</p>
         ) : (
-          <Table head={['Date', 'Month', 'Detail', 'In', 'Out', { label: 'Fees (AED)', align: 'right' }, { label: 'Hours Credited', align: 'right' }, { label: 'Discount', align: 'right' }, { label: 'Adjusted', align: 'right' }, { label: 'Total Credited', align: 'right' }, { label: 'Used', align: 'right' }, { label: 'Hours Remaining', align: 'right' }]}>
+          <Table head={['Date', 'Month', 'Detail', 'In', 'Out', { label: 'Fees (AED)', align: 'right' }, { label: 'Hours Credited', align: 'right' }, { label: 'Discounted', align: 'right' }, { label: 'Adjusted', align: 'right' }, { label: 'Total Credited', align: 'right' }, { label: 'Utilised', align: 'right' }, { label: 'Hours Remaining', align: 'right' }]}>
             {visibleRows.map((r: any, i: number) => (
               <tr key={i} style={r.kind !== 'lecture' ? { background: 'var(--color-card-alt)' } : undefined}>
                 <td className="table-td whitespace-nowrap">{r.date || '—'}</td>

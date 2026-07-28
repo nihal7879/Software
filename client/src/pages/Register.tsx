@@ -124,7 +124,7 @@ export default function Register() {
               <div className="grid grid-cols-2 gap-3">
                 <Field name="name" label="Your Name" required />
                 <div>
-                  <label className="text-sm font-semibold">Relationship</label>
+                  <label className="text-sm font-semibold">Relationship to the child</label>
                   <input type="hidden" {...register('relationship')} />
                   <div className="mt-1">
                     <Select

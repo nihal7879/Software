@@ -117,7 +117,6 @@ export default function ParentProfile() {
                 <Field icon={<Mail size={16} />} label="Email" value={parentEmail} />
                 <Field icon={<Phone size={16} />} label="Mobile" value={parentMobile} />
                 <Field icon={<Shield size={16} />} label="Username" value={username} />
-                <Field icon={<Shield size={16} />} label="Role" value="Parent" />
               </div>
             </div>
           ) : tab === 'student' ? (

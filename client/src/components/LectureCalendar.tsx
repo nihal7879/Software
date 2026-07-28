@@ -142,12 +142,11 @@ export default function LectureCalendar({ lectures }: { lectures: any[] }) {
                     </span>
                   </div>
 
-                  {/* Subject / topic / subtopic / remark — always shown so the detail is visible */}
+                  {/* Subject / topic / subtopic — always shown so the detail is visible */}
                   <div className="mt-2 space-y-1 text-xs">
                     <div className="flex gap-1.5"><span className="muted shrink-0 w-16">Subject</span><span className="font-medium min-w-0">{r.subject_name || '—'}</span></div>
                     <div className="flex gap-1.5"><span className="muted shrink-0 w-16">Topic</span><span className="font-medium min-w-0">{r.topic || '—'}</span></div>
                     <div className="flex gap-1.5"><span className="muted shrink-0 w-16">Subtopic</span><span className="font-medium min-w-0">{r.subtopic || '—'}</span></div>
-                    <div className="flex gap-1.5"><span className="muted shrink-0 w-16">Remark</span><span className="min-w-0">{r.remark || '—'}</span></div>
                   </div>
 
                   <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2 pt-2 border-t text-[11px] muted" style={{ borderColor: 'var(--color-border)' }}>

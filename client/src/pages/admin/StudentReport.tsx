@@ -83,7 +83,7 @@ export default function StudentReport() {
         <Link to="/admin/students" className="btn-ghost !py-1.5 !px-3 text-sm">← Students</Link>
         <h1 className="text-2xl font-bold">{s.full_name}</h1>
         <StatusBadge status={s.status} />
-        <span className="muted text-sm">Form {s.form_no} · {s.year_grade} · {s.exam_board}</span>
+        <span className="muted text-sm">Form {s.form_no} · {s.year_grade} · {s.exam_board} · {s.school_name || '—'}</span>
         <button className="btn-ghost !py-1.5 !px-3 text-sm ml-auto" onClick={() => setEditProfile(true)}>
           {s.profile_completed ? 'Edit Profile' : 'Complete Profile'}
         </button>

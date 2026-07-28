@@ -43,14 +43,15 @@ export default function FacultyDashboard() {
         <Section title="My Students" action={<Link to="/faculty/students" className="btn-ghost !py-1.5 !px-3 text-sm">View All</Link>}>
           {students.isLoading ? <Spinner /> : (
             <div className="max-h-[420px] overflow-y-auto">
-              <Table head={['Form', 'Student', 'Grade', 'Subjects', { label: 'Hours Left', align: 'right' }, 'Status']}>
+              <Table head={['Form', 'Student', 'Grade', 'School', 'Subjects', { label: 'Hours Left', align: 'right' }, 'Status']}>
                 {(students.data || []).length === 0 ? (
-                  <tr><td className="table-td muted" colSpan={6}>No students assigned to you yet.</td></tr>
+                  <tr><td className="table-td muted" colSpan={7}>No students assigned to you yet.</td></tr>
                 ) : students.data.map((s: any) => (
                   <tr key={s.id}>
                     <td className="table-td font-mono">{s.form_no}</td>
                     <td className="table-td font-medium">{s.full_name}</td>
                     <td className="table-td">{s.year_grade || '—'}</td>
+                    <td className="table-td">{s.school_name || '—'}</td>
                     <td className="table-td">{s.subjects || '—'}</td>
                     <td className="table-td text-right tabular-nums">{s.hours_left != null ? <HoursValue value={s.hours_left} /> : '—'}</td>
                     <td className="table-td"><StatusBadge status={s.status} /></td>

@@ -28,7 +28,7 @@ export default function FacultyStudentDetail() {
         <Link to="/faculty/students" className="btn-ghost !py-1.5 !px-3 text-sm">← My Students</Link>
         <h1 className="text-2xl font-bold">{s.full_name}</h1>
         <StatusBadge status={s.status} />
-        <span className="muted text-sm">Form {s.form_no} · {s.year_grade || '—'} · {s.exam_board || '—'}</span>
+        <span className="muted text-sm">Form {s.form_no} · {s.year_grade || '—'} · {s.exam_board || '—'} · {s.school_name || '—'}</span>
       </div>
 
       <DateRangePicker from={from} to={to} onFrom={setFrom} onTo={setTo} />

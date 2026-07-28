@@ -142,7 +142,7 @@ export function StudentRegistrationForm({
           <F name="father_name" label="Father Name" required />
           <F name="mother_name" label="Mother Name" required />
           <div>
-            <label className="text-xs font-semibold muted block mb-1">Relationship (who pays) *</label>
+            <label className="text-xs font-semibold muted block mb-1">Relationship to the child *</label>
             <input type="hidden" {...register('relationship', { required: true })} />
             <Select value={watch('relationship') || ''} onChange={(v) => setValue('relationship', v, { shouldValidate: true })} options={['Father', 'Mother', 'Guardian'].map((v) => ({ value: v, label: v }))} placeholder="Select…" />
             {errors.relationship && <span className="text-xs text-red-500">Required</span>}

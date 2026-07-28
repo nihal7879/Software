@@ -79,7 +79,7 @@ router.get(
     const tid = await myTeacherId(req);
     if (!tid) return res.json({ data: [] });
     const rows = await query<any>(
-      `SELECT s.id, s.form_no, s.full_name, s.year_grade, s.status, s.parent_mobile,
+      `SELECT s.id, s.form_no, s.full_name, s.year_grade, s.school_name, s.status, s.parent_mobile,
               GROUP_CONCAT(DISTINCT sub.name SEPARATOR ', ') AS subjects,
               ${CREDITED_EXPR} AS total_hours_credited,
               ${CONSUMED_EXPR} AS total_hours_consumed,
@@ -88,7 +88,7 @@ router.get(
        JOIN students s ON s.id = m.student_id
        JOIN subjects sub ON sub.id = m.subject_id
        WHERE m.teacher_id = ?
-       GROUP BY s.id, s.form_no, s.full_name, s.year_grade, s.status, s.parent_mobile
+       GROUP BY s.id, s.form_no, s.full_name, s.year_grade, s.school_name, s.status, s.parent_mobile
        ORDER BY s.full_name`,
       [tid]
     );
