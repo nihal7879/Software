@@ -189,7 +189,8 @@ router.post(
         );
         await conn.query(
           `INSERT INTO parents (student_id, user_id, name, mobile, relationship) VALUES (?,?,?,?,?)`,
-          [child.id, u.insertId, parentName, b.mobile || null, b.relationship || 'Father']
+          // Null when the parent didn't pick one — better unknown than assumed father.
+          [child.id, u.insertId, parentName, b.mobile || null, b.relationship || null]
         );
         await conn.commit();
         await audit(u.insertId, 'REGISTER', 'user', u.insertId, null, { role: 'parent', email: b.email, child_id: child.id });

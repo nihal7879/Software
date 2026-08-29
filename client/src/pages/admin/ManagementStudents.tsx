@@ -41,17 +41,27 @@ export default function ManagementStudents() {
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [drawer, setDrawer] = useState(false);
+  // '' = all. Trial students are people on a free trial, not yet enrolled.
+  const [typeFilter, setTypeFilter] = useState<'' | 'Trial' | 'Enrolled'>('');
   // After step 1 (create) we keep the new student id to fill the full profile form (step 2).
   const [newStudentId, setNewStudentId] = useState<number | null>(null);
 
   const { data, isLoading } = useQuery({
-    queryKey: ['mgmt-master', search, page],
-    queryFn: () => api.get('/management/master', { params: { search, page, limit: 20 } }).then((r) => r.data),
+    queryKey: ['mgmt-master', search, page, typeFilter],
+    queryFn: () => api.get('/management/master', {
+      params: { search, page, limit: 20, ...(typeFilter ? { student_type: typeFilter } : {}) },
+    }).then((r) => r.data),
   });
 
-  const { register, handleSubmit, reset } = useForm();
+  const { register, handleSubmit, reset, watch } = useForm();
+  const isTrial = watch('student_type') === 'Trial';
   const create = useMutation({
-    mutationFn: (b: any) => api.post('/students', { ...b, age: b.age ? Number(b.age) : null, fees_received: b.fees_received ? Number(b.fees_received) : 0 }),
+    mutationFn: (b: any) => api.post('/students', {
+      ...b,
+      age: b.age ? Number(b.age) : null,
+      fees_received: b.fees_received ? Number(b.fees_received) : 0,
+      trial_hours: b.student_type === 'Trial' && b.trial_hours ? Number(b.trial_hours) : undefined,
+    }),
     onSuccess: (res) => { qc.invalidateQueries({ queryKey: ['mgmt-master'] }); setNewStudentId(res.data.id); },
   });
 
@@ -62,6 +72,16 @@ export default function ManagementStudents() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['mgmt-master'] }),
   });
   const [confirm, setConfirm] = useState<{ id: number; name: string; next: 'Active' | 'Inactive' } | null>(null);
+
+  // Converting a trial keeps the same student record, so their trial lectures,
+  // login and parent stay attached. One-way.
+  const convert = useMutation({
+    mutationFn: (v: { id: number; package_hours?: number }) =>
+      api.post(`/students/${v.id}/convert`, v.package_hours ? { package_hours: v.package_hours } : {}),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['mgmt-master'] }),
+  });
+  const [converting, setConverting] = useState<{ id: number; name: string } | null>(null);
+  const [convertHours, setConvertHours] = useState('');
 
   const rows = data?.data || [];
   const total = data?.total || 0;
@@ -77,8 +97,22 @@ export default function ManagementStudents() {
         <button className="btn-primary" onClick={() => setDrawer(true)}>+ Add Student</button>
       </div>
 
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap gap-2 items-center">
         <input className="input max-w-xs" placeholder="Search name / form no…" value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} />
+        <div className="flex gap-1 rounded-lg p-0.5" style={{ background: 'var(--color-card-alt)' }}>
+          {([['', 'All'], ['Trial', 'Trial'], ['Enrolled', 'Enrolled']] as const).map(([v, label]) => (
+            <button
+              key={v}
+              type="button"
+              onClick={() => { setTypeFilter(v); setPage(1); }}
+              className={`text-xs px-3 py-1.5 rounded-md transition-colors ${
+                typeFilter === v ? 'bg-[var(--color-card)] font-semibold shadow-sm' : 'muted hover:text-[var(--color-primary)]'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
       </div>
 
       <Section title={`${total} students`}>
@@ -91,7 +125,12 @@ export default function ManagementStudents() {
               <tr key={r.id}>
                 {/* Student — name + form + grade */}
                 <td className="table-td min-w-[180px]">
-                  <div className="font-semibold leading-tight">{r.full_name || '—'}</div>
+                  <div className="font-semibold leading-tight flex items-center gap-1.5">
+                    <span>{r.full_name || '—'}</span>
+                    {r.student_type === 'Trial' && (
+                      <span className="text-[10px] font-bold tracking-wide px-1.5 py-0.5 rounded bg-violet-500/15 text-violet-600">TRIAL</span>
+                    )}
+                  </div>
                   <div className="text-xs muted mt-0.5">
                     <span className="font-mono">Form {r.form_no}</span>
                     {r.year_grade ? <> · {r.year_grade}</> : ''}
@@ -126,6 +165,14 @@ export default function ManagementStudents() {
                 <td className="table-td">
                   <div className="flex gap-1.5 whitespace-nowrap">
                     <Link to={`/admin/student/${r.id}`} className="btn-ghost !py-1 !px-2.5 text-xs">Report →</Link>
+                    {r.student_type === 'Trial' && (
+                      <button
+                        className="!py-1 !px-2.5 text-xs rounded-lg border border-violet-500/30 text-violet-600 hover:bg-violet-500/10 transition-colors"
+                        onClick={() => { setConvertHours(''); setConverting({ id: r.id, name: r.full_name }); }}
+                      >
+                        Enroll
+                      </button>
+                    )}
                     {r.status === 'Inactive' ? (
                       <button
                         className="!py-1 !px-2.5 text-xs rounded-lg border border-emerald-500/30 text-emerald-600 hover:bg-emerald-500/10 transition-colors"
@@ -189,12 +236,30 @@ export default function ManagementStudents() {
                     </div>
                   </div>
 
-                  <div>
-                    <label className="text-xs font-medium muted">Status</label>
-                    <select className="input mt-1" {...register('status')} defaultValue="Active">
-                      <option>Active</option><option>Inactive</option>
-                    </select>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-xs font-medium muted">Status</label>
+                      <select className="input mt-1" {...register('status')} defaultValue="Active">
+                        <option>Active</option><option>Inactive</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium muted">Student type</label>
+                      <select className="input mt-1" {...register('student_type')} defaultValue="Enrolled">
+                        <option>Enrolled</option><option>Trial</option>
+                      </select>
+                    </div>
                   </div>
+                  {isTrial && (
+                    <div className="rounded-lg p-3" style={{ background: 'var(--color-card-alt)' }}>
+                      <label className="text-xs font-medium muted">Free trial hours</label>
+                      <input className="input mt-1" type="number" step="0.5" min="0.5" placeholder="e.g. 2" {...register('trial_hours')} />
+                      <p className="text-xs muted mt-1.5">
+                        Added as a zero-cost package so the hours count down normally.
+                        You can enroll them later without losing any of this.
+                      </p>
+                    </div>
+                  )}
                   {create.isError && (
                     <div className="text-sm text-red-500">
                       {(create.error as any)?.response?.data?.error || 'Failed to create — the username/email may already be in use.'}
@@ -221,6 +286,42 @@ export default function ManagementStudents() {
                 />
               </>
             )}
+          </div>
+        </div>
+      )}
+
+      {converting && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={() => setConverting(null)}>
+          <div className="w-full max-w-sm rounded-xl p-5" style={{ background: 'var(--color-card)' }} onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-bold">Enroll {converting.name}</h3>
+            <p className="muted text-sm mt-1">
+              Their trial lectures, login and parent record all stay with them. This can't be undone.
+            </p>
+            <label className="text-xs font-medium muted block mt-4">First package hours (optional)</label>
+            <input
+              className="input mt-1" type="number" step="0.5" min="0.5" placeholder="e.g. 30"
+              value={convertHours} onChange={(e) => setConvertHours(e.target.value)}
+            />
+            <p className="text-xs muted mt-1.5">Leave empty to enroll now and add the package later.</p>
+            {convert.isError && (
+              <div className="text-sm text-red-500 mt-2">
+                {(convert.error as any)?.response?.data?.error || 'Could not enroll this student.'}
+              </div>
+            )}
+            <div className="flex gap-2 mt-5">
+              <button
+                className="btn-primary flex-1" disabled={convert.isPending}
+                onClick={() => {
+                  convert.mutate(
+                    { id: converting.id, package_hours: convertHours ? Number(convertHours) : undefined },
+                    { onSuccess: () => setConverting(null) }
+                  );
+                }}
+              >
+                {convert.isPending ? 'Enrolling…' : 'Enroll'}
+              </button>
+              <button type="button" className="btn-ghost" onClick={() => setConverting(null)}>Cancel</button>
+            </div>
           </div>
         </div>
       )}

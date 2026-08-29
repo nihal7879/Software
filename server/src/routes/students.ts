@@ -15,6 +15,9 @@ const studentSchema = z.object({
   form_no: z.string().optional(),
   date_of_joining: z.string().nullable().optional(),
   status: z.enum(['Active', 'Inactive']).default('Active'),
+  // Whether this is a trial student. Independent of status: a trial can be
+  // Active or Inactive, same as an enrolment.
+  student_type: z.enum(['Trial', 'Enrolled']).default('Enrolled'),
   first_name: z.string().optional().nullable(),
   middle_name: z.string().optional().nullable(),
   last_name: z.string().optional().nullable(),
@@ -64,6 +67,8 @@ router.get(
     if (status) { where.push('status = ?'); params.push(status); }
     if (grade) { where.push('year_grade = ?'); params.push(grade); }
     if (board) { where.push('exam_board = ?'); params.push(board); }
+    const studentType = req.query.student_type as string;
+    if (studentType) { where.push('student_type = ?'); params.push(studentType); }
     const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
 
     const rows = await query(
@@ -102,7 +107,13 @@ router.post(
   wrap(async (req, res) => {
     const b = studentSchema.parse(req.body);
     // Optional login: management can hand the student credentials at creation.
-    const creds = z.object({ password: z.string().min(6).optional() }).parse(req.body);
+    const creds = z
+      .object({
+        password: z.string().min(6).optional(),
+        // Free hours granted to a trial student.
+        trial_hours: z.number().positive().optional(),
+      })
+      .parse(req.body);
 
     // If an email + password are given, create the student's login account first.
     let userId: number | null = null;
@@ -123,16 +134,21 @@ router.post(
     // form_no is auto-assigned = DB id. Insert a temp unique value, then set it to the id.
     const result: any = await query(
       `INSERT INTO students
-        (form_no,date_of_joining,status,first_name,middle_name,last_name,full_name,
+        (form_no,date_of_joining,status,student_type,trial_started_on,
+         first_name,middle_name,last_name,full_name,
          year_grade,school_name,exam_board,father_name,mother_name,relationship,
          email,dob,age,gender,nationality,student_mobile,parent_mobile,extra_mobile,
          fees_received,form_received,branch_id,user_id)
-       VALUES (UUID(),?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+       VALUES (UUID(),?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       [
-        b.date_of_joining || null, b.status, b.first_name || null,
+        b.date_of_joining || null, b.status, b.student_type,
+        // A trial's clock starts on the joining date, or today if none given.
+        b.student_type === 'Trial' ? (b.date_of_joining || new Date().toISOString().slice(0, 10)) : null,
+        b.first_name || null,
         b.middle_name || null, b.last_name || null, fullName(b), b.year_grade || null,
         b.school_name || null, b.exam_board || null, b.father_name || null,
-        b.mother_name || null, b.relationship || 'Father', b.email || null, b.dob || null,
+        // Left null when not chosen — "who pays" is unknown, not assumed to be the father.
+        b.mother_name || null, b.relationship || null, b.email || null, b.dob || null,
         b.age ?? null, b.gender || null, b.nationality || null, b.student_mobile || null,
         b.parent_mobile || null, b.extra_mobile || null, b.fees_received ?? 0,
         b.form_received ?? false, b.branch_id ?? null, userId,
@@ -140,6 +156,17 @@ router.post(
     );
     const id = (result as any).insertId;
     await query('UPDATE students SET form_no = ? WHERE id = ?', [String(id), id]);
+
+    // Trial hours are just a package at zero cost, so the existing hours ledger
+    // counts them down and the statement screens show them with no extra logic.
+    if (b.student_type === 'Trial' && creds.trial_hours) {
+      await query(
+        `INSERT INTO fee_packages (student_id,course_name,package_hours,rate_per_hour,start_date)
+         VALUES (?,'Trial',?,0,CURDATE())`,
+        [id, creds.trial_hours]
+      );
+    }
+
     await audit(req.user!.userId, 'CREATE', 'student', id, null, { ...b, password: undefined, form_no: String(id), login_created: !!userId });
     res.status(201).json({ id, form_no: String(id), login_created: !!userId });
   })
@@ -185,6 +212,52 @@ router.post(
     await query('UPDATE users SET is_active = ? WHERE id = (SELECT user_id FROM students WHERE id = ?)', [isActive, req.params.id]);
     await audit(req.user!.userId, 'SET_STATUS', 'student', req.params.id, null, { status: b.status });
     res.json({ ok: true });
+  })
+);
+
+// Convert a trial into a real enrolment.
+//
+// Deliberately flips the flag on the SAME student row rather than creating a
+// new one, so the trial's lectures, login and parent record stay attached and
+// the student keeps one continuous history. One-way on purpose.
+router.post(
+  '/:id/convert',
+  requireRole('admin'),
+  wrap(async (req, res) => {
+    const b = z
+      .object({
+        // Optionally record the first paid package in the same step.
+        package_hours: z.number().positive().optional(),
+        rate_per_hour: z.number().nonnegative().optional(),
+      })
+      .parse(req.body);
+
+    const before = await queryOne<any>('SELECT * FROM students WHERE id = ?', [req.params.id]);
+    if (!before) return res.status(404).json({ error: 'Student not found' });
+    if (before.student_type !== 'Trial') {
+      return res.status(409).json({ error: `${before.full_name} is already enrolled` });
+    }
+
+    await query(
+      `UPDATE students SET student_type = 'Enrolled', converted_on = CURDATE(), converted_by = ?
+       WHERE id = ?`,
+      [req.user!.userId, req.params.id]
+    );
+
+    let packageId: number | null = null;
+    if (b.package_hours) {
+      const pkg: any = await query(
+        `INSERT INTO fee_packages (student_id,package_hours,rate_per_hour,start_date)
+         VALUES (?,?,?,CURDATE())`,
+        [req.params.id, b.package_hours, b.rate_per_hour ?? 0]
+      );
+      packageId = pkg.insertId;
+    }
+
+    await audit(req.user!.userId, 'CONVERT', 'student', req.params.id,
+      { student_type: 'Trial' },
+      { student_type: 'Enrolled', package_hours: b.package_hours ?? null });
+    res.json({ ok: true, package_id: packageId });
   })
 );
 

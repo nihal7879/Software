@@ -51,6 +51,7 @@ export function StatusBadge({ status }: { status: string }) {
   const map: Record<string, string> = {
     Active: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400',
     Inactive: 'bg-slate-500/15 text-slate-500',
+    Trial: 'bg-violet-500/15 text-violet-600 dark:text-violet-400',
     'Payment Required': 'bg-red-500/15 text-red-600 dark:text-red-400',
   };
   return (

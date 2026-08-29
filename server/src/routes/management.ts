@@ -21,21 +21,36 @@ router.get(
     const limit = Math.min(100, Number(req.query.limit || 20));
     const offset = (page - 1) * limit;
 
-    const searchSql = search ? ' AND (s.full_name LIKE ? OR s.form_no LIKE ?)' : '';
-    const searchParams = search ? [`%${search}%`, `%${search}%`] : [];
+    const studentType = (req.query.student_type as string) || '';
+    const typeSql = studentType ? ' AND s.student_type = ?' : '';
+    const searchSql = (search ? ' AND (s.full_name LIKE ? OR s.form_no LIKE ?)' : '') + typeSql;
+    const searchParams = [
+      ...(search ? [`%${search}%`, `%${search}%`] : []),
+      ...(studentType ? [studentType] : []),
+    ];
 
     const [rows, totalRows] = await Promise.all([
     query(
       `SELECT
          s.id, s.form_no, s.full_name, s.status, s.year_grade, s.exam_board, s.school_name,
+         s.student_type, s.trial_started_on, s.converted_on,
          s.relationship, s.profile_completed, s.profile_submitted_at,
-         -- "Who pays": the attached parent based on relationship
-         CASE s.relationship
+         -- "Who pays": the attached parent based on relationship.
+         NULLIF(CASE s.relationship
            WHEN 'Mother' THEN s.mother_name
            WHEN 'Father' THEN s.father_name
            ELSE COALESCE(s.father_name, s.mother_name)
-         END AS parent_name,
-         s.relationship AS paid_by,
+         END, '') AS parent_name,
+         -- Only claim a relation when that person is actually named. The
+         -- relationship column defaults to 'Father', so without this every
+         -- student with no parent on file would show "Father" next to a blank
+         -- parent — which is what trial students were doing.
+         CASE WHEN COALESCE(CASE s.relationship
+                WHEN 'Mother' THEN s.mother_name
+                WHEN 'Father' THEN s.father_name
+                ELSE COALESCE(s.father_name, s.mother_name)
+              END, '') = '' THEN NULL
+              ELSE s.relationship END AS paid_by,
          s.parent_mobile,
          s.fees_received,
          -- hours summary, computed scoped to this student (no full-table view)
