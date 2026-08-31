@@ -5,6 +5,7 @@ import { Section, Table, Spinner, KpiCard, HoursValue, StatusBadge, Pagination }
 import { Select } from '../../components/Select';
 import { CalendarRangePicker } from '../../components/CalendarPicker';
 import { AdjustHoursModal } from '../../components/AdjustHoursModal';
+import { downloadHoursStatement } from '../../lib/hoursStatementExcel';
 
 // Student Hours Statement — pick a student to see their hours summary and a
 // chronological ledger: hours credited (with discount) when a package is added,
@@ -14,6 +15,8 @@ export default function HoursMonthly() {
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
   const [adjustOpen, setAdjustOpen] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [exportErr, setExportErr] = useState('');
 
   const [summarySearch, setSummarySearch] = useState('');
   const [summaryPage, setSummaryPage] = useState(1);
@@ -104,6 +107,39 @@ export default function HoursMonthly() {
   );
 
   const l = ledger.data;
+
+  // The Excel export follows whatever date filter is on screen, and says so in
+  // its header, so a filtered statement can never be mistaken for a full one.
+  const exportExcel = async () => {
+    if (!l) return;
+    setExporting(true);
+    setExportErr('');
+    try {
+      const s = (students.data || []).find((x: any) => String(x.id) === String(studentId)) || {};
+      await downloadHoursStatement({
+        student: {
+          form_no: l.form_no,
+          full_name: l.student_name,
+          year_grade: s.year_grade,
+          school_name: s.school_name,
+        },
+        summary: {
+          total_hours_credited: l.total_hours_credited,
+          total_hours_consumed: l.total_hours_consumed,
+          hours_left: l.hours_left,
+          fee_status: l.fee_status,
+        },
+        lectures: lectures.data || [],
+        packages: packages.data || [],
+        from: fromDate || undefined,
+        to: toDate || undefined,
+      });
+    } catch (e: any) {
+      setExportErr(e?.message || 'Could not build the Excel file.');
+    } finally {
+      setExporting(false);
+    }
+  };
   // Most recent recharge (package added) date for this student.
   const lastRecharge = (packages.data || [])
     .map((p: any) => String(p.start_date || p.created_at || '').slice(0, 10))
@@ -170,8 +206,17 @@ export default function HoursMonthly() {
             <KpiCard label="Last Recharge" value={<span className="text-base">{lastRecharge || '—'}</span>} accent="blue" />
           </div>
 
-          <div>
+          <div className="flex flex-wrap items-center gap-2">
             <button className="btn-ghost !py-1.5 !px-3 text-sm" onClick={() => setAdjustOpen(true)}>± Adjust Hours</button>
+            <button
+              className="btn-ghost !py-1.5 !px-3 text-sm"
+              onClick={exportExcel}
+              disabled={exporting || !l}
+              title="Download this statement as a formatted Excel file"
+            >
+              {exporting ? 'Preparing…' : '⤓ Export Excel'}
+            </button>
+            {exportErr && <span className="text-sm text-red-500">{exportErr}</span>}
           </div>
 
           <Section
