@@ -149,11 +149,16 @@ export function Pagination({
     label: String(i + 1),
   }));
 
+  // Both labels below are <span>, never <label>. A <label> forwards stray
+  // clicks to the control inside it, so clicking away to dismiss the menu
+  // bubbled up and reopened it instantly — the picker looked impossible to
+  // close without choosing something.
+
   return (
     <div className="flex flex-wrap items-center justify-between gap-2 mt-3 text-sm">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
         {onPageSize && (
-          <label className="flex items-center gap-1.5 muted">
+          <span className="flex items-center gap-1.5 muted">
             Rows
             <div className="w-[72px]">
               <Select
@@ -169,7 +174,7 @@ export function Pagination({
                 }}
               />
             </div>
-          </label>
+          </span>
         )}
         <span className="flex items-center gap-1.5 muted">
           Page
@@ -181,6 +186,7 @@ export function Pagination({
                 compact
                 // The search box earns its place once the list outgrows a glance.
                 searchable={pageCount > 12}
+                maxVisible={6}
                 value={String(current)}
                 options={pageOptions}
                 onChange={(v) => onPage(Number(v))}

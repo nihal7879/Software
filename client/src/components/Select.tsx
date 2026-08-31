@@ -17,6 +17,7 @@ export function Select({
   onSearch,
   searchable = true,
   compact = false,
+  maxVisible,
 }: {
   value: string | number | '';
   onChange: (v: string) => void;
@@ -32,13 +33,22 @@ export function Select({
   searchable?: boolean;
   /** Tighter trigger, for inline controls like the pagination bar. */
   compact?: boolean;
+  /** Cap the option list to roughly this many rows; the rest scrolls. */
+  maxVisible?: number;
 }) {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState('');
   const btnRef = useRef<HTMLButtonElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+  const [rowH, setRowH] = useState(0);
   const [pos, setPos] = useState<{ left: number; width: number; top?: number; bottom?: number }>({ left: 0, width: 0 });
 
   const selected = options.find((o) => String(o.value) === String(value));
+
+  // Cap the list at exactly `maxVisible` rows. The height is measured from a
+  // real rendered option rather than assumed: padding, font size and browser
+  // zoom all move it, and guessing low leaves a seventh row peeking through.
+  const listMaxHeight = maxVisible && rowH ? maxVisible * rowH : undefined;
 
   const filtered = useMemo(() => {
     // Server-side search mode: parent already filtered `options`, don't re-filter.
@@ -68,6 +78,13 @@ export function Select({
   };
 
   useLayoutEffect(() => { if (open) reposition(); }, [open]);
+
+  // Measure one option once the menu is on screen.
+  useLayoutEffect(() => {
+    if (!open || !maxVisible) return;
+    const first = listRef.current?.firstElementChild as HTMLElement | null;
+    if (first?.offsetHeight) setRowH(first.offsetHeight);
+  }, [open, maxVisible, filtered.length]);
 
   // Keep the menu glued to the trigger while the page/table scrolls or resizes.
   useEffect(() => {
@@ -120,7 +137,11 @@ export function Select({
               />
             </div>
             )}
-            <div className="flex-1 min-h-0 overflow-y-auto thin-scroll">
+            <div
+              ref={listRef}
+              className="flex-1 min-h-0 overflow-y-auto thin-scroll"
+              style={listMaxHeight ? { maxHeight: listMaxHeight } : undefined}
+            >
               {allowCustom && q.trim() && !options.some((o) => o.label.toLowerCase() === q.trim().toLowerCase()) && (
                 <button
                   type="button"
