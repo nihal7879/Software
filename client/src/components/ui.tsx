@@ -1,4 +1,5 @@
 import { ReactNode } from 'react';
+import { Select } from './Select';
 
 const ACCENTS: Record<string, string> = {
   blue: '#f97316',   // orange (brand)
@@ -134,41 +135,58 @@ export function Pagination({
   const pageCount = Math.max(1, pages);
   const current = Math.min(page, pageCount);
 
+  // Both pickers use the themed Select rather than a native <select>: the
+  // native option list is drawn by the OS, so it ignores the app theme, and at
+  // 80 pages it renders an unbroken column the height of the screen. Select's
+  // menu is capped and scrolls, and its search box makes a long page list
+  // usable — type "47" instead of dragging to it.
+  const sizeOptions = [
+    ...PAGE_SIZES.map((n) => ({ value: String(n), label: String(n) })),
+    { value: String(ALL_ROWS), label: 'All' },
+  ];
+  const pageOptions = Array.from({ length: pageCount }, (_, i) => ({
+    value: String(i + 1),
+    label: String(i + 1),
+  }));
+
   return (
     <div className="flex flex-wrap items-center justify-between gap-2 mt-3 text-sm">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
         {onPageSize && (
           <label className="flex items-center gap-1.5 muted">
             Rows
-            <select
-              className="input !w-auto !py-1 !px-2"
-              value={pageSize}
-              onChange={(e) => {
-                // Resetting here rather than at each call site: page 10 of 2
-                // is unreachable, and every list would otherwise need the fix.
-                onPageSize(Number(e.target.value));
-                onPage(1);
-              }}
-            >
-              {PAGE_SIZES.map((n) => (
-                <option key={n} value={n}>{n}</option>
-              ))}
-              <option value={ALL_ROWS}>All</option>
-            </select>
+            <div className="w-[72px]">
+              <Select
+                compact
+                searchable={false}
+                value={String(pageSize)}
+                options={sizeOptions}
+                onChange={(v) => {
+                  // Resetting here rather than at each call site: page 10 of 2
+                  // is unreachable, and every list would otherwise need the fix.
+                  onPageSize(Number(v));
+                  onPage(1);
+                }}
+              />
+            </div>
           </label>
         )}
         <span className="flex items-center gap-1.5 muted">
           Page
-          <select
-            className="input !w-auto !py-1 !px-2"
-            value={current}
-            onChange={(e) => onPage(Number(e.target.value))}
-            disabled={pageCount <= 1}
-          >
-            {Array.from({ length: pageCount }, (_, i) => i + 1).map((p) => (
-              <option key={p} value={p}>{p}</option>
-            ))}
-          </select>
+          {pageCount <= 1 ? (
+            <span className="font-semibold" style={{ color: 'var(--color-text)' }}>1</span>
+          ) : (
+            <div className="w-[76px]">
+              <Select
+                compact
+                // The search box earns its place once the list outgrows a glance.
+                searchable={pageCount > 12}
+                value={String(current)}
+                options={pageOptions}
+                onChange={(v) => onPage(Number(v))}
+              />
+            </div>
+          )}
           / {pageCount}
           {total != null && <> · {total} {noun}</>}
           {note && <> · {note}</>}

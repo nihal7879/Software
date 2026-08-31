@@ -15,6 +15,8 @@ export function Select({
   className = '',
   allowCustom = false,
   onSearch,
+  searchable = true,
+  compact = false,
 }: {
   value: string | number | '';
   onChange: (v: string) => void;
@@ -26,6 +28,10 @@ export function Select({
   // `options` from the search term). Used for large lists (e.g. 3000 students)
   // that can't all be loaded into the dropdown.
   onSearch?: (q: string) => void;
+  /** Hide the search box on short, self-evident lists (e.g. rows-per-page). */
+  searchable?: boolean;
+  /** Tighter trigger, for inline controls like the pagination bar. */
+  compact?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState('');
@@ -47,7 +53,10 @@ export function Select({
     if (!btnRef.current) return;
     const r = btnRef.current.getBoundingClientRect();
     // Clamp the menu inside the viewport so it never causes horizontal scroll.
-    const width = Math.min(Math.max(r.width, 200), window.innerWidth - 16);
+    // Compact pickers hold short values (page numbers, row counts) and would
+    // look absurd stretched to the 200px a labelled list needs.
+    const minWidth = compact ? r.width : 200;
+    const width = Math.min(Math.max(r.width, minWidth), window.innerWidth - 16);
     const left = Math.max(8, Math.min(r.left, window.innerWidth - width - 8));
     const spaceBelow = window.innerHeight - r.bottom;
     const MENU_MAX = 300;
@@ -79,7 +88,7 @@ export function Select({
       <button
         ref={btnRef}
         type="button"
-        className="input flex items-center justify-between gap-2 w-full text-left"
+        className={`input flex items-center justify-between gap-2 w-full text-left ${compact ? '!py-1 !px-2' : ''}`}
         onClick={() => setOpen((o) => !o)}
       >
         <span className={`truncate ${selected || (allowCustom && value) ? '' : 'muted'}`}>{selected ? selected.label : (allowCustom && value ? String(value) : placeholder)}</span>
@@ -99,6 +108,7 @@ export function Select({
               maxHeight: 300,
             }}
           >
+            {searchable && (
             <div className="flex items-center gap-2 px-2 py-1.5 mb-1 shrink-0" style={{ background: 'var(--color-card)' }}>
               <Search size={14} className="muted shrink-0" />
               <input
@@ -109,6 +119,7 @@ export function Select({
                 onChange={(e) => { setQ(e.target.value); onSearch?.(e.target.value); }}
               />
             </div>
+            )}
             <div className="flex-1 min-h-0 overflow-y-auto thin-scroll">
               {allowCustom && q.trim() && !options.some((o) => o.label.toLowerCase() === q.trim().toLowerCase()) && (
                 <button
