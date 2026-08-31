@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { query } from '../db';
 import { requireAuth, requireRole } from '../middleware/auth';
 import { wrap } from '../middleware/error';
+import { formNoOrder } from '../utils/formNo';
 
 const router = Router();
 // Institute-wide analytics are Management-only. Faculty use /teachers/me instead.
@@ -103,7 +104,7 @@ async function pivot(req: any, res: any, opts: {
   const { valueExpr, valueAlias, src, where, monthCol } = opts;
   const search = (req.query.search as string) || '';
   const page = Math.max(1, Number(req.query.page || 1));
-  const limit = Math.min(100, Number(req.query.limit || 20));
+  const limit = Math.min(1000, Number(req.query.limit || 20));
   const offset = (page - 1) * limit;
 
   // Years that actually have data (newest first).
@@ -125,7 +126,7 @@ async function pivot(req: any, res: any, opts: {
       `SELECT s.id, s.form_no, s.full_name AS student_name
        FROM students s
        WHERE ${existsSql}${searchSql}
-       ORDER BY CAST(s.form_no AS UNSIGNED)
+       ORDER BY ${formNoOrder('s.form_no')}
        LIMIT ? OFFSET ?`,
       [yearLike, ...sp, limit, offset]
     ),

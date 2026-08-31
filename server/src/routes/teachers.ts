@@ -86,7 +86,7 @@ router.get(
               ${PENDING_EXPR}  AS pending_fees
        FROM student_teacher_mapping m
        JOIN students s ON s.id = m.student_id
-       JOIN subjects sub ON sub.id = m.subject_id
+       LEFT JOIN subjects sub ON sub.id = m.subject_id
        WHERE m.teacher_id = ?
        GROUP BY s.id, s.form_no, s.full_name, s.year_grade, s.school_name, s.status, s.parent_mobile
        ORDER BY s.full_name`,
@@ -351,7 +351,7 @@ router.get(
       `SELECT m.id, t.id AS teacher_id, t.name AS teacher_name, sub.name AS subject_name, m.package_hours
        FROM student_teacher_mapping m
        JOIN teachers t ON t.id = m.teacher_id
-       JOIN subjects sub ON sub.id = m.subject_id
+       LEFT JOIN subjects sub ON sub.id = m.subject_id
        WHERE m.student_id = ?`,
       [req.params.studentId]
     );
@@ -370,7 +370,7 @@ router.get(
     const rows = await query(
       `SELECT s.id, s.form_no, s.full_name, s.year_grade, s.status,
               (SELECT GROUP_CONCAT(DISTINCT sub.name SEPARATOR ', ')
-                 FROM student_teacher_mapping m JOIN subjects sub ON sub.id = m.subject_id
+                 FROM student_teacher_mapping m LEFT JOIN subjects sub ON sub.id = m.subject_id
                  WHERE m.teacher_id = ? AND m.student_id = s.id) AS subjects,
               EXISTS(SELECT 1 FROM student_teacher_mapping m
                        WHERE m.teacher_id = ? AND m.student_id = s.id) AS is_assigned,
@@ -406,7 +406,7 @@ router.get(
               GROUP_CONCAT(DISTINCT sub.name SEPARATOR ', ') AS subject_name
        FROM student_teacher_mapping m
        JOIN students s ON s.id = m.student_id
-       JOIN subjects sub ON sub.id = m.subject_id
+       LEFT JOIN subjects sub ON sub.id = m.subject_id
        WHERE m.teacher_id = ?
        GROUP BY s.id, s.form_no, s.full_name, s.year_grade, s.status, s.parent_mobile
        ORDER BY s.full_name`,

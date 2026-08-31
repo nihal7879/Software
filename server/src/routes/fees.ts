@@ -6,6 +6,7 @@ import { wrap } from '../middleware/error';
 import { deriveMonth } from '../utils/hours';
 import { HOURS_COLUMNS, deriveHours } from '../utils/hoursSummary';
 import { audit } from '../utils/audit';
+import { formNoOrder } from '../utils/formNo';
 
 const router = Router();
 router.use(requireAuth);
@@ -34,7 +35,7 @@ router.get(
   wrap(async (req, res) => {
     const search = (req.query.search as string) || '';
     const page = Math.max(1, Number(req.query.page || 1));
-    const limit = Math.min(100, Number(req.query.limit || 20));
+    const limit = Math.min(1000, Number(req.query.limit || 20));
     const offset = (page - 1) * limit;
 
     const searchSql = search ? 'WHERE (s.full_name LIKE ? OR s.form_no LIKE ?)' : '';
@@ -44,7 +45,7 @@ router.get(
       query<any>(
         `SELECT s.id AS student_id, s.form_no, s.full_name AS student_name, s.status, ${HOURS_COLUMNS}
          FROM students s ${searchSql}
-         ORDER BY CAST(s.form_no AS UNSIGNED) LIMIT ? OFFSET ?`,
+         ORDER BY ${formNoOrder('s.form_no')} LIMIT ? OFFSET ?`,
         [...searchParams, limit, offset]
       ),
       query<any>(`SELECT COUNT(*) AS total FROM students s ${searchSql}`, searchParams),
@@ -76,7 +77,7 @@ router.get(
     const from = req.query.from as string;
     const to = req.query.to as string;
     const page = Math.max(1, Number(req.query.page || 1));
-    const limit = Math.min(100, Number(req.query.limit || 20));
+    const limit = Math.min(1000, Number(req.query.limit || 20));
     const offset = (page - 1) * limit;
 
     const where: string[] = ['ft.is_deleted = FALSE'];

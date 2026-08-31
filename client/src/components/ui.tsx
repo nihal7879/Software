@@ -99,3 +99,85 @@ export function Spinner() {
 
 
 
+
+// Every list in the admin area shares this footer, so the page-size and
+// jump-to-page controls behave identically wherever they appear.
+//
+// The sizes stop at "All" = 1000 rows. That is a real "all" for this data —
+// the largest paginated list is 358 payments — and it keeps a stray click from
+// pulling an unbounded result set once the tables have grown.
+const PAGE_SIZES = [15, 20, 50, 100];
+export const ALL_ROWS = 1000;
+
+export function Pagination({
+  page,
+  pages,
+  total,
+  pageSize,
+  onPage,
+  onPageSize,
+  noun = 'rows',
+  note,
+}: {
+  page: number;
+  pages: number;
+  total?: number;
+  pageSize: number;
+  onPage: (p: number) => void;
+  /** Omit to hide the rows-per-page picker on lists with a fixed size. */
+  onPageSize?: (n: number) => void;
+  noun?: string;
+  /** Extra context appended after the counts, e.g. what a totals row covers. */
+  note?: string;
+}) {
+  // A list that is still loading reports 0 pages; the picker always needs one.
+  const pageCount = Math.max(1, pages);
+  const current = Math.min(page, pageCount);
+
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-2 mt-3 text-sm">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+        {onPageSize && (
+          <label className="flex items-center gap-1.5 muted">
+            Rows
+            <select
+              className="input !w-auto !py-1 !px-2"
+              value={pageSize}
+              onChange={(e) => {
+                // Resetting here rather than at each call site: page 10 of 2
+                // is unreachable, and every list would otherwise need the fix.
+                onPageSize(Number(e.target.value));
+                onPage(1);
+              }}
+            >
+              {PAGE_SIZES.map((n) => (
+                <option key={n} value={n}>{n}</option>
+              ))}
+              <option value={ALL_ROWS}>All</option>
+            </select>
+          </label>
+        )}
+        <span className="flex items-center gap-1.5 muted">
+          Page
+          <select
+            className="input !w-auto !py-1 !px-2"
+            value={current}
+            onChange={(e) => onPage(Number(e.target.value))}
+            disabled={pageCount <= 1}
+          >
+            {Array.from({ length: pageCount }, (_, i) => i + 1).map((p) => (
+              <option key={p} value={p}>{p}</option>
+            ))}
+          </select>
+          / {pageCount}
+          {total != null && <> · {total} {noun}</>}
+          {note && <> · {note}</>}
+        </span>
+      </div>
+      <div className="flex gap-2">
+        <button className="btn-ghost" disabled={current <= 1} onClick={() => onPage(current - 1)}>Prev</button>
+        <button className="btn-ghost" disabled={current >= pageCount} onClick={() => onPage(current + 1)}>Next</button>
+      </div>
+    </div>
+  );
+}

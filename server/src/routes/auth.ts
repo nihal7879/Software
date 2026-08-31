@@ -7,6 +7,7 @@ import { requireAuth } from '../middleware/auth';
 import { wrap } from '../middleware/error';
 import { audit } from '../utils/audit';
 import { clientIp, deviceInfo } from '../utils/reqContext';
+import { claimFormNo } from '../utils/formNo';
 
 const router = Router();
 
@@ -153,14 +154,14 @@ router.post(
            VALUES ('student', ?, ?, ?, ?, ?, ?)`,
           [b.email, hash, fullName, ip, gps, ua]
         );
-        // form_no is auto-assigned = the student's DB id (insert temp unique, then set to id).
+        // form_no is auto-assigned (insert a temp unique value, then claim the
+        // real one). A self-registering student is an enrolment, not a trial.
         const [s]: any = await conn.query(
           `INSERT INTO students (form_no, status, first_name, last_name, full_name, email, user_id, profile_completed)
            VALUES (UUID(), 'Active', ?, ?, ?, ?, ?, FALSE)`,
           [b.first_name, b.last_name || null, fullName, b.email, u.insertId]
         );
-        const formNo = String(s.insertId);
-        await conn.query('UPDATE students SET form_no = ? WHERE id = ?', [formNo, s.insertId]);
+        const formNo = await claimFormNo(s.insertId, 'Enrolled', conn);
         await conn.commit();
         await audit(u.insertId, 'REGISTER', 'user', u.insertId, null, { role: 'student', email: b.email, form_no: formNo });
         const token = signToken({ userId: u.insertId, role: 'student', email: b.email, studentId: s.insertId });

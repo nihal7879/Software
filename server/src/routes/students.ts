@@ -6,12 +6,14 @@ import { requireAuth, requireRole, ensureOwnStudent } from '../middleware/auth';
 import { wrap } from '../middleware/error';
 import { audit } from '../utils/audit';
 import { clientIp, deviceInfo, getReqCtx } from '../utils/reqContext';
+import { claimFormNo, formNoOrder } from '../utils/formNo';
 
 const router = Router();
 router.use(requireAuth);
 
 const studentSchema = z.object({
-  // form_no is system-assigned (= the student's DB id); never entered manually.
+  // form_no is system-assigned — T1, T2 … while on trial, an enrolment number
+  // once enrolled. Never entered manually.
   form_no: z.string().optional(),
   date_of_joining: z.string().nullable().optional(),
   status: z.enum(['Active', 'Inactive']).default('Active'),
@@ -72,7 +74,7 @@ router.get(
     const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
 
     const rows = await query(
-      `SELECT * FROM students ${whereSql} ORDER BY CAST(form_no AS UNSIGNED) LIMIT ? OFFSET ?`,
+      `SELECT * FROM students ${whereSql} ORDER BY ${formNoOrder()} LIMIT ? OFFSET ?`,
       [...params, limit, offset]
     );
     const [{ total }] = await query<any>(
@@ -131,7 +133,8 @@ router.post(
       userId = (u as any).insertId;
     }
 
-    // form_no is auto-assigned = DB id. Insert a temp unique value, then set it to the id.
+    // form_no is auto-assigned. Insert a temp unique value, then claim the real
+    // number: a trial takes the next T-number, an enrolment the next form number.
     const result: any = await query(
       `INSERT INTO students
         (form_no,date_of_joining,status,student_type,trial_started_on,
@@ -155,7 +158,7 @@ router.post(
       ]
     );
     const id = (result as any).insertId;
-    await query('UPDATE students SET form_no = ? WHERE id = ?', [String(id), id]);
+    const formNo = await claimFormNo(id, b.student_type);
 
     // Trial hours are just a package at zero cost, so the existing hours ledger
     // counts them down and the statement screens show them with no extra logic.
@@ -167,8 +170,8 @@ router.post(
       );
     }
 
-    await audit(req.user!.userId, 'CREATE', 'student', id, null, { ...b, password: undefined, form_no: String(id), login_created: !!userId });
-    res.status(201).json({ id, form_no: String(id), login_created: !!userId });
+    await audit(req.user!.userId, 'CREATE', 'student', id, null, { ...b, password: undefined, form_no: formNo, login_created: !!userId });
+    res.status(201).json({ id, form_no: formNo, login_created: !!userId });
   })
 );
 
@@ -220,6 +223,11 @@ router.post(
 // Deliberately flips the flag on the SAME student row rather than creating a
 // new one, so the trial's lectures, login and parent record stay attached and
 // the student keeps one continuous history. One-way on purpose.
+//
+// This is also where the student stops being T-something and joins the
+// enrolment sequence: with 177 enrolled students the next one enrolled is 178.
+// Their old T-number is recorded in the audit log, since anything printed or
+// emailed during the trial still quotes it.
 router.post(
   '/:id/convert',
   requireRole('admin'),
@@ -243,6 +251,7 @@ router.post(
        WHERE id = ?`,
       [req.user!.userId, req.params.id]
     );
+    const formNo = await claimFormNo(req.params.id, 'Enrolled');
 
     let packageId: number | null = null;
     if (b.package_hours) {
@@ -255,9 +264,9 @@ router.post(
     }
 
     await audit(req.user!.userId, 'CONVERT', 'student', req.params.id,
-      { student_type: 'Trial' },
-      { student_type: 'Enrolled', package_hours: b.package_hours ?? null });
-    res.json({ ok: true, package_id: packageId });
+      { student_type: 'Trial', form_no: before.form_no },
+      { student_type: 'Enrolled', form_no: formNo, package_hours: b.package_hours ?? null });
+    res.json({ ok: true, package_id: packageId, form_no: formNo, previous_form_no: before.form_no });
   })
 );
 

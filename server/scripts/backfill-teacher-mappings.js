@@ -12,8 +12,11 @@
 // appears in the lecture history. Only inserts what is missing; never deletes,
 // and never touches package_hours on mappings that already exist.
 //
-// Lectures with no subject cannot produce a mapping — student_teacher_mapping
-// .subject_id is NOT NULL — so those are reported separately.
+// Where the lecture records a teacher but no subject, a teacher-only mapping is
+// created (subject_id NULL, allowed since the 2026-08-31 migration). The teacher
+// is a known fact; withholding it because the subject is missing is what left
+// seven students with an empty Teachers cell. Guessing the subject from the
+// teacher is not an option — Krishna Wadhvani alone teaches four of them.
 require('dotenv').config();
 const mysql = require('mysql2/promise');
 
@@ -51,7 +54,25 @@ const sinceSql = SINCE ? ' AND CAST(s.form_no AS UNSIGNED) >= ' + SINCE : '';
             AND m.subject_id = l.subject_id)${sinceSql}
      ORDER BY CAST(s.form_no AS UNSIGNED), t.name, sub.name`);
 
-  // students who will still show nothing, because every lecture lacks a subject
+  // (student, teacher) pairs seen in lectures that have no subject, and that no
+  // mapping covers yet. uq_stm counts NULL subjects as distinct, so dedupe here
+  // rather than relying on the unique key.
+  const teacherOnly = await q(`
+    SELECT DISTINCT a.student_id, l.teacher_id, s.form_no, s.full_name, t.name AS teacher
+      FROM lecture_attendees a
+      JOIN lecture_sessions l ON l.id = a.lecture_id
+      JOIN students s ON s.id = a.student_id
+      JOIN teachers t ON t.id = l.teacher_id
+     WHERE l.is_deleted = FALSE
+       AND l.teacher_id IS NOT NULL
+       AND l.subject_id IS NULL
+       AND NOT EXISTS (
+         SELECT 1 FROM student_teacher_mapping m
+          WHERE m.student_id = a.student_id
+            AND m.teacher_id = l.teacher_id)${sinceSql}
+     ORDER BY CAST(REGEXP_REPLACE(s.form_no,'[^0-9]','') AS UNSIGNED), t.name`);
+
+  // students who will STILL show nothing after both passes
   const stillEmpty = await q(`
     SELECT s.form_no, s.full_name, s.student_type,
            COUNT(DISTINCT a.lecture_id) lectures,
@@ -63,7 +84,7 @@ const sinceSql = SINCE ? ' AND CAST(s.form_no AS UNSIGNED) >= ' + SINCE : '';
        AND NOT EXISTS (
          SELECT 1 FROM lecture_attendees a2
            JOIN lecture_sessions l2 ON l2.id = a2.lecture_id
-          WHERE a2.student_id = s.id AND l2.subject_id IS NOT NULL AND l2.teacher_id IS NOT NULL)
+          WHERE a2.student_id = s.id AND l2.teacher_id IS NOT NULL)
      GROUP BY s.id ORDER BY CAST(s.form_no AS UNSIGNED)`);
 
   const byStudent = new Map();
@@ -75,13 +96,19 @@ const sinceSql = SINCE ? ' AND CAST(s.form_no AS UNSIGNED) >= ' + SINCE : '';
   for (const [form, v] of byStudent)
     console.log(`  form ${String(form).padEnd(5)} ${v.name.slice(0, 26).padEnd(26)} ${v.rows.join(' | ')}`);
 
+  if (teacherOnly.length) {
+    console.log(`\nteacher-only mappings to create (no subject on the lecture): ${teacherOnly.length}`);
+    for (const r of teacherOnly)
+      console.log(`  form ${String(r.form_no).padEnd(5)} ${String(r.full_name).slice(0, 26).padEnd(26)} ${r.teacher} / (no subject)`);
+  }
+
   if (stillEmpty.length) {
     console.log(`\n${stillEmpty.length} student(s) will STILL show no teacher — every lecture of theirs has no subject recorded:`);
     for (const r of stillEmpty)
       console.log(`  form ${String(r.form_no).padEnd(5)} ${r.full_name.slice(0, 26).padEnd(26)} ${r.lectures} lectures, ${r.lectures_without_subject} with no subject`);
   }
 
-  if (!missing.length) { console.log('\nNothing to do.'); await conn.end(); return; }
+  if (!missing.length && !teacherOnly.length) { console.log('\nNothing to do.'); await conn.end(); return; }
   if (!APPLY) { console.log('\nDRY RUN — nothing written. Re-run with --apply.'); await conn.end(); return; }
 
   await conn.beginTransaction();
@@ -92,6 +119,20 @@ const sinceSql = SINCE ? ' AND CAST(s.form_no AS UNSIGNED) >= ' + SINCE : '';
         `INSERT IGNORE INTO student_teacher_mapping (student_id,teacher_id,subject_id,package_hours)
          VALUES (?,?,?,0)`,
         [r.student_id, r.teacher_id, r.subject_id]);
+      n++;
+    }
+    for (const r of teacherOnly) {
+      // INSERT IGNORE cannot dedupe these — uq_stm counts NULL subjects as
+      // distinct — so re-check NULL-safely inside the transaction.
+      const [dup] = await q(
+        `SELECT id FROM student_teacher_mapping
+          WHERE student_id = ? AND teacher_id = ? AND subject_id <=> NULL`,
+        [r.student_id, r.teacher_id]);
+      if (dup) continue;
+      await q(
+        `INSERT INTO student_teacher_mapping (student_id,teacher_id,subject_id,package_hours)
+         VALUES (?,?,NULL,0)`,
+        [r.student_id, r.teacher_id]);
       n++;
     }
     await conn.commit();

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { api } from '../../api/client';
-import { Section, StatusBadge, Table, Spinner } from '../../components/ui';
+import { Section, StatusBadge, Table, Spinner, Pagination } from '../../components/ui';
 import { ConfirmModal } from '../../components/ConfirmModal';
 
 export default function StudentsList() {
@@ -10,13 +10,14 @@ export default function StudentsList() {
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState('');
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(15);
   const [drawer, setDrawer] = useState(false);
   const [confirm, setConfirm] = useState<{ id: number; name: string; next: 'Active' | 'Inactive' } | null>(null);
 
   const { data, isLoading } = useQuery({
-    queryKey: ['students', search, status, page],
+    queryKey: ['students', search, status, page, pageSize],
     queryFn: () =>
-      api.get('/students', { params: { search, status, page, limit: 15 } }).then((r) => r.data),
+      api.get('/students', { params: { search, status, page, limit: pageSize } }).then((r) => r.data),
   });
 
   const { register, handleSubmit, reset } = useForm();
@@ -40,7 +41,7 @@ export default function StudentsList() {
   });
 
   const total = data?.total || 0;
-  const pages = Math.ceil(total / 15) || 1;
+  const pages = Math.ceil(total / pageSize) || 1;
 
   return (
     <div className="space-y-4">
@@ -92,13 +93,10 @@ export default function StudentsList() {
                 </tr>
               ))}
             </Table>
-            <div className="flex items-center justify-between mt-3 text-sm">
-              <span className="muted">Page {page} / {pages}</span>
-              <div className="flex gap-2">
-                <button className="btn-ghost" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>Prev</button>
-                <button className="btn-ghost" disabled={page >= pages} onClick={() => setPage((p) => p + 1)}>Next</button>
-              </div>
-            </div>
+            <Pagination
+              page={page} pages={pages} total={total} noun="students"
+              pageSize={pageSize} onPage={setPage} onPageSize={setPageSize}
+            />
           </>
         )}
       </Section>

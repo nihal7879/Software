@@ -3,6 +3,7 @@ import { query, queryOne } from '../db';
 import { requireAuth, requireRole } from '../middleware/auth';
 import { wrap } from '../middleware/error';
 import { CREDITED_EXPR, CONSUMED_EXPR, PENDING_EXPR, LAST_LECTURE_EXPR, deriveHours } from '../utils/hoursSummary';
+import { formNoOrder } from '../utils/formNo';
 
 const router = Router();
 router.use(requireAuth, requireRole('admin', 'faculty'));
@@ -18,7 +19,7 @@ router.get(
     const month = (req.query.month as string) || null;
     const search = (req.query.search as string) || '';
     const page = Math.max(1, Number(req.query.page || 1));
-    const limit = Math.min(100, Number(req.query.limit || 20));
+    const limit = Math.min(1000, Number(req.query.limit || 20));
     const offset = (page - 1) * limit;
 
     const studentType = (req.query.student_type as string) || '';
@@ -76,7 +77,7 @@ router.get(
        FROM students s
        LEFT JOIN users u ON u.id = s.user_id
        WHERE s.is_deleted = FALSE${searchSql}
-       ORDER BY CAST(s.form_no AS UNSIGNED)
+       ORDER BY ${formNoOrder('s.form_no')}
        LIMIT ? OFFSET ?`,
       [month, month, month, month, ...searchParams, limit, offset]
     ),
@@ -172,7 +173,7 @@ router.get(
        JOIN students s ON s.id = a.student_id
        WHERE l.month IS NOT NULL
        GROUP BY s.form_no, s.full_name, s.status, l.month
-       ORDER BY CAST(s.form_no AS UNSIGNED), l.month`
+       ORDER BY ${formNoOrder('s.form_no')}, l.month`
     );
     const months = await query<any>(
       `SELECT DISTINCT month FROM lecture_sessions WHERE month IS NOT NULL ORDER BY month`

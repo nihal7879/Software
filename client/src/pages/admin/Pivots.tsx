@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { ChevronLeft, ChevronRight, Wallet, Clock } from 'lucide-react';
 import { api } from '../../api/client';
-import { Section, Spinner } from '../../components/ui';
+import { Section, Spinner, Pagination } from '../../components/ui';
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const pad = (n: number) => String(n).padStart(2, '0');
@@ -14,6 +14,7 @@ export default function Pivots() {
   const [year, setYear] = useState<number | null>(null); // null = server's latest
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
 
   const valueKey = view === 'finance' ? 'amount' : 'hours';
   const fmt = view === 'finance'
@@ -21,14 +22,14 @@ export default function Pivots() {
     : (n: number) => n.toLocaleString('en-AE', { maximumFractionDigits: 1 });
 
   const q = useQuery({
-    queryKey: ['pivot', view, year, search, page],
-    queryFn: () => api.get(`/analytics/${view}-pivot`, { params: { year: year ?? undefined, search, page, limit: 20 } }).then((r) => r.data),
+    queryKey: ['pivot', view, year, search, page, pageSize],
+    queryFn: () => api.get(`/analytics/${view}-pivot`, { params: { year: year ?? undefined, search, page, limit: pageSize } }).then((r) => r.data),
   });
 
   const data = q.data;
   const curYear = data?.year ?? year ?? new Date().getFullYear();
   const total = data?.total || 0;
-  const pages = Math.ceil(total / 20) || 1;
+  const pages = Math.ceil(total / pageSize) || 1;
   const unit = view === 'finance' ? '(AED)' : '(h)';
 
   // Build student rows × month cells for the current page.
@@ -124,13 +125,11 @@ export default function Pivots() {
               </tfoot>
             </table>
           </div>
-          <div className="flex items-center justify-between mt-3 text-sm">
-            <span className="muted">Page {page} / {pages} · {total} students · totals row covers all of {curYear}</span>
-            <div className="flex gap-2">
-              <button className="btn-ghost" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>Prev</button>
-              <button className="btn-ghost" disabled={page >= pages} onClick={() => setPage((p) => p + 1)}>Next</button>
-            </div>
-          </div>
+          <Pagination
+            page={page} pages={pages} total={total} noun="students"
+            note={`totals row covers all of ${curYear}`}
+            pageSize={pageSize} onPage={setPage} onPageSize={setPageSize}
+          />
           </>
         )}
       </Section>

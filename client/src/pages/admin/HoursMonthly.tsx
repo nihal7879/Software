@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api, hrs, num, studentOption } from '../../api/client';
-import { Section, Table, Spinner, KpiCard, HoursValue, StatusBadge } from '../../components/ui';
+import { Section, Table, Spinner, KpiCard, HoursValue, StatusBadge, Pagination } from '../../components/ui';
 import { Select } from '../../components/Select';
 import { CalendarRangePicker } from '../../components/CalendarPicker';
 import { AdjustHoursModal } from '../../components/AdjustHoursModal';
@@ -17,9 +17,10 @@ export default function HoursMonthly() {
 
   const [summarySearch, setSummarySearch] = useState('');
   const [summaryPage, setSummaryPage] = useState(1);
+  const [summarySize, setSummarySize] = useState(20);
   const allLedger = useQuery({
-    queryKey: ['ledger-all', summarySearch, summaryPage],
-    queryFn: () => api.get('/fees/ledger', { params: { search: summarySearch, page: summaryPage, limit: 20 } }).then((r) => r.data),
+    queryKey: ['ledger-all', summarySearch, summaryPage, summarySize],
+    queryFn: () => api.get('/fees/ledger', { params: { search: summarySearch, page: summaryPage, limit: summarySize } }).then((r) => r.data),
   });
   const [studentSearch, setStudentSearch] = useState('');
   const students = useQuery({ queryKey: ['students-pick', studentSearch], queryFn: () => api.get('/students', { params: { search: studentSearch, limit: 1000 } }).then((r) => r.data.data) });
@@ -148,14 +149,11 @@ export default function HoursMonthly() {
                   </tr>
                 ))}
             </Table>
-            {(() => { const total = allLedger.data?.total || 0; const pages = Math.ceil(total / 20) || 1; return (
-              <div className="flex items-center justify-between mt-3 text-sm">
-                <span className="muted">Page {summaryPage} / {pages} · {total} students</span>
-                <div className="flex gap-2">
-                  <button className="btn-ghost" disabled={summaryPage <= 1} onClick={() => setSummaryPage((p) => p - 1)}>Prev</button>
-                  <button className="btn-ghost" disabled={summaryPage >= pages} onClick={() => setSummaryPage((p) => p + 1)}>Next</button>
-                </div>
-              </div>
+            {(() => { const total = allLedger.data?.total || 0; const pages = Math.ceil(total / summarySize) || 1; return (
+              <Pagination
+                page={summaryPage} pages={pages} total={total} noun="students"
+                pageSize={summarySize} onPage={setSummaryPage} onPageSize={setSummarySize}
+              />
             ); })()}
             </>
           )}

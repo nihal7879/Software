@@ -7,6 +7,11 @@
 //
 // Refuses if a paid package was created at conversion, because that would mean
 // real money is attached and reverting would misreport them as a free trial.
+//
+// Reverting also hands back the enrolment number and gives a fresh T-number,
+// since a trial must not sit in the enrolment sequence. The surrendered number
+// is not reissued to anyone else — the next enrolment carries on from the
+// highest one in use, so no register ever names two students with one number.
 require('dotenv').config();
 const mysql = require('mysql2/promise');
 
@@ -51,22 +56,27 @@ const forms = process.argv.slice(2).filter((a) => /^\d+$/.test(a));
 
   await conn.beginTransaction();
   try {
+    const [{ mx }] = await q("SELECT MAX(CAST(SUBSTRING(form_no,2) AS UNSIGNED)) mx FROM students WHERE form_no REGEXP '^T[0-9]+$'");
+    let nextTrial = Number(mx || 0) + 1;
     for (const r of ok) {
-      await q(`UPDATE students SET student_type='Trial', converted_on=NULL, converted_by=NULL WHERE id=?`, [r.id]);
+      const trialForm = `T${nextTrial++}`;
+      await q(`UPDATE students SET student_type='Trial', form_no=?, converted_on=NULL, converted_by=NULL WHERE id=?`, [trialForm, r.id]);
       await q(
         `INSERT INTO audit_logs (user_id, action, entity_type, entity_id, before_json, after_json)
          VALUES (NULL,'REVERT_TO_TRIAL','student',?,?,?)`,
         [String(r.id),
-         JSON.stringify({ student_type: 'Enrolled', converted_on: r.converted_on }),
-         JSON.stringify({ student_type: 'Trial', converted_on: null, reason: 'enrolled in error' })]);
+         JSON.stringify({ student_type: 'Enrolled', form_no: r.form_no, converted_on: r.converted_on }),
+         JSON.stringify({ student_type: 'Trial', form_no: trialForm, converted_on: null, reason: 'enrolled in error' })]);
+      console.log(`  form ${r.form_no} -> ${trialForm}  ${r.full_name}`);
     }
     await conn.commit();
     console.log(`\nAPPLIED — ${ok.length} reverted`);
+    // Look them up by id: their form numbers changed a moment ago.
     console.table(await q(
       `SELECT s.form_no, s.full_name, s.student_type, s.trial_started_on, s.converted_on,
               ROUND(h.hours_left,1) hours_left, h.fee_status
          FROM students s JOIN student_hours_summary h ON h.student_id = s.id
-        WHERE s.form_no IN (?) ORDER BY CAST(s.form_no AS UNSIGNED)`, [forms]));
+        WHERE s.id IN (?) ORDER BY CAST(SUBSTRING(s.form_no,2) AS UNSIGNED)`, [ok.map((r) => r.id)]));
   } catch (e) {
     await conn.rollback();
     console.error('ROLLED BACK:', e.message);

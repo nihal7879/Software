@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { api } from '../../api/client';
-import { Section, StatusBadge, Table, Spinner } from '../../components/ui';
+import { Section, StatusBadge, Table, Spinner, Pagination } from '../../components/ui';
 import { StudentRegistrationForm } from '../../components/StudentRegistrationForm';
 import { ConfirmModal } from '../../components/ConfirmModal';
 
@@ -40,6 +40,7 @@ export default function ManagementStudents() {
   const qc = useQueryClient();
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
   const [drawer, setDrawer] = useState(false);
   // '' = all. Trial students are people on a free trial, not yet enrolled.
   const [typeFilter, setTypeFilter] = useState<'' | 'Trial' | 'Enrolled'>('');
@@ -47,9 +48,9 @@ export default function ManagementStudents() {
   const [newStudentId, setNewStudentId] = useState<number | null>(null);
 
   const { data, isLoading } = useQuery({
-    queryKey: ['mgmt-master', search, page, typeFilter],
+    queryKey: ['mgmt-master', search, page, pageSize, typeFilter],
     queryFn: () => api.get('/management/master', {
-      params: { search, page, limit: 20, ...(typeFilter ? { student_type: typeFilter } : {}) },
+      params: { search, page, limit: pageSize, ...(typeFilter ? { student_type: typeFilter } : {}) },
     }).then((r) => r.data),
   });
 
@@ -80,12 +81,15 @@ export default function ManagementStudents() {
       api.post(`/students/${v.id}/convert`, v.package_hours ? { package_hours: v.package_hours } : {}),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['mgmt-master'] }),
   });
-  const [converting, setConverting] = useState<{ id: number; name: string } | null>(null);
+  const [converting, setConverting] = useState<{ id: number; name: string; form_no: string } | null>(null);
   const [convertHours, setConvertHours] = useState('');
+  // Enrolling changes their form number, so say which one they got rather than
+  // letting the row quietly renumber itself behind the closed dialog.
+  const [enrolled, setEnrolled] = useState<{ name: string; form_no: string; previous_form_no: string } | null>(null);
 
   const rows = data?.data || [];
   const total = data?.total || 0;
-  const pages = Math.ceil(total / 20) || 1;
+  const pages = Math.ceil(total / pageSize) || 1;
 
   return (
     <div className="space-y-4">
@@ -168,7 +172,7 @@ export default function ManagementStudents() {
                     {r.student_type === 'Trial' && (
                       <button
                         className="!py-1 !px-2.5 text-xs rounded-lg border border-violet-500/30 text-violet-600 hover:bg-violet-500/10 transition-colors"
-                        onClick={() => { setConvertHours(''); setConverting({ id: r.id, name: r.full_name }); }}
+                        onClick={() => { setConvertHours(''); setConverting({ id: r.id, name: r.full_name, form_no: r.form_no }); }}
                       >
                         Enroll
                       </button>
@@ -193,13 +197,10 @@ export default function ManagementStudents() {
               </tr>
             ))}
           </Table>
-          <div className="flex items-center justify-between mt-3 text-sm">
-            <span className="muted">Page {page} / {pages}</span>
-            <div className="flex gap-2">
-              <button className="btn-ghost" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>Prev</button>
-              <button className="btn-ghost" disabled={page >= pages} onClick={() => setPage((p) => p + 1)}>Next</button>
-            </div>
-          </div>
+          <Pagination
+            page={page} pages={pages} total={total} noun="students"
+            pageSize={pageSize} onPage={setPage} onPageSize={setPageSize}
+          />
           </>
         )}
       </Section>
@@ -211,7 +212,10 @@ export default function ManagementStudents() {
             {!newStudentId ? (
               <>
                 <h2 className="text-lg font-bold mb-1">Add Student</h2>
-                <p className="muted text-sm mb-4">Step 1 of 2 — set the name &amp; login, then fill the full profile. The Form No is assigned automatically.</p>
+                <p className="muted text-sm mb-4">
+                  Step 1 of 2 — set the name &amp; login, then fill the full profile. The Form No is assigned
+                  automatically: a trial gets a T-number and only takes a real form number when they enroll.
+                </p>
                 <form onSubmit={handleSubmit((b) => create.mutate(b))} className="space-y-3">
                   {[
                     ['first_name', 'First Name *'],
@@ -256,7 +260,8 @@ export default function ManagementStudents() {
                       <input className="input mt-1" type="number" step="0.5" min="0.5" placeholder="e.g. 2" {...register('trial_hours')} />
                       <p className="text-xs muted mt-1.5">
                         Added as a zero-cost package so the hours count down normally.
-                        You can enroll them later without losing any of this.
+                        You can enroll them later without losing any of this — they'll keep this record
+                        and swap their T-number for a real form number then.
                       </p>
                     </div>
                   )}
@@ -297,6 +302,10 @@ export default function ManagementStudents() {
             <p className="muted text-sm mt-1">
               Their trial lectures, login and parent record all stay with them. This can't be undone.
             </p>
+            <p className="text-xs muted mt-2">
+              Form <span className="font-mono">{converting.form_no}</span> is a trial number — enrolling
+              replaces it with the next real form number.
+            </p>
             <label className="text-xs font-medium muted block mt-4">First package hours (optional)</label>
             <input
               className="input mt-1" type="number" step="0.5" min="0.5" placeholder="e.g. 30"
@@ -314,7 +323,16 @@ export default function ManagementStudents() {
                 onClick={() => {
                   convert.mutate(
                     { id: converting.id, package_hours: convertHours ? Number(convertHours) : undefined },
-                    { onSuccess: () => setConverting(null) }
+                    {
+                      onSuccess: (res) => {
+                        setEnrolled({
+                          name: converting.name,
+                          form_no: res.data.form_no,
+                          previous_form_no: res.data.previous_form_no,
+                        });
+                        setConverting(null);
+                      },
+                    }
                   );
                 }}
               >
@@ -322,6 +340,21 @@ export default function ManagementStudents() {
               </button>
               <button type="button" className="btn-ghost" onClick={() => setConverting(null)}>Cancel</button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {enrolled && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={() => setEnrolled(null)}>
+          <div className="w-full max-w-sm rounded-xl p-5 text-center" style={{ background: 'var(--color-card)' }} onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-bold">{enrolled.name} is enrolled</h3>
+            <p className="muted text-sm mt-1">Form number assigned:</p>
+            <div className="font-mono text-3xl font-bold my-3">{enrolled.form_no}</div>
+            <p className="text-xs muted">
+              Was <span className="font-mono">{enrolled.previous_form_no}</span> while on trial. Anything
+              sent out under the old number should be reissued with this one.
+            </p>
+            <button className="btn-primary w-full mt-5" onClick={() => setEnrolled(null)}>Done</button>
           </div>
         </div>
       )}

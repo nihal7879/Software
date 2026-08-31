@@ -6,7 +6,7 @@
 // They were skipped by import-july-aug.js because their form numbers were
 // 'demo', 'demo2', 'Demo3', 'Demo4', 'Demo6'. Now that students.student_type
 // exists they can come in properly:
-//   - a real numeric form number, so nothing has to be renumbered if they enroll
+//   - a trial form number (T1, T2 …); they get a real one when they enroll
 //   - student_type = 'Trial', status = 'Active'
 //   - trial_started_on = the date of their trial lecture
 //   - a zero-cost 'Trial' fee_package equal to the hours they actually used, so
@@ -118,8 +118,11 @@ const M = sheet(/student details master/i);
     for (let i = 1; i < 99; i++) { const t = base + i; if (!takenUser.has(t)) { takenUser.add(t); return t; } }
     return null;
   };
-  const [{ mx }] = await q("SELECT MAX(CAST(form_no AS UNSIGNED)) mx FROM students WHERE form_no REGEXP '^[0-9]+$'");
-  let nextForm = Number(mx) + 1;
+  // Trials are numbered on their own T-counter and only take an enrolment
+  // number when they convert, so importing them cannot leave a hole in the
+  // enrolment sequence.
+  const [{ mx }] = await q("SELECT MAX(CAST(SUBSTRING(form_no,2) AS UNSIGNED)) mx FROM students WHERE form_no REGEXP '^T[0-9]+$'");
+  let nextForm = Number(mx || 0) + 1;
 
   const plan = [];
   for (const d of [...demos.values()].sort((a, b) => a.lectures[0].date.localeCompare(b.lectures[0].date))) {
@@ -127,7 +130,7 @@ const M = sheet(/student details master/i);
     const m = master.get(d.key);
     const hours = d.lectures.reduce((a, b) => a + b.hours, 0);
     plan.push({
-      oldKey: d.key, form: String(nextForm++), name: d.name,
+      oldKey: d.key, form: `T${nextForm++}`, name: d.name,
       year_grade: clean(m ? m[mY] : '') || null,
       school: clean(m ? m[mSc] : '') || null,
       board: clean(m ? m[mB] : '') || null,
@@ -195,7 +198,7 @@ const M = sheet(/student details master/i);
          ROUND(h.total_hours_credited,1) credited, ROUND(h.total_hours_consumed,1) consumed,
          ROUND(h.hours_left,1) hours_left, h.fee_status
        FROM students s JOIN student_hours_summary h ON h.student_id = s.id
-       WHERE s.student_type = 'Trial' ORDER BY CAST(s.form_no AS UNSIGNED)`));
+       WHERE s.student_type = 'Trial' ORDER BY CAST(SUBSTRING(s.form_no,2) AS UNSIGNED)`));
     fs.writeFileSync(path.join(__dirname, 'import-demo-as-trial-created.json'), JSON.stringify(done, null, 1));
   } catch (e) {
     await conn.rollback();

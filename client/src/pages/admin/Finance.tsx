@@ -2,7 +2,7 @@ import { useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { api, rs, num, studentOption } from '../../api/client';
-import { Section, Table, Spinner } from '../../components/ui';
+import { Section, Table, Spinner, Pagination } from '../../components/ui';
 import { CalendarPicker, CalendarRangePicker } from '../../components/CalendarPicker';
 import { Select } from '../../components/Select';
 import { ConfirmModal } from '../../components/ConfirmModal';
@@ -17,14 +17,15 @@ export default function Finance() {
   const [toDate, setToDate] = useState('');
   const [txSearch, setTxSearch] = useState('');
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
   const [importMsg, setImportMsg] = useState('');
   const [draftsOpen, setDraftsOpen] = useState(false);
   const [confirm, setConfirm] = useState<{ title: string; message: string; confirmLabel: string; onConfirm: () => void } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const tx = useQuery({
-    queryKey: ['transactions', txSearch, fromDate, toDate, page],
-    queryFn: () => api.get('/fees/transactions', { params: { search: txSearch, from: fromDate || undefined, to: toDate || undefined, page, limit: 20 } }).then((r) => r.data),
+    queryKey: ['transactions', txSearch, fromDate, toDate, page, pageSize],
+    queryFn: () => api.get('/fees/transactions', { params: { search: txSearch, from: fromDate || undefined, to: toDate || undefined, page, limit: pageSize } }).then((r) => r.data),
   });
   const [studentSearch, setStudentSearch] = useState('');
   const students = useQuery({ queryKey: ['students-pick', studentSearch], queryFn: () => api.get('/students', { params: { search: studentSearch, limit: 50 } }).then((r) => r.data.data) });
@@ -220,13 +221,10 @@ export default function Finance() {
           </Table>
         ))}
         {!tx.isLoading && visibleTx.length > 0 && (
-          <div className="flex items-center justify-between mt-3 text-sm">
-            <span className="muted">Page {page} / {txPages} · {txTotal} payments</span>
-            <div className="flex gap-2">
-              <button className="btn-ghost" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>Prev</button>
-              <button className="btn-ghost" disabled={page >= txPages} onClick={() => setPage((p) => p + 1)}>Next</button>
-            </div>
-          </div>
+          <Pagination
+            page={page} pages={txPages} total={txTotal} noun="payments"
+            pageSize={pageSize} onPage={setPage} onPageSize={setPageSize}
+          />
         )}
       </Section>
 
