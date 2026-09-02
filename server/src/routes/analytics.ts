@@ -118,6 +118,11 @@ async function pivot(req: any, res: any, opts: {
   const searchSql = search ? ' AND (s.full_name LIKE ? OR s.form_no LIKE ?)' : '';
   const sp = search ? [`%${search}%`, `%${search}%`] : [];
 
+  // Trials are prospects on free hours, not customers. Counting them here
+  // inflated the hours pivot with hours nobody was billed for, and would put a
+  // zero-revenue row in the finance pivot. Both pivots read enrolments only.
+  const enrolledOnly = " AND s.student_type <> 'Trial'";
+
   // EXISTS: students who have data in this year (matching search), paginated.
   const existsSql = `EXISTS (SELECT 1 FROM ${src} WHERE ${where} AND ${monthCol} LIKE ? AND student_id = s.id)`;
   // These three are independent — run them in one concurrent batch.
@@ -125,17 +130,17 @@ async function pivot(req: any, res: any, opts: {
     query<any>(
       `SELECT s.id, s.form_no, s.full_name AS student_name
        FROM students s
-       WHERE ${existsSql}${searchSql}
+       WHERE ${existsSql}${searchSql}${enrolledOnly}
        ORDER BY ${formNoOrder('s.form_no')}
        LIMIT ? OFFSET ?`,
       [yearLike, ...sp, limit, offset]
     ),
-    query<any>(`SELECT COUNT(*) AS total FROM students s WHERE ${existsSql}${searchSql}`, [yearLike, ...sp]),
+    query<any>(`SELECT COUNT(*) AS total FROM students s WHERE ${existsSql}${searchSql}${enrolledOnly}`, [yearLike, ...sp]),
     query(
       `SELECT ${monthCol} AS month, ${valueExpr} AS ${valueAlias}
        FROM ${src}
        JOIN students s ON s.id = student_id
-       WHERE ${where} AND ${monthCol} LIKE ?${searchSql}
+       WHERE ${where} AND ${monthCol} LIKE ?${searchSql}${enrolledOnly}
        GROUP BY ${monthCol}`,
       [yearLike, ...sp]
     ),

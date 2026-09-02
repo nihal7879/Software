@@ -4,6 +4,7 @@ import { useForm } from 'react-hook-form';
 import { api } from '../../api/client';
 import { Section, StatusBadge, Table, Spinner, Pagination } from '../../components/ui';
 import { ConfirmModal } from '../../components/ConfirmModal';
+import { Overlay } from '../../components/Overlay';
 
 export default function StudentsList() {
   const qc = useQueryClient();
@@ -103,7 +104,7 @@ export default function StudentsList() {
 
       {/* Drawer form */}
       {drawer && (
-        <div className="fixed inset-0 bg-black/40 flex justify-end z-50" onClick={() => setDrawer(false)}>
+        <Overlay onClose={() => setDrawer(false)}>
           <div className="w-full max-w-md h-full p-6 overflow-y-auto" style={{ background: 'var(--color-card)' }} onClick={(e) => e.stopPropagation()}>
             <h2 className="text-lg font-bold mb-4">Add Student</h2>
             <form onSubmit={handleSubmit((b) => create.mutate(b))} className="space-y-3">
@@ -150,7 +151,7 @@ export default function StudentsList() {
               </div>
             </form>
           </div>
-        </div>
+        </Overlay>
       )}
 
       {confirm && (

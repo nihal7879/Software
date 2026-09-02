@@ -1,3 +1,5 @@
+import { Overlay } from './Overlay';
+
 // Themed confirmation dialog — replaces the browser's window.confirm popup.
 // Render it conditionally from a parent that holds the "what am I confirming" state.
 export function ConfirmModal({
@@ -20,7 +22,7 @@ export function ConfirmModal({
   onClose: () => void;
 }) {
   return (
-    <div className="fixed inset-0 bg-black/50 z-[70] flex items-center justify-center p-4" onClick={onClose}>
+    <Overlay align="center" z="z-[70]" onClose={onClose}>
       <div className="card w-full max-w-sm p-6" onClick={(e) => e.stopPropagation()}>
         <h2 className="text-lg font-bold mb-1">{title}</h2>
         <p className="muted text-sm mb-5">{message}</p>
@@ -37,6 +39,6 @@ export function ConfirmModal({
           </button>
         </div>
       </div>
-    </div>
+    </Overlay>
   );
 }

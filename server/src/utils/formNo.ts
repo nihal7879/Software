@@ -31,8 +31,16 @@ export async function nextEnrolledFormNo(conn: Queryable = pool): Promise<string
 }
 
 // T1, T2, T3 … counted independently of the enrolment numbers.
+//
+// Counted from trial_form_no, not form_no. Enrolling rewrites form_no to an
+// enrolment number, so counting live T-numbers let the maximum fall back and
+// handed the next prospect a number an enrolled student had already used.
+// trial_form_no is written once and never cleared, so this only moves forward.
 export async function nextTrialFormNo(conn: Queryable = pool): Promise<string> {
-  return `T${(await maxOf(conn, 'SUBSTRING(form_no,2)', '^T[0-9]+$')) + 1}`;
+  const [rows]: any = await conn.query(
+    'SELECT MAX(CAST(SUBSTRING(trial_form_no,2) AS UNSIGNED)) AS mx FROM students'
+  );
+  return `T${Number(rows[0]?.mx || 0) + 1}`;
 }
 
 // Give a student row its form number. Used on create, and again on conversion
@@ -49,7 +57,14 @@ export async function claimFormNo(
     const formNo =
       studentType === 'Trial' ? await nextTrialFormNo(conn) : await nextEnrolledFormNo(conn);
     try {
-      await conn.query('UPDATE students SET form_no = ? WHERE id = ?', [formNo, studentId]);
+      // trial_form_no is stamped alongside the T-number and left alone on
+      // conversion, so the trial counter never rewinds.
+      await conn.query(
+        studentType === 'Trial'
+          ? 'UPDATE students SET form_no = ?, trial_form_no = ? WHERE id = ?'
+          : 'UPDATE students SET form_no = ? WHERE id = ?',
+        studentType === 'Trial' ? [formNo, formNo, studentId] : [formNo, studentId]
+      );
       return formNo;
     } catch (e: any) {
       if (e?.code !== 'ER_DUP_ENTRY' || attempt >= 4) throw e;

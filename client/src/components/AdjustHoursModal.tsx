@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Overlay } from './Overlay';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api/client';
 
@@ -41,7 +42,7 @@ export function AdjustHoursModal({
   const valid = Number(hours) > 0;
 
   return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={onClose}>
+    <Overlay align="center" onClose={onClose}>
       <div className="card w-full max-w-sm p-6" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-1">
           <h2 className="text-lg font-bold">Adjust Hours</h2>
@@ -104,6 +105,6 @@ export function AdjustHoursModal({
           <button className="btn-ghost" onClick={onClose}>Cancel</button>
         </div>
       </div>
-    </div>
+    </Overlay>
   );
 }

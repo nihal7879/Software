@@ -9,6 +9,7 @@ import { DateRangePicker } from '../../components/DateRangePicker';
 import { StudentRegistrationForm } from '../../components/StudentRegistrationForm';
 import { Select } from '../../components/Select';
 import { AdjustHoursModal } from '../../components/AdjustHoursModal';
+import { Overlay } from '../../components/Overlay';
 
 // MANAGEMENT per-student report with a DATE RANGE.
 // Per-day lecture log (date, month, teacher, time in/out, hours, topic/subtopic/remark)
@@ -232,7 +233,7 @@ export default function StudentReport() {
 
       {/* Edit / Complete Profile modal */}
       {editProfile && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-start justify-center overflow-y-auto p-4" onClick={() => setEditProfile(false)}>
+        <Overlay align="top" onClose={() => setEditProfile(false)}>
           <div className="card w-full max-w-2xl p-6 my-8" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-bold">{s.profile_completed ? 'Edit Profile' : 'Complete Profile'} — {s.full_name}</h2>
@@ -245,7 +246,7 @@ export default function StudentReport() {
               onSaved={() => { qc.invalidateQueries({ queryKey: ['student-report', id] }); setEditProfile(false); }}
             />
           </div>
-        </div>
+        </Overlay>
       )}
     </div>
   );

@@ -6,6 +6,7 @@ import { api } from '../../api/client';
 import { Section, StatusBadge, Table, Spinner, Pagination } from '../../components/ui';
 import { StudentRegistrationForm } from '../../components/StudentRegistrationForm';
 import { ConfirmModal } from '../../components/ConfirmModal';
+import { Overlay } from '../../components/Overlay';
 
 // Teachers cell: show 3 chips, then a clickable "+N" that expands/collapses the
 // rest (works on touch — no hover dependency).
@@ -206,7 +207,7 @@ export default function ManagementStudents() {
       </Section>
 
       {drawer && (
-        <div className="fixed inset-0 bg-black/40 flex justify-end z-50" onClick={closeDrawer}>
+        <Overlay onClose={closeDrawer}>
           <div className="w-full max-w-lg h-full p-6 overflow-y-auto" style={{ background: 'var(--color-card)' }} onClick={(e) => e.stopPropagation()}>
             {/* Step 1 — create the student (Form No is the key). */}
             {!newStudentId ? (
@@ -292,11 +293,11 @@ export default function ManagementStudents() {
               </>
             )}
           </div>
-        </div>
+        </Overlay>
       )}
 
       {converting && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={() => setConverting(null)}>
+        <Overlay align="center" onClose={() => setConverting(null)}>
           <div className="w-full max-w-sm rounded-xl p-5" style={{ background: 'var(--color-card)' }} onClick={(e) => e.stopPropagation()}>
             <h3 className="text-lg font-bold">Enroll {converting.name}</h3>
             <p className="muted text-sm mt-1">
@@ -341,11 +342,11 @@ export default function ManagementStudents() {
               <button type="button" className="btn-ghost" onClick={() => setConverting(null)}>Cancel</button>
             </div>
           </div>
-        </div>
+        </Overlay>
       )}
 
       {enrolled && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={() => setEnrolled(null)}>
+        <Overlay align="center" onClose={() => setEnrolled(null)}>
           <div className="w-full max-w-sm rounded-xl p-5 text-center" style={{ background: 'var(--color-card)' }} onClick={(e) => e.stopPropagation()}>
             <h3 className="text-lg font-bold">{enrolled.name} is enrolled</h3>
             <p className="muted text-sm mt-1">Form number assigned:</p>
@@ -356,7 +357,7 @@ export default function ManagementStudents() {
             </p>
             <button className="btn-primary w-full mt-5" onClick={() => setEnrolled(null)}>Done</button>
           </div>
-        </div>
+        </Overlay>
       )}
 
       {confirm && (

@@ -5,6 +5,7 @@ import { useForm } from 'react-hook-form';
 import { api, hrs } from '../../api/client';
 import { Section, Table, Spinner } from '../../components/ui';
 import { ConfirmModal } from '../../components/ConfirmModal';
+import { Overlay } from '../../components/Overlay';
 import { AdminLectureEntryModal } from '../../components/AdminLectureEntryModal';
 import { MultiSelect } from '../../components/MultiSelect';
 
@@ -246,7 +247,7 @@ export default function Teachers() {
       )}
 
       {drawer && (
-        <div className="fixed inset-0 bg-black/40 flex justify-end z-50" onClick={() => setDrawer(false)}>
+        <Overlay onClose={() => setDrawer(false)}>
           <div className="w-full max-w-md h-full p-6" style={{ background: 'var(--color-card)' }} onClick={(e) => e.stopPropagation()}>
             <h2 className="text-lg font-bold mb-1">Add Teacher</h2>
             <p className="muted text-sm mb-4">Set the email &amp; password — these are the teacher's login (share them with the teacher).</p>
@@ -290,11 +291,11 @@ export default function Teachers() {
               </div>
             </form>
           </div>
-        </div>
+        </Overlay>
       )}
 
       {editTeacher && (
-        <div className="fixed inset-0 bg-black/40 flex justify-end z-50" onClick={() => setEditTeacher(null)}>
+        <Overlay onClose={() => setEditTeacher(null)}>
           <div className="w-full max-w-md h-full p-6 overflow-y-auto" style={{ background: 'var(--color-card)' }} onClick={(e) => e.stopPropagation()}>
             <h2 className="text-lg font-bold mb-1">Edit Teacher</h2>
             <p className="muted text-sm mb-4">Update the teacher's details. Specialization controls which subjects show for them in Lecture Entry &amp; assignment.</p>
@@ -353,7 +354,7 @@ export default function Teachers() {
               </div>
             </div>
           </div>
-        </div>
+        </Overlay>
       )}
 
       {confirm && (

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Overlay } from './Overlay';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { api } from '../api/client';
@@ -93,7 +94,7 @@ export function AdminLectureEntryModal({
   );
 
   return (
-    <div className="fixed inset-0 bg-black/40 flex justify-end z-50" onClick={onClose}>
+    <Overlay onClose={onClose}>
       <div className="w-full max-w-2xl h-full p-6 overflow-y-auto" style={{ background: 'var(--color-card)' }} onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-1">
           <h2 className="text-lg font-bold">Log Lecture</h2>
@@ -190,6 +191,6 @@ export function AdminLectureEntryModal({
           <button className="btn-primary w-full" disabled={create.isPending}>{create.isPending ? 'Saving…' : 'Save Lecture'}</button>
         </form>
       </div>
-    </div>
+    </Overlay>
   );
 }

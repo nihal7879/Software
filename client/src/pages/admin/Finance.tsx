@@ -6,6 +6,7 @@ import { Section, Table, Spinner, Pagination } from '../../components/ui';
 import { CalendarPicker, CalendarRangePicker } from '../../components/CalendarPicker';
 import { Select } from '../../components/Select';
 import { ConfirmModal } from '../../components/ConfirmModal';
+import { Overlay } from '../../components/Overlay';
 import { toast } from '../../components/Toast';
 import { parseFeeWorkbook } from '../../lib/excel';
 
@@ -229,7 +230,7 @@ export default function Finance() {
       </Section>
 
       {drawer && (
-        <div className="fixed inset-0 bg-black/40 flex justify-end z-50" onClick={closeDrawer}>
+        <Overlay onClose={closeDrawer}>
           <div className="w-full max-w-md h-full p-6 overflow-y-auto" style={{ background: 'var(--color-card)' }} onClick={(e) => e.stopPropagation()}>
             <h2 className="text-lg font-bold mb-4">{editing ? 'Edit Payment' : 'Record Payment'}</h2>
             <form onSubmit={handleSubmit((b) => save.mutate(b))} className="space-y-3">
@@ -280,7 +281,7 @@ export default function Finance() {
               </div>
             </form>
           </div>
-        </div>
+        </Overlay>
       )}
 
       {confirm && (
