@@ -41,8 +41,11 @@ export function AdminLectureEntryModal({
   const now = new Date();
   const pad = (n: number) => String(n).padStart(2, '0');
   const today = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
-  const nowTime = `${pad(now.getHours())}:${pad(now.getMinutes())}:00`;
-  const plusHour = new Date(now.getTime() + 60 * 60 * 1000);
+  // Snapped to the nearest quarter hour — the only minutes the picker offers.
+  const start = new Date(now);
+  start.setMinutes(Math.round(now.getMinutes() / 15) * 15, 0, 0);
+  const nowTime = `${pad(start.getHours())}:${pad(start.getMinutes())}:00`;
+  const plusHour = new Date(start.getTime() + 60 * 60 * 1000);
   const endTime = `${pad(plusHour.getHours())}:${pad(plusHour.getMinutes())}:00`;
 
   const { register, handleSubmit, reset, watch, setValue } = useForm<any>({

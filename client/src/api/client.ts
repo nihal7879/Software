@@ -83,10 +83,16 @@ export const fmtDate = (d: string | Date | null | undefined) => {
 // Student dropdown option: main line = "Form — Name", sub line = Grade · Parent
 // (mobile). The parent + mobile disambiguate two same-name students in the same
 // class/school. Used as { value, label, sub } for the themed Select.
+// Who pays: the parent named by the student's stated relationship, falling back
+// to whichever parent is on file. Used both for the dropdown's sub-line and to
+// pre-fill the payer on a payment.
+export const parentOf = (s: any): string =>
+  (s?.relationship === 'Mother' ? s.mother_name
+    : s?.relationship === 'Father' ? s.father_name
+    : (s?.father_name || s?.mother_name)) || '';
+
 export const studentOption = (s: any) => {
-  const parent = s.relationship === 'Mother' ? s.mother_name
-    : s.relationship === 'Father' ? s.father_name
-    : (s.father_name || s.mother_name);
+  const parent = parentOf(s);
   const sub = [
     s.year_grade || null,
     parent ? `${parent}${s.parent_mobile ? ` · ${s.parent_mobile}` : ''}` : (s.parent_mobile || null),

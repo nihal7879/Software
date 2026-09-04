@@ -86,9 +86,11 @@ router.get(
     if (from) { where.push('ft.payment_date >= ?'); params.push(from); }
     if (to) { where.push('ft.payment_date <= ?'); params.push(to); }
     if (search) {
-      where.push('(s.full_name LIKE ? OR s.form_no LIKE ? OR ft.transaction_reference LIKE ? OR ft.payment_source LIKE ? OR ft.parent_name LIKE ? OR ft.notes LIKE ?)');
+      // The bank narration is searched too: it is the only field carrying the
+      // payer's name and IBAN, so it is how an unnamed transfer gets traced.
+      where.push('(s.full_name LIKE ? OR s.form_no LIKE ? OR ft.transaction_reference LIKE ? OR ft.transaction_narration LIKE ? OR ft.payment_source LIKE ? OR ft.parent_name LIKE ? OR ft.notes LIKE ?)');
       const like = `%${search}%`;
-      params.push(like, like, like, like, like, like);
+      params.push(like, like, like, like, like, like, like);
     }
     const whereSql = `WHERE ${where.join(' AND ')}`;
 
@@ -117,6 +119,7 @@ const txSchema = z.object({
   amount: z.number(),
   payment_date: z.string(),
   transaction_reference: z.string().optional().nullable(),
+  transaction_narration: z.string().optional().nullable(),
   payment_source: z.string().optional().nullable(),
   course_package_hours: z.number().optional().nullable(),
   discount_hours: z.number().optional().nullable(),
@@ -131,11 +134,11 @@ router.post(
     const b = txSchema.parse(req.body);
     const r: any = await query(
       `INSERT INTO fee_transactions
-        (student_id,parent_name,amount,payment_date,month,transaction_reference,payment_source,course_package_hours,discount_hours,notes,created_by)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
+        (student_id,parent_name,amount,payment_date,month,transaction_reference,transaction_narration,payment_source,course_package_hours,discount_hours,notes,created_by)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
       [
         b.student_id, b.parent_name || null, b.amount, b.payment_date,
-        deriveMonth(b.payment_date), b.transaction_reference || null,
+        deriveMonth(b.payment_date), b.transaction_reference || null, b.transaction_narration || null,
         b.payment_source || null, b.course_package_hours ?? null, b.discount_hours ?? null,
         b.notes || null, req.user!.userId,
       ]
@@ -239,6 +242,7 @@ const importRowSchema = z.object({
   amount: z.union([z.number(), z.string()]).optional().nullable(),
   payment_date: z.string().optional().nullable(),
   transaction_reference: z.string().optional().nullable(),
+  transaction_narration: z.string().optional().nullable(),
   payment_source: z.string().optional().nullable(),
   parent_name: z.string().optional().nullable(),
   course_package_hours: z.union([z.number(), z.string()]).optional().nullable(),
@@ -283,9 +287,10 @@ router.post(
       if (ready) {
         const tr: any = await query(
           `INSERT INTO fee_transactions
-            (student_id,parent_name,amount,payment_date,month,transaction_reference,payment_source,course_package_hours,discount_hours,notes,created_by)
-           VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
+            (student_id,parent_name,amount,payment_date,month,transaction_reference,transaction_narration,payment_source,course_package_hours,discount_hours,notes,created_by)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
           [studentId, row.parent_name || null, amount, date, month, row.transaction_reference || null,
+           row.transaction_narration || null,
            row.payment_source || null, pkgHours, discHours, row.notes || null, req.user!.userId]
         );
         // Auto-credit imported hours so they appear in the student's statement.
@@ -305,11 +310,12 @@ router.post(
         await query(
           `INSERT INTO fee_import_drafts
             (student_id,guessed_form_no,guessed_student_name,amount,payment_date,month,
-             transaction_reference,payment_source,parent_name,course_package_hours,discount_hours,notes,reason,raw_json,created_by)
-           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+             transaction_reference,transaction_narration,payment_source,parent_name,course_package_hours,discount_hours,notes,reason,raw_json,created_by)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
           [studentId, row.form_no || null, row.student_name || null,
            Number.isFinite(amount) ? amount : null, date, month,
-           row.transaction_reference || null, row.payment_source || null, row.parent_name || null,
+           row.transaction_reference || null, row.transaction_narration || null,
+           row.payment_source || null, row.parent_name || null,
            pkgHours, discHours, row.notes || null, reason, JSON.stringify(row.raw ?? row), req.user!.userId]
         );
         drafted++;
@@ -368,11 +374,12 @@ router.post(
     const discHours = b.discount_hours ?? (draft.discount_hours != null ? Number(draft.discount_hours) : null);
     const r: any = await query(
       `INSERT INTO fee_transactions
-        (student_id,parent_name,amount,payment_date,month,transaction_reference,payment_source,course_package_hours,discount_hours,notes,created_by)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
+        (student_id,parent_name,amount,payment_date,month,transaction_reference,transaction_narration,payment_source,course_package_hours,discount_hours,notes,created_by)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
       [
         b.student_id, b.parent_name ?? draft.parent_name ?? null, amount, date, deriveMonth(date),
         b.transaction_reference ?? draft.transaction_reference ?? null,
+        draft.transaction_narration ?? null,
         b.payment_source ?? draft.payment_source ?? null,
         pkgHours, discHours, b.notes ?? draft.notes ?? null, req.user!.userId,
       ]
@@ -387,6 +394,20 @@ router.post(
     await query("UPDATE fee_import_drafts SET status = 'imported', student_id = ? WHERE id = ?", [b.student_id, req.params.id]);
     await audit(req.user!.userId, 'ASSIGN_IMPORT', 'fee_transaction', (r as any).insertId, draft, b);
     res.status(201).json({ id: (r as any).insertId });
+  })
+);
+
+// Discard every pending draft (admin) — same soft delete, in one go, for when a
+// whole upload was wrong and clearing it row by row is the only alternative.
+router.delete(
+  '/drafts',
+  requireRole('admin'),
+  wrap(async (req, res) => {
+    const pending = await query<any>("SELECT id FROM fee_import_drafts WHERE status = 'draft'");
+    if (pending.length === 0) return res.json({ ok: true, discarded: 0 });
+    await query("UPDATE fee_import_drafts SET status = 'discarded' WHERE status = 'draft'");
+    await audit(req.user!.userId, 'DISCARD_ALL', 'fee_import_draft', '0', { ids: pending.map((d) => d.id) }, null);
+    res.json({ ok: true, discarded: pending.length });
   })
 );
 

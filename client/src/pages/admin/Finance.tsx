@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
-import { api, rs, num, studentOption } from '../../api/client';
+import { api, rs, num, studentOption, parentOf } from '../../api/client';
 import { Section, Table, Spinner, Pagination } from '../../components/ui';
 import { CalendarPicker, CalendarRangePicker } from '../../components/CalendarPicker';
 import { Select } from '../../components/Select';
@@ -9,6 +9,13 @@ import { ConfirmModal } from '../../components/ConfirmModal';
 import { Overlay } from '../../components/Overlay';
 import { toast } from '../../components/Toast';
 import { parseFeeWorkbook } from '../../lib/excel';
+
+// Where the money came in. 323 of the 367 payments on record arrived as a
+// Mashreq transfer, so that is what a new payment starts as; the rest are one
+// click away, and anything unlisted can be typed into the dropdown's search box.
+const PAYMENT_SOURCES = ['MASHQ transfer', 'CASH', 'ADCB transfer', 'Krishna Sir account'];
+const DEFAULT_SOURCE = PAYMENT_SOURCES[0];
+const sourceOptions = PAYMENT_SOURCES.map((s) => ({ value: s, label: s }));
 
 export default function Finance() {
   const qc = useQueryClient();
@@ -20,6 +27,15 @@ export default function Finance() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
   const [importMsg, setImportMsg] = useState('');
+  // The bank narration is long machine text, useful only when tracing a payment
+  // back to a payer — so the column ships hidden and the choice is remembered.
+  const [showNarration, setShowNarration] = useState(() => {
+    try { return localStorage.getItem('finance.showNarration') === '1'; } catch { return false; }
+  });
+  const toggleNarration = () => setShowNarration((v) => {
+    try { localStorage.setItem('finance.showNarration', v ? '0' : '1'); } catch { /* private mode */ }
+    return !v;
+  });
   const [draftsOpen, setDraftsOpen] = useState(false);
   const [confirm, setConfirm] = useState<{ title: string; message: string; confirmLabel: string; onConfirm: () => void } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -34,7 +50,7 @@ export default function Finance() {
 
   const { register, handleSubmit, reset, watch, setValue } = useForm();
 
-  const openAdd = () => { setEditing(null); reset({ student_id: '', amount: '', payment_date: '', payment_source: '', transaction_reference: '', parent_name: '', course_package_hours: '', discount_hours: '', notes: '' }); setDrawer(true); };
+  const openAdd = () => { setEditing(null); reset({ student_id: '', amount: '', payment_date: '', payment_source: DEFAULT_SOURCE, transaction_reference: '', transaction_narration: '', parent_name: '', course_package_hours: '', discount_hours: '', notes: '' }); setDrawer(true); };
   const openEdit = (t: any) => { setEditing(t); reset({ ...t, course_package_hours: t.course_package_hours ?? '', discount_hours: t.discount_hours ?? '' }); setDrawer(true); };
   const closeDrawer = () => { setDrawer(false); setEditing(null); reset(); save.reset(); };
 
@@ -103,6 +119,14 @@ export default function Finance() {
     mutationFn: (id: number) => api.delete(`/fees/drafts/${id}`),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['fee-drafts'] }),
   });
+  const discardAll = useMutation({
+    mutationFn: () => api.delete('/fees/drafts').then((r) => r.data),
+    onSuccess: (r: any) => {
+      qc.invalidateQueries({ queryKey: ['fee-drafts'] });
+      toast(`Discarded ${r.discarded} draft row(s)`);
+    },
+    onError: (e: any) => toast(e?.response?.data?.error || 'Could not discard drafts', 'error'),
+  });
 
   const draftList = drafts.data || [];
 
@@ -136,9 +160,23 @@ export default function Finance() {
         <Section
           title={`Drafts — ${draftList.length} row(s) need a student assigned`}
           action={
-            <button className="btn-ghost !py-1 !px-3 text-xs flex items-center gap-1" onClick={() => setDraftsOpen((o) => !o)}>
-              {draftsOpen ? 'Hide ▲' : 'Show ▼'}
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                className="!py-1 !px-3 text-xs rounded-lg border border-red-500/30 text-red-600 hover:bg-red-500/10 transition-colors disabled:opacity-50"
+                disabled={discardAll.isPending || assign.isPending}
+                onClick={() => setConfirm({
+                  title: 'Discard all drafts',
+                  message: `Discard all ${draftList.length} draft row(s)? None of them will be recorded as payments. This cannot be undone.`,
+                  confirmLabel: 'Discard all',
+                  onConfirm: () => discardAll.mutate(),
+                })}
+              >
+                {discardAll.isPending ? 'Discarding…' : 'Discard all'}
+              </button>
+              <button className="btn-ghost !py-1 !px-3 text-xs flex items-center gap-1" onClick={() => setDraftsOpen((o) => !o)}>
+                {draftsOpen ? 'Hide ▲' : 'Show ▼'}
+              </button>
+            </div>
           }
         >
           {draftsOpen && (
@@ -148,7 +186,7 @@ export default function Finance() {
                 <table className="w-full border-collapse">
                   <thead>
                     <tr>
-                      {['Date', 'Transaction', 'Reference', 'Credit', 'Source', 'Assign to student', 'Pkg Hrs', 'Disc Hrs', 'Note', ''].map((h) => <th key={h} className="table-th">{h}</th>)}
+                      {['Date', 'Transaction', 'Reference', 'Credit', 'Source', 'Assign to student', 'Parent', 'Pkg Hrs', 'Disc Hrs', 'Note', ''].map((h) => <th key={h} className="table-th">{h}</th>)}
                     </tr>
                   </thead>
                   <tbody>
@@ -188,6 +226,13 @@ export default function Finance() {
               placeholder="Filter by date / month"
               align="right"
             />
+            <button
+              className="btn-ghost !py-1.5 !px-3 text-sm whitespace-nowrap"
+              onClick={toggleNarration}
+              title="The bank's own statement line for each payment — payer name, IBAN and reference"
+            >
+              {showNarration ? 'Hide bank details' : 'Show bank details'}
+            </button>
             {(fromDate || toDate || txSearch) && (
               <button className="btn-ghost !py-1.5 !px-3 text-sm whitespace-nowrap" onClick={() => { setFromDate(''); setToDate(''); setTxSearch(''); setPage(1); }}>
                 Show all
@@ -199,7 +244,9 @@ export default function Finance() {
         {tx.isLoading ? <Spinner /> : (visibleTx.length === 0 ? (
           <p className="muted text-sm">No payments recorded{fromDate || toDate || txSearch ? ' for this filter' : ''}.</p>
         ) : (
-          <Table head={['Date', 'Form', 'Student', { label: 'Amount (AED)', align: 'right' }, 'Source', 'Reference', 'Parent', { label: 'Pkg Hrs', align: 'right' }, { label: 'Disc Hrs', align: 'right' }, 'Notes', '']}>
+          <Table head={['Date', 'Form', 'Student', { label: 'Amount (AED)', align: 'right' }, 'Source', 'Reference',
+                        ...(showNarration ? ['Bank Transaction'] : []),
+                        'Parent', { label: 'Pkg Hrs', align: 'right' }, { label: 'Disc Hrs', align: 'right' }, 'Notes', '']}>
             {visibleTx.map((t: any) => (
               <tr key={t.id}>
                 <td className="table-td whitespace-nowrap">{t.payment_date}</td>
@@ -208,6 +255,23 @@ export default function Finance() {
                 <td className="table-td text-right font-semibold text-emerald-600">{num(t.amount)}</td>
                 <td className="table-td">{t.payment_source || '—'}</td>
                 <td className="table-td font-mono text-xs">{t.transaction_reference || '—'}</td>
+                {showNarration && (
+                  <td className="table-td align-top">
+                    {t.transaction_narration ? (
+                      // Collapsed to two lines; the full line is one click away
+                      // rather than in a tooltip, because it is long enough that
+                      // a hover title gets cut off by the browser.
+                      <details className="max-w-[320px]">
+                        <summary className="cursor-pointer text-xs font-mono leading-snug line-clamp-2 marker:hidden [&::-webkit-details-marker]:hidden">
+                          {t.transaction_narration}
+                        </summary>
+                        <div className="mt-1 text-xs font-mono whitespace-pre-wrap break-words muted">
+                          {t.transaction_narration}
+                        </div>
+                      </details>
+                    ) : <span className="muted">—</span>}
+                  </td>
+                )}
                 <td className="table-td">{t.parent_name || '—'}</td>
                 <td className="table-td text-right">{t.course_package_hours ?? '—'}</td>
                 <td className="table-td text-right">{t.discount_hours ?? '—'}</td>
@@ -239,7 +303,15 @@ export default function Finance() {
                 <input type="hidden" {...register('student_id', { required: true })} />
                 <Select
                   value={watch('student_id') || ''}
-                  onChange={(v) => setValue('student_id', v, { shouldValidate: true })}
+                  onChange={(v) => {
+                    setValue('student_id', v, { shouldValidate: true });
+                    // A fee is nearly always paid by the parent on record, so
+                    // picking the student fills the payer in. It stays editable
+                    // for the relative or third party who sometimes sends it.
+                    const s = (students.data || []).find((x: any) => String(x.id) === String(v));
+                    const parent = s ? parentOf(s) : '';
+                    if (parent) setValue('parent_name', parent);
+                  }}
                   options={(students.data || []).map((s: any) => studentOption(s))}
                   onSearch={setStudentSearch}
                   placeholder="Search student…"
@@ -258,8 +330,18 @@ export default function Finance() {
                   placeholder="Select payment date"
                 />
               </div>
+              <div>
+                <label className="text-xs font-medium muted block mb-1">Payment Source</label>
+                <input type="hidden" {...register('payment_source')} />
+                <Select
+                  value={watch('payment_source') || ''}
+                  onChange={(v) => setValue('payment_source', v)}
+                  options={sourceOptions}
+                  allowCustom
+                  placeholder="Select source…"
+                />
+              </div>
               {[
-                ['payment_source', 'Payment Source'],
                 ['transaction_reference', 'Transaction Reference'],
                 ['parent_name', 'Parent Name'],
                 ['course_package_hours', 'Course Package Hours'],
@@ -270,6 +352,15 @@ export default function Finance() {
                   <input className="input mt-1" {...register(n)} />
                 </div>
               ))}
+              <div>
+                <label className="text-xs font-medium muted">Bank Transaction</label>
+                <textarea
+                  className="input mt-1 font-mono text-xs"
+                  rows={3}
+                  placeholder="Bank statement line — payer name, IBAN, reference"
+                  {...register('transaction_narration')}
+                />
+              </div>
               <div>
                 <label className="text-xs font-medium muted">Notes</label>
                 <textarea className="input mt-1" rows={3} {...register('notes')} />
@@ -315,6 +406,10 @@ function DraftRow({
   onStudentSearch: (q: string) => void;
 }) {
   const [studentId, setStudentId] = useState<string>(draft.student_id ? String(draft.student_id) : '');
+  const [parentName, setParentName] = useState<string>(draft.parent_name || '');
+  // The sheet often leaves Source blank; a blank draft starts on Mashreq like a
+  // manual payment does, and an imported source is kept as-is.
+  const [source, setSource] = useState<string>(draft.payment_source || DEFAULT_SOURCE);
   const [pkgHours, setPkgHours] = useState<string>(draft.course_package_hours != null ? String(draft.course_package_hours) : '');
   const [discHours, setDiscHours] = useState<string>(draft.discount_hours != null ? String(draft.discount_hours) : '');
   const [note, setNote] = useState<string>('');
@@ -323,9 +418,11 @@ function DraftRow({
   const amount = draft.amount != null ? String(draft.amount) : '';
   const date = draft.payment_date ? String(draft.payment_date).slice(0, 10) : '';
   const reference = draft.transaction_reference || '';
-  const source = draft.payment_source || '';
 
-  const transaction = draft.notes || draft.guessed_student_name || '—';
+  // The bank's statement line, which is what identifies an unassigned payment.
+  // Before it was imported this column fell back to the note or the guessed
+  // name — neither of which says who actually sent the money.
+  const transaction = draft.transaction_narration || draft.notes || draft.guessed_student_name || '—';
   const canAssign = studentId && Number(amount) > 0 && date;
 
   return (
@@ -336,16 +433,27 @@ function DraftRow({
       </td>
       <td className="table-td font-mono text-xs">{reference || '—'}</td>
       <td className="table-td text-sm">{amount || '—'}</td>
-      <td className="table-td text-sm">{source || '—'}</td>
+      <td className="table-td min-w-[170px]">
+        <Select value={source} onChange={setSource} options={sourceOptions} allowCustom compact placeholder="Source…" />
+      </td>
       <td className="table-td min-w-[220px]">
         <Select
           value={studentId}
-          onChange={setStudentId}
+          onChange={(v) => {
+            setStudentId(v);
+            // The bank line rarely names the payer in a usable form, so the
+            // parent on the student's record fills in here — still editable,
+            // because the sender is not always the parent.
+            const s = students.find((x: any) => String(x.id) === String(v));
+            const parent = s ? parentOf(s) : '';
+            if (parent) setParentName(parent);
+          }}
           options={students.map((s: any) => studentOption(s))}
           onSearch={onStudentSearch}
           placeholder="Search student…"
         />
       </td>
+      <td className="table-td"><input className="input !py-1 w-36" value={parentName} onChange={(e) => setParentName(e.target.value)} placeholder="Parent" /></td>
       <td className="table-td"><input className="input !py-1 w-24" type="number" step="0.01" value={pkgHours} onChange={(e) => setPkgHours(e.target.value)} placeholder="0" /></td>
       <td className="table-td"><input className="input !py-1 w-24" type="number" step="0.01" value={discHours} onChange={(e) => setDiscHours(e.target.value)} placeholder="0" /></td>
       <td className="table-td"><input className="input !py-1 w-40" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Add note…" /></td>
@@ -358,11 +466,15 @@ function DraftRow({
               student_id: Number(studentId),
               amount: Number(amount),
               payment_date: date,
+              parent_name: parentName.trim() || null,
               transaction_reference: reference || null,
               payment_source: source || null,
               course_package_hours: pkgHours ? Number(pkgHours) : null,
               discount_hours: discHours ? Number(discHours) : null,
-              notes: [transaction !== '—' ? transaction : '', note].filter(Boolean).join(' — ') || null,
+              // Only the admin's own note. The bank line used to be copied in
+              // here too; it now has its own column and is carried across by
+              // the server, so copying it would just duplicate it.
+              notes: note.trim() || null,
             })}
           >
             Assign

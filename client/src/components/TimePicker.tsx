@@ -3,7 +3,9 @@ import { Clock } from 'lucide-react';
 
 const pad = (n: number) => String(n).padStart(2, '0');
 const HOURS = Array.from({ length: 12 }, (_, i) => i + 1);
-const MINUTES = Array.from({ length: 60 }, (_, i) => i); // 0,1,…,59
+// Lectures start and end on the quarter hour, so those are the only minutes
+// offered — scrolling past 60 rows to reach :30 was the slow part of the form.
+const QUARTERS = [0, 15, 30, 45];
 
 // 12-hour time picker (hour / minute / AM-PM columns). Stores value as
 // 'HH:MM:SS' (24-hour) so the server can parse it.
@@ -18,6 +20,10 @@ export function TimePicker({ value, onChange, placeholder = 'Select time' }: { v
   const [open, setOpen] = useState(false);
   const cur = parse(value) || { h12: 12, m: 0, ampm: 'AM' as 'AM' | 'PM' };
   const has = !!parse(value);
+  // An existing record can hold an odd minute (an older entry, or a time typed
+  // before this list was narrowed). It is kept in the column so the value stays
+  // visible and re-selectable instead of silently vanishing.
+  const minutes = QUARTERS.includes(cur.m) ? QUARTERS : [...QUARTERS, cur.m].sort((a, b) => a - b);
 
   const emit = (h12: number, m: number, ampm: 'AM' | 'PM') => {
     const h24 = ampm === 'PM' ? (h12 % 12) + 12 : h12 % 12;
@@ -52,7 +58,7 @@ export function TimePicker({ value, onChange, placeholder = 'Select time' }: { v
           <div className="fixed inset-0 z-[60]" onClick={() => setOpen(false)} />
           <div className="card p-2 absolute z-[61] mt-2 flex gap-1">
             <Col>{HOURS.map((h) => <Item key={h} active={has && cur.h12 === h} onClick={() => emit(h, cur.m, cur.ampm)} label={pad(h)} />)}</Col>
-            <Col>{MINUTES.map((m) => <Item key={m} active={has && cur.m === m} onClick={() => emit(cur.h12, m, cur.ampm)} label={pad(m)} />)}</Col>
+            <Col>{minutes.map((m) => <Item key={m} active={has && cur.m === m} onClick={() => emit(cur.h12, m, cur.ampm)} label={pad(m)} />)}</Col>
             <div className="flex flex-col gap-0.5 w-14">
               {(['AM', 'PM'] as const).map((a) => <Item key={a} active={has && cur.ampm === a} onClick={() => emit(cur.h12, cur.m, a)} label={a} />)}
             </div>

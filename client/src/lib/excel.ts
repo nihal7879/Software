@@ -7,6 +7,7 @@ export type ImportRow = {
   amount?: string;
   payment_date?: string;
   transaction_reference?: string;
+  transaction_narration?: string;
   payment_source?: string;
   parent_name?: string;
   course_package_hours?: string;
@@ -23,10 +24,14 @@ const FIELD_ALIASES: Record<string, string[]> = {
   amount: ['amount', 'fees', 'feesreceived', 'amountpaid', 'paid', 'feespaid', 'feereceived', 'amountreceived', 'feesamount', 'credit', 'creditamount', 'creditamt'],
   payment_date: ['date', 'paymentdate', 'paydate', 'dateofpayment', 'transactiondate', 'paiddate'],
   transaction_reference: ['reference', 'transactionreference', 'ref', 'utr', 'txnref', 'referenceno', 'referencenumber', 'transactionref', 'transactionid'],
+  // The bank's own statement line. It used to fall into `notes`, which put a
+  // 260-character machine string where the admin's own remark belongs — and
+  // there was nowhere left for the remark itself.
+  transaction_narration: ['transaction', 'transactiondetails', 'narration', 'particulars', 'description', 'bankdescription', 'statementnarration'],
   payment_source: ['source', 'paymentsource', 'mode', 'bank', 'paymentmode', 'paidvia', 'channel'],
   parent_name: ['parent', 'parentname', 'paidby', 'guardian', 'payee'],
   course_package_hours: ['packagehours', 'pkghrs', 'hours', 'coursepackagehours', 'pkghours'],
-  notes: ['notes', 'remark', 'remarks', 'note', 'description', 'comment', 'transaction', 'transactiondetails', 'narration', 'particulars'],
+  notes: ['notes', 'remark', 'remarks', 'note', 'comment'],
 };
 
 const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -67,7 +72,11 @@ export async function parseFeeWorkbook(file: File): Promise<ImportRow[]> {
     for (const [key, value] of Object.entries(raw)) {
       const field = hmap[key];
       if (!field) continue;
-      const v = field === 'payment_date' ? fmtDate(value) : value == null ? '' : String(value).trim();
+      const v = field === 'payment_date'
+        ? fmtDate(value)
+        // Bank narrations wrap mid-field in the sheet; those newlines are
+        // layout, not content, so they collapse to single spaces.
+        : value == null ? '' : String(value).replace(/\s*\n\s*/g, ' ').trim();
       (out as any)[field] = v;
     }
     return out;

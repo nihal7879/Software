@@ -28,8 +28,13 @@ export default function LectureEntry() {
   const now = new Date();
   const pad = (n: number) => String(n).padStart(2, '0');
   const today = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
-  const nowTime = `${pad(now.getHours())}:${pad(now.getMinutes())}:00`;
-  const plusHour = new Date(now.getTime() + 60 * 60 * 1000);
+  // Snapped to the nearest quarter hour, which is all the time picker offers —
+  // and what a lecture is actually booked on. Both ends move together, so the
+  // default is still exactly one hour long.
+  const start = new Date(now);
+  start.setMinutes(Math.round(now.getMinutes() / 15) * 15, 0, 0);
+  const nowTime = `${pad(start.getHours())}:${pad(start.getMinutes())}:00`;
+  const plusHour = new Date(start.getTime() + 60 * 60 * 1000);
   const endTime = `${pad(plusHour.getHours())}:${pad(plusHour.getMinutes())}:00`;
 
   const { register, handleSubmit, reset, watch, setValue } = useForm<any>({
