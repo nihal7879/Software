@@ -62,7 +62,11 @@ export default function HoursMonthly() {
       const date = String(p.start_date || p.created_at || '').slice(0, 10) || '—';
       events.push({
         kind: 'credit', date,
-        fees: Number(p.rate_per_hour || 0) * credited,
+        // The amount actually paid, straight off the linked transaction. Falling
+        // back to rate × hours is only for a package with no payment behind it —
+        // a stored rate can be missing (older backfills wrote 0), and then the
+        // fee showed as a dash next to a payment that plainly exists.
+        fees: p.paid_amount != null ? Number(p.paid_amount) : Number(p.rate_per_hour || 0) * credited,
         credited, discount, adjusted, totalCredited: credited + discount + adjusted,
       });
     }

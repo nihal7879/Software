@@ -184,13 +184,21 @@ router.put(
     const disc = merged.discount_hours != null ? Number(merged.discount_hours) : 0;
     const amount = Number(merged.amount) || 0;
     const date = merged.payment_date ? String(merged.payment_date).slice(0, 10) : null;
-    const existingPkg = await queryOne<any>('SELECT id FROM fee_packages WHERE transaction_id = ?', [req.params.id]);
+    // A transaction can have picked up more than one package row over the years;
+    // the live one is the one to keep in sync, not a retired duplicate.
+    const existingPkg = await queryOne<any>(
+      'SELECT id FROM fee_packages WHERE transaction_id = ? ORDER BY is_deleted ASC, is_active DESC, id DESC LIMIT 1',
+      [req.params.id]
+    );
     if (hrs > 0 || disc > 0) {
       const rate = amount && hrs ? amount / hrs : 0;
       if (existingPkg) {
+        // student_id moves with the transaction: re-assigning a payment from one
+        // student to another has to carry the credited hours across, or the old
+        // student keeps hours they never paid for and the new one shows none.
         await query(
-          `UPDATE fee_packages SET package_hours = ?, discount_hours = ?, rate_per_hour = ?, start_date = ?, is_active = TRUE, is_deleted = FALSE WHERE id = ?`,
-          [hrs, disc, rate, date, existingPkg.id]
+          `UPDATE fee_packages SET student_id = ?, package_hours = ?, discount_hours = ?, rate_per_hour = ?, start_date = ?, is_active = TRUE, is_deleted = FALSE WHERE id = ?`,
+          [merged.student_id, hrs, disc, rate, date, existingPkg.id]
         );
       } else {
         await query(
@@ -233,7 +241,10 @@ const normDate = (v: any): string | null => {
   if (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v)) return v;
   const d = new Date(v);
   if (isNaN(d.getTime())) return null;
-  return d.toISOString().slice(0, 10);
+  // Local parts, not toISOString(): a date-only string parses to local midnight,
+  // and converting that to UTC lands on the previous day east of Greenwich.
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 };
 
 const importRowSchema = z.object({

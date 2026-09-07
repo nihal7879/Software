@@ -48,10 +48,26 @@ function headerMap(keys: string[]): Record<string, string> {
   return map;
 }
 
+const pad2 = (n: number) => String(n).padStart(2, '0');
+const EXCEL_MAX_SERIAL = 2958465; // 9999-12-31, the last date Excel can hold
+
+// Excel keeps a date as a day count, not text. SheetJS's `cellDates` option turns
+// that count into a JS Date using local-time arithmetic, and the floating-point
+// rounding can land a few seconds *short* of midnight — 25-Aug-2026 (serial
+// 46259) came back as 24-Aug 23:59:50 here, so reading the local calendar day
+// imported it as the 24th. Asking SheetJS for the calendar parts of the serial
+// instead skips both the rounding and the timezone.
 const fmtDate = (v: any): string => {
+  if (typeof v === 'number' && isFinite(v) && v >= 1 && v <= EXCEL_MAX_SERIAL) {
+    const d: any = (XLSX as any).SSF.parse_date_code(v);
+    if (d && d.y) return `${d.y}-${pad2(d.m)}-${pad2(d.d)}`;
+  }
   if (v instanceof Date && !isNaN(v.getTime())) {
-    const p = (n: number) => String(n).padStart(2, '0');
-    return `${v.getFullYear()}-${p(v.getMonth() + 1)}-${p(v.getDate())}`;
+    // A CSV can still hand us a Date. Anything inside the last minute of a day is
+    // that same rounding artefact, so it counts as the day about to start.
+    const ms = v.getHours() * 3600e3 + v.getMinutes() * 60e3 + v.getSeconds() * 1000 + v.getMilliseconds();
+    const d = ms > 86400e3 - 60e3 ? new Date(v.getTime() + 60e3) : v;
+    return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
   }
   return v == null ? '' : String(v).trim();
 };
@@ -59,7 +75,9 @@ const fmtDate = (v: any): string => {
 // Parse a File (.xlsx/.xls/.csv) → mapped rows. Uses the first sheet.
 export async function parseFeeWorkbook(file: File): Promise<ImportRow[]> {
   const buf = await file.arrayBuffer();
-  const wb = XLSX.read(buf, { type: 'array', cellDates: true });
+  // No `cellDates` — date cells stay as their raw serial number and fmtDate reads
+  // the calendar day off that, which is the only lossless route (see above).
+  const wb = XLSX.read(buf, { type: 'array' });
   const sheet = wb.Sheets[wb.SheetNames[0]];
   if (!sheet) return [];
   const json = XLSX.utils.sheet_to_json<Record<string, any>>(sheet, { defval: '' });

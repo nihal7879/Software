@@ -51,6 +51,15 @@ export default function Finance() {
   const { register, handleSubmit, reset, watch, setValue } = useForm();
 
   const openAdd = () => { setEditing(null); reset({ student_id: '', amount: '', payment_date: '', payment_source: DEFAULT_SOURCE, transaction_reference: '', transaction_narration: '', parent_name: '', course_package_hours: '', discount_hours: '', notes: '' }); setDrawer(true); };
+  // A payment carries hours with it, so anything that reads the hours ledger is
+  // stale the moment one is added, edited or deleted — most of all when the
+  // payment is moved to a different student, which changes two students' totals.
+  const invalidateFeeViews = () => {
+    for (const k of ['transactions', 'tx', 'ledger', 'ledger-all', 'pkg', 'adjustments', 'student-report', 'overview', 'breakdown', 'trend']) {
+      qc.invalidateQueries({ queryKey: [k] });
+    }
+  };
+
   const openEdit = (t: any) => { setEditing(t); reset({ ...t, course_package_hours: t.course_package_hours ?? '', discount_hours: t.discount_hours ?? '' }); setDrawer(true); };
   const closeDrawer = () => { setDrawer(false); setEditing(null); reset(); save.reset(); };
 
@@ -66,7 +75,7 @@ export default function Finance() {
       return editing ? api.put(`/fees/transactions/${editing.id}`, payload) : api.post('/fees/transactions', payload);
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['transactions'] });
+      invalidateFeeViews();
       toast(editing ? 'Payment updated' : 'Payment recorded');
       closeDrawer();
     },
@@ -75,7 +84,7 @@ export default function Finance() {
 
   const del = useMutation({
     mutationFn: (id: number) => api.delete(`/fees/transactions/${id}`),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['transactions'] }); toast('Payment deleted'); },
+    onSuccess: () => { invalidateFeeViews(); toast('Payment deleted'); },
   });
 
   const onDelete = (t: any) => setConfirm({
@@ -94,7 +103,7 @@ export default function Finance() {
     },
     onSuccess: (r) => {
       setImportMsg(`Imported ${r.imported} payment(s); ${r.drafted} sent to drafts (of ${r.total} rows).`);
-      qc.invalidateQueries({ queryKey: ['transactions'] });
+      invalidateFeeViews();
       qc.invalidateQueries({ queryKey: ['fee-drafts'] });
     },
     onError: (e: any) => setImportMsg(e?.response?.data?.error || e?.message || 'Import failed.'),
@@ -109,7 +118,7 @@ export default function Finance() {
   const assign = useMutation({
     mutationFn: (b: { id: number; payload: any }) => api.post(`/fees/drafts/${b.id}/assign`, b.payload),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['transactions'] });
+      invalidateFeeViews();
       qc.invalidateQueries({ queryKey: ['fee-drafts'] });
       toast('Payment assigned to student');
     },
