@@ -45,7 +45,7 @@ const LEDGER_SORTS: Record<string, string> = {
 // that rule in SQL — same three branches, same order.
 const LEDGER_STATUS_FILTERS: Record<string, string> = {
   'Payment Required': `s.student_type <> 'Trial' AND ${HOURS_LEFT_EXPR} <= 0`,
-  Active: `s.student_type <> 'Trial' AND ${HOURS_LEFT_EXPR} > 0`,
+  'In Credit': `s.student_type <> 'Trial' AND ${HOURS_LEFT_EXPR} > 0`,
   Trial: `s.student_type = 'Trial'`,
 };
 

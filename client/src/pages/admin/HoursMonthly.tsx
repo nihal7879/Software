@@ -52,7 +52,7 @@ export default function HoursMonthly() {
   const feeStatusOptions = [
     { value: '', label: 'All fee statuses' },
     { value: 'Payment Required', label: 'Payment Required' },
-    { value: 'Active', label: 'Active' },
+    { value: 'In Credit', label: 'In Credit' },
     { value: 'Trial', label: 'Trial' },
   ];
   const activeFilters = [status, feeStatus].filter(Boolean).length;

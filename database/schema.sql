@@ -330,7 +330,7 @@ SELECT
   COALESCE(la.extra_amount_left,0)  AS extra_amount_left,
   CASE
     WHEN ((COALESCE(pk.package_hours,0)+COALESCE(pk.discount_hours,0)+COALESCE(pk.adjusted_hours,0)+COALESCE(adj.total,0)) - COALESCE(con.consumed,0)) <= 0
-    THEN 'Payment Required' ELSE 'Active'
+    THEN 'Payment Required' ELSE 'In Credit'
   END                               AS fee_status,
   con.last_lecture_date             AS last_attended_lecture
 FROM students s

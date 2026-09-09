@@ -48,7 +48,9 @@ export const HOURS_COLUMNS = `
 
 // Derive hours_left + fee_status from the raw aggregates — same rule as the view:
 // Payment Required ONLY when hours_left <= 0. If the student still has remaining
-// hours (> 0) they are Active, regardless of any pending-fees figure.
+// hours (> 0) they are In Credit, regardless of any pending-fees figure. ("In
+// Credit" rather than "Active": the students table has its own Active/Inactive
+// enrolment status, and one row carrying two different "Active"s read as noise.)
 // A Trial student never reads Payment Required — using up free hours is not a
 // debt — so they report 'Trial' whatever their balance.
 export function deriveHours<T extends Record<string, any>>(row: T): T & { hours_left: number; fee_status: string } {
@@ -56,7 +58,7 @@ export function deriveHours<T extends Record<string, any>>(row: T): T & { hours_
   const consumed = Number(row.total_hours_consumed) || 0;
   const hours_left = Math.round((credited - consumed) * 100) / 100;
   const fee_status =
-    row.student_type === 'Trial' ? 'Trial' : hours_left <= 0 ? 'Payment Required' : 'Active';
+    row.student_type === 'Trial' ? 'Trial' : hours_left <= 0 ? 'Payment Required' : 'In Credit';
   return { ...row, hours_left, fee_status };
 }
 

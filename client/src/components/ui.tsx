@@ -51,6 +51,9 @@ export function Section({ title, action, children }: { title: string; action?: R
 export function StatusBadge({ status }: { status: string }) {
   const map: Record<string, string> = {
     Active: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400',
+    // Fee status: still has paid hours left. Same green as an active enrolment,
+    // but a distinct word, so the two columns cannot be read as the same thing.
+    'In Credit': 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400',
     Inactive: 'bg-slate-500/15 text-slate-500',
     Trial: 'bg-violet-500/15 text-violet-600 dark:text-violet-400',
     'Payment Required': 'bg-red-500/15 text-red-600 dark:text-red-400',
