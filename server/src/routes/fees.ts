@@ -4,7 +4,7 @@ import { query, queryOne } from '../db';
 import { requireAuth, requireRole, ensureOwnStudent } from '../middleware/auth';
 import { wrap } from '../middleware/error';
 import { deriveMonth } from '../utils/hours';
-import { HOURS_COLUMNS, deriveHours } from '../utils/hoursSummary';
+import { HOURS_COLUMNS, deriveHours, CREDITED_EXPR, CONSUMED_EXPR, LAST_LECTURE_EXPR } from '../utils/hoursSummary';
 import { audit } from '../utils/audit';
 import { formNoOrder } from '../utils/formNo';
 
@@ -27,6 +27,28 @@ router.get(
   })
 );
 
+// Sortable columns for the ledger table, mapped to the SQL that produces them.
+// Whitelisted rather than interpolated from the query string — the values land
+// straight in an ORDER BY. `hours_left` is the balance the admin actually chases:
+// sorted ascending it puts the deepest negative (owing the most) at the top.
+const HOURS_LEFT_EXPR = `(${CREDITED_EXPR} - ${CONSUMED_EXPR})`;
+const LEDGER_SORTS: Record<string, string> = {
+  form_no: formNoOrder('s.form_no'),
+  student_name: 's.full_name',
+  total_hours_credited: CREDITED_EXPR,
+  total_hours_consumed: CONSUMED_EXPR,
+  hours_left: HOURS_LEFT_EXPR,
+  last_attended_lecture: LAST_LECTURE_EXPR,
+};
+
+// Fee status is derived in JS by deriveHours, so filtering on it means repeating
+// that rule in SQL — same three branches, same order.
+const LEDGER_STATUS_FILTERS: Record<string, string> = {
+  'Payment Required': `s.student_type <> 'Trial' AND ${HOURS_LEFT_EXPR} <= 0`,
+  Active: `s.student_type <> 'Trial' AND ${HOURS_LEFT_EXPR} > 0`,
+  Trial: `s.student_type = 'Trial'`,
+};
+
 // Full ledger table (admin) — one PAGE of students, each computed scoped to its
 // own id, so we never aggregate the whole table.
 router.get(
@@ -38,17 +60,29 @@ router.get(
     const limit = Math.min(1000, Number(req.query.limit || 20));
     const offset = (page - 1) * limit;
 
-    const searchSql = search ? 'WHERE (s.full_name LIKE ? OR s.form_no LIKE ?)' : '';
-    const searchParams = search ? [`%${search}%`, `%${search}%`] : [];
+    const where: string[] = [];
+    const params: any[] = [];
+    if (search) {
+      where.push('(s.full_name LIKE ? OR s.form_no LIKE ?)');
+      params.push(`%${search}%`, `%${search}%`);
+    }
+    const feeStatus = LEDGER_STATUS_FILTERS[String(req.query.feeStatus || '')];
+    if (feeStatus) where.push(feeStatus);
+    const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
+
+    const sortExpr = LEDGER_SORTS[String(req.query.sort || '')] || LEDGER_SORTS.form_no;
+    const dir = String(req.query.dir || '').toLowerCase() === 'desc' ? 'DESC' : 'ASC';
+    // Form number is the tie-break, so equal balances keep a stable, familiar order.
+    const orderSql = `${sortExpr} ${dir}, ${LEDGER_SORTS.form_no} ASC`;
 
     const [rows, totalRows] = await Promise.all([
       query<any>(
         `SELECT s.id AS student_id, s.form_no, s.full_name AS student_name, s.status, ${HOURS_COLUMNS}
-         FROM students s ${searchSql}
-         ORDER BY ${formNoOrder('s.form_no')} LIMIT ? OFFSET ?`,
-        [...searchParams, limit, offset]
+         FROM students s ${whereSql}
+         ORDER BY ${orderSql} LIMIT ? OFFSET ?`,
+        [...params, limit, offset]
       ),
-      query<any>(`SELECT COUNT(*) AS total FROM students s ${searchSql}`, searchParams),
+      query<any>(`SELECT COUNT(*) AS total FROM students s ${whereSql}`, params),
     ]);
     res.json({ data: rows.map(deriveHours), page, limit, total: totalRows[0].total });
   })

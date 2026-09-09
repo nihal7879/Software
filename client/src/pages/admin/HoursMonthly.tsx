@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api, hrs, num, studentOption } from '../../api/client';
-import { Section, Table, Spinner, KpiCard, HoursValue, StatusBadge, Pagination } from '../../components/ui';
+import { Section, Table, Spinner, KpiCard, HoursValue, StatusBadge, Pagination, type Sort } from '../../components/ui';
 import { Select } from '../../components/Select';
 import { CalendarRangePicker } from '../../components/CalendarPicker';
 import { AdjustHoursModal } from '../../components/AdjustHoursModal';
@@ -21,10 +21,28 @@ export default function HoursMonthly() {
   const [summarySearch, setSummarySearch] = useState('');
   const [summaryPage, setSummaryPage] = useState(1);
   const [summarySize, setSummarySize] = useState(20);
+  const [feeStatus, setFeeStatus] = useState('');
+  const [sort, setSort] = useState<Sort>({ key: 'form_no', dir: 'asc' });
   const allLedger = useQuery({
-    queryKey: ['ledger-all', summarySearch, summaryPage, summarySize],
-    queryFn: () => api.get('/fees/ledger', { params: { search: summarySearch, page: summaryPage, limit: summarySize } }).then((r) => r.data),
+    queryKey: ['ledger-all', summarySearch, summaryPage, summarySize, feeStatus, sort.key, sort.dir],
+    queryFn: () => api.get('/fees/ledger', {
+      params: { search: summarySearch, page: summaryPage, limit: summarySize, feeStatus, sort: sort.key, dir: sort.dir },
+    }).then((r) => r.data),
   });
+  // Sorting is done by the server, because the table is paginated — sorting the
+  // 20 rows on screen would only ever reorder that page, not find the student
+  // furthest into the red. A fresh column starts ascending, which on Remaining
+  // means the biggest negative balance first: who owes the most, at the top.
+  const toggleSort = (key: string) => {
+    setSummaryPage(1);
+    setSort((s) => ({ key, dir: s.key === key && s.dir === 'asc' ? 'desc' : 'asc' }));
+  };
+  const feeStatusOptions = [
+    { value: '', label: 'All fee statuses' },
+    { value: 'Payment Required', label: 'Payment Required' },
+    { value: 'Active', label: 'Active' },
+    { value: 'Trial', label: 'Trial' },
+  ];
   const [studentSearch, setStudentSearch] = useState('');
   const students = useQuery({ queryKey: ['students-pick', studentSearch], queryFn: () => api.get('/students', { params: { search: studentSearch, limit: 1000 } }).then((r) => r.data.data) });
   const ledger = useQuery({ queryKey: ['ledger', studentId], queryFn: () => api.get(`/fees/ledger/${studentId}`).then((r) => r.data), enabled: !!studentId });
@@ -170,11 +188,43 @@ export default function HoursMonthly() {
 
       {!studentId ? (
         <Section title="All students — hours summary" action={
-          <input className="input w-full sm:max-w-[220px]" placeholder="Search student…" value={summarySearch} onChange={(e) => { setSummarySearch(e.target.value); setSummaryPage(1); }} />
+          // Same shape as the Finance Tracker's filter row: one wrapping group,
+          // search first, then the narrowing controls. The widths are fixed from
+          // `sm` up — `w-full` alone makes each control claim a whole flex line,
+          // which stacked them on top of each other.
+          <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+            <input
+              className="input w-full sm:w-[220px]"
+              placeholder="Search student…"
+              value={summarySearch}
+              onChange={(e) => { setSummarySearch(e.target.value); setSummaryPage(1); }}
+            />
+            <div className="w-full sm:w-[190px]">
+              <Select
+                searchable={false}
+                value={feeStatus}
+                options={feeStatusOptions}
+                onChange={(v) => { setFeeStatus(v); setSummaryPage(1); }}
+              />
+            </div>
+          </div>
         }>
           {allLedger.isLoading ? <Spinner /> : (
             <>
-            <Table head={['Form', 'Student', 'Status', { label: 'Total', align: 'right' }, { label: 'Used', align: 'right' }, { label: 'Remaining', align: 'right' }, 'Fee Status', 'Last Lecture']}>
+            <Table
+              sort={sort}
+              onSort={toggleSort}
+              head={[
+                { label: 'Form', sortKey: 'form_no' },
+                { label: 'Student', sortKey: 'student_name' },
+                'Status',
+                { label: 'Total', align: 'right', sortKey: 'total_hours_credited' },
+                { label: 'Used', align: 'right', sortKey: 'total_hours_consumed' },
+                { label: 'Remaining', align: 'right', sortKey: 'hours_left' },
+                'Fee Status',
+                { label: 'Last Lecture', sortKey: 'last_attended_lecture' },
+              ]}
+            >
               {(allLedger.data?.data || [])
                 .map((r: any) => (
                   <tr key={r.student_id} className="cursor-pointer hover:bg-[var(--color-card-alt)]" onClick={() => setStudentId(String(r.student_id))}>
@@ -188,6 +238,9 @@ export default function HoursMonthly() {
                     <td className="table-td whitespace-nowrap">{r.last_attended_lecture || '—'}</td>
                   </tr>
                 ))}
+              {(allLedger.data?.data || []).length === 0 && (
+                <tr><td className="table-td muted" colSpan={8}>No students match this filter.</td></tr>
+              )}
             </Table>
             {(() => { const total = allLedger.data?.total || 0; const pages = Math.ceil(total / summarySize) || 1; return (
               <Pagination
@@ -227,6 +280,10 @@ export default function HoursMonthly() {
             title="Hours statement — credited & consumed"
             action={
               <div className="flex flex-wrap items-center gap-2">
+                <span className="text-sm muted whitespace-nowrap tabular-nums">
+                  {visibleRows.length} {visibleRows.length === 1 ? 'entry' : 'entries'}
+                  {visibleRows.length !== rows.length && <span className="opacity-70"> of {rows.length}</span>}
+                </span>
                 <CalendarRangePicker
                   from={fromDate}
                   to={toDate}

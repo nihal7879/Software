@@ -70,10 +70,24 @@ export function HoursValue({ value }: { value: number | string }) {
 // A column header is either a plain label (left-aligned) or an object that can
 // request right alignment — used for numeric / money / hours columns so the
 // figures (and the trailing "h") line up vertically, finance-app style.
-type Col = string | { label: string; align?: 'left' | 'right' | 'center' };
+// A column carrying a `sortKey` becomes clickable, provided the table was given
+// an `onSort`. The arrow shows on every sortable column (faint until it is the
+// one in use) so it is visible that the column can be clicked at all.
+type Col = string | { label: string; align?: 'left' | 'right' | 'center'; sortKey?: string };
+export type Sort = { key: string; dir: 'asc' | 'desc' };
 const alignClass = (a?: 'left' | 'right' | 'center') => (a === 'right' ? 'text-right' : a === 'center' ? 'text-center' : '');
 
-export function Table({ head, children }: { head: Col[]; children: ReactNode }) {
+export function Table({
+  head,
+  children,
+  sort,
+  onSort,
+}: {
+  head: Col[];
+  children: ReactNode;
+  sort?: Sort;
+  onSort?: (key: string) => void;
+}) {
   return (
     <div className="overflow-x-auto">
       <table className="w-full border-collapse">
@@ -82,7 +96,24 @@ export function Table({ head, children }: { head: Col[]; children: ReactNode }) 
             {head.map((h, i) => {
               const label = typeof h === 'string' ? h : h.label;
               const cls = typeof h === 'string' ? '' : alignClass(h.align);
-              return <th key={i} className={`table-th ${cls}`}>{label}</th>;
+              const sortKey = typeof h === 'string' ? undefined : h.sortKey;
+              if (!sortKey || !onSort) return <th key={i} className={`table-th ${cls}`}>{label}</th>;
+              const active = sort?.key === sortKey;
+              return (
+                <th key={i} className={`table-th ${cls}`}>
+                  <button
+                    type="button"
+                    onClick={() => onSort(sortKey)}
+                    className="inline-flex items-center gap-1 hover:opacity-70 transition-opacity"
+                    title={`Sort by ${label}`}
+                  >
+                    <span>{label}</span>
+                    <span className={`text-[10px] leading-none ${active ? '' : 'opacity-25'}`}>
+                      {active && sort?.dir === 'desc' ? '▼' : '▲'}
+                    </span>
+                  </button>
+                </th>
+              );
             })}
           </tr>
         </thead>
