@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { api, hrs, num, studentOption } from '../../api/client';
 import { Section, Table, Spinner, KpiCard, HoursValue, StatusBadge, Pagination, type Sort } from '../../components/ui';
 import { Select } from '../../components/Select';
+import { FilterMenu, FilterField } from '../../components/FilterMenu';
 import { CalendarRangePicker } from '../../components/CalendarPicker';
 import { AdjustHoursModal } from '../../components/AdjustHoursModal';
 import { downloadHoursStatement } from '../../lib/hoursStatementExcel';
@@ -22,11 +23,15 @@ export default function HoursMonthly() {
   const [summaryPage, setSummaryPage] = useState(1);
   const [summarySize, setSummarySize] = useState(20);
   const [feeStatus, setFeeStatus] = useState('');
+  const [status, setStatus] = useState('');
   const [sort, setSort] = useState<Sort>({ key: 'form_no', dir: 'asc' });
   const allLedger = useQuery({
-    queryKey: ['ledger-all', summarySearch, summaryPage, summarySize, feeStatus, sort.key, sort.dir],
+    queryKey: ['ledger-all', summarySearch, summaryPage, summarySize, status, feeStatus, sort.key, sort.dir],
     queryFn: () => api.get('/fees/ledger', {
-      params: { search: summarySearch, page: summaryPage, limit: summarySize, feeStatus, sort: sort.key, dir: sort.dir },
+      params: {
+        search: summarySearch, page: summaryPage, limit: summarySize,
+        status, feeStatus, sort: sort.key, dir: sort.dir,
+      },
     }).then((r) => r.data),
   });
   // Sorting is done by the server, because the table is paginated — sorting the
@@ -37,12 +42,21 @@ export default function HoursMonthly() {
     setSummaryPage(1);
     setSort((s) => ({ key, dir: s.key === key && s.dir === 'asc' ? 'desc' : 'asc' }));
   };
+  // Two separate axes, because "still on the roll AND owing hours" is the list
+  // that actually gets chased, and neither dropdown alone can ask for it.
+  const statusOptions = [
+    { value: '', label: 'All statuses' },
+    { value: 'Active', label: 'Active' },
+    { value: 'Inactive', label: 'Inactive' },
+  ];
   const feeStatusOptions = [
     { value: '', label: 'All fee statuses' },
     { value: 'Payment Required', label: 'Payment Required' },
     { value: 'Active', label: 'Active' },
     { value: 'Trial', label: 'Trial' },
   ];
+  const activeFilters = [status, feeStatus].filter(Boolean).length;
+  const clearFilters = () => { setStatus(''); setFeeStatus(''); setSummaryPage(1); };
   const [studentSearch, setStudentSearch] = useState('');
   const students = useQuery({ queryKey: ['students-pick', studentSearch], queryFn: () => api.get('/students', { params: { search: studentSearch, limit: 1000 } }).then((r) => r.data.data) });
   const ledger = useQuery({ queryKey: ['ledger', studentId], queryFn: () => api.get(`/fees/ledger/${studentId}`).then((r) => r.data), enabled: !!studentId });
@@ -187,7 +201,16 @@ export default function HoursMonthly() {
       </div>
 
       {!studentId ? (
-        <Section title="All students — hours summary" action={
+        <Section
+          // The count stands in for "All students" in the heading, so the number
+          // on screen is the first thing read, and it follows the filters:
+          // "61 students — hours summary" once they are narrowed.
+          title={
+            allLedger.data
+              ? `${allLedger.data.total} ${allLedger.data.total === 1 ? 'student' : 'students'} — hours summary`
+              : 'All students — hours summary'
+          }
+          action={
           // Same shape as the Finance Tracker's filter row: one wrapping group,
           // search first, then the narrowing controls. The widths are fixed from
           // `sm` up — `w-full` alone makes each control claim a whole flex line,
@@ -199,14 +222,24 @@ export default function HoursMonthly() {
               value={summarySearch}
               onChange={(e) => { setSummarySearch(e.target.value); setSummaryPage(1); }}
             />
-            <div className="w-full sm:w-[190px]">
-              <Select
-                searchable={false}
-                value={feeStatus}
-                options={feeStatusOptions}
-                onChange={(v) => { setFeeStatus(v); setSummaryPage(1); }}
-              />
-            </div>
+            <FilterMenu count={activeFilters} onClear={clearFilters}>
+              <FilterField label="Status">
+                <Select
+                  searchable={false}
+                  value={status}
+                  options={statusOptions}
+                  onChange={(v) => { setStatus(v); setSummaryPage(1); }}
+                />
+              </FilterField>
+              <FilterField label="Fee Status">
+                <Select
+                  searchable={false}
+                  value={feeStatus}
+                  options={feeStatusOptions}
+                  onChange={(v) => { setFeeStatus(v); setSummaryPage(1); }}
+                />
+              </FilterField>
+            </FilterMenu>
           </div>
         }>
           {allLedger.isLoading ? <Spinner /> : (

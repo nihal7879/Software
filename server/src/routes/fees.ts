@@ -68,6 +68,13 @@ router.get(
     }
     const feeStatus = LEDGER_STATUS_FILTERS[String(req.query.feeStatus || '')];
     if (feeStatus) where.push(feeStatus);
+    // Enrolment status is a separate axis from fee status: "still on the roll AND
+    // owing hours" is the list that gets chased, and neither filter alone says it.
+    const status = String(req.query.status || '');
+    if (status === 'Active' || status === 'Inactive') {
+      where.push('s.status = ?');
+      params.push(status);
+    }
     const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
 
     const sortExpr = LEDGER_SORTS[String(req.query.sort || '')] || LEDGER_SORTS.form_no;
