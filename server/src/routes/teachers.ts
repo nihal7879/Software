@@ -31,11 +31,13 @@ router.get(
       `SELECT t.*,
         (SELECT COUNT(DISTINCT a.student_id)
            FROM lecture_sessions l JOIN lecture_attendees a ON a.lecture_id = l.id
-           WHERE l.teacher_id = t.id) AS taught_students,
+           WHERE l.teacher_id = t.id AND l.is_deleted = FALSE) AS taught_students,
         (SELECT COUNT(DISTINCT m.student_id) FROM student_teacher_mapping m WHERE m.teacher_id = t.id) AS assigned_students,
-        (SELECT COALESCE(SUM(l.total_hours),0) FROM lecture_sessions l WHERE l.teacher_id = t.id) AS total_hours,
         (SELECT COALESCE(SUM(l.total_hours),0) FROM lecture_sessions l
-           WHERE l.teacher_id = t.id AND l.month = DATE_FORMAT(CURDATE(),'%Y-%m')) AS month_hours
+           WHERE l.teacher_id = t.id AND l.is_deleted = FALSE) AS total_hours,
+        (SELECT COALESCE(SUM(l.total_hours),0) FROM lecture_sessions l
+           WHERE l.teacher_id = t.id AND l.is_deleted = FALSE
+             AND l.month = DATE_FORMAT(CURDATE(),'%Y-%m')) AS month_hours
        FROM teachers t WHERE t.id = ?`,
       [tid]
     );
@@ -111,7 +113,7 @@ router.get(
        LEFT JOIN subjects sub ON sub.id = l.subject_id
        JOIN lecture_attendees a ON a.lecture_id = l.id
        JOIN students s ON s.id = a.student_id
-       WHERE l.teacher_id = ?
+       WHERE l.teacher_id = ? AND l.is_deleted = FALSE
        GROUP BY l.id
        ORDER BY l.session_date DESC, l.id DESC LIMIT 300`,
       [tid]
@@ -169,7 +171,7 @@ router.get(
        JOIN lecture_sessions l ON l.id = a.lecture_id
        LEFT JOIN teachers t ON t.id = l.teacher_id
        LEFT JOIN subjects sub ON sub.id = l.subject_id
-       WHERE a.student_id = ? AND l.session_date BETWEEN ? AND ? ${teacherFilter}
+       WHERE a.student_id = ? AND l.session_date BETWEEN ? AND ? AND l.is_deleted = FALSE ${teacherFilter}
        ORDER BY l.session_date`,
       params
     );
@@ -376,10 +378,12 @@ router.get(
                        WHERE m.teacher_id = ? AND m.student_id = s.id) AS is_assigned,
               COALESCE((SELECT SUM(a.hours_consumed) FROM lecture_attendees a
                           JOIN lecture_sessions l ON l.id = a.lecture_id
-                          WHERE l.teacher_id = ? AND a.student_id = s.id),0) AS hours_with_teacher
+                          WHERE l.teacher_id = ? AND a.student_id = s.id
+                            AND l.is_deleted = FALSE),0) AS hours_with_teacher
        FROM students s
        WHERE s.id IN (
-         SELECT a.student_id FROM lecture_sessions l JOIN lecture_attendees a ON a.lecture_id = l.id WHERE l.teacher_id = ?
+         SELECT a.student_id FROM lecture_sessions l JOIN lecture_attendees a ON a.lecture_id = l.id
+           WHERE l.teacher_id = ? AND l.is_deleted = FALSE
          UNION
          SELECT m.student_id FROM student_teacher_mapping m WHERE m.teacher_id = ?
        )

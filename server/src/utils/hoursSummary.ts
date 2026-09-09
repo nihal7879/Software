@@ -15,16 +15,20 @@ export const CREDITED_EXPR =
   `(${activePkg('package_hours')} + ${activePkg('discount_hours')} + ${activePkg('adjusted_hours')} ` +
   `+ COALESCE((SELECT SUM(delta) FROM hours_adjustments WHERE student_id = s.id),0))`;
 
+// `l.is_deleted = FALSE` throughout: a deleted lecture must stop consuming the
+// student's hours, or deleting one changes nothing anybody can see.
 export const CONSUMED_EXPR =
   `COALESCE((SELECT SUM(a.hours_consumed) FROM lecture_attendees a ` +
-  `JOIN lecture_sessions l ON l.id = a.lecture_id WHERE a.student_id = s.id),0)`;
+  `JOIN lecture_sessions l ON l.id = a.lecture_id ` +
+  `WHERE a.student_id = s.id AND l.is_deleted = FALSE),0)`;
 
 export const PENDING_EXPR =
   `COALESCE((SELECT pending_fees FROM ledger_adjustments WHERE student_id = s.id),0)`;
 
 export const LAST_LECTURE_EXPR =
   `(SELECT MAX(l.session_date) FROM lecture_attendees a ` +
-  `JOIN lecture_sessions l ON l.id = a.lecture_id WHERE a.student_id = s.id)`;
+  `JOIN lecture_sessions l ON l.id = a.lecture_id ` +
+  `WHERE a.student_id = s.id AND l.is_deleted = FALSE)`;
 
 // Full column list matching the VIEW's output (minus hours_left / fee_status,
 // which are derived in JS by deriveHours below). Prefix the SELECT with this.

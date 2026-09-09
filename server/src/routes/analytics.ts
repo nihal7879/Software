@@ -79,13 +79,16 @@ router.get(
     const rows = await query(
       `SELECT t.id, t.name, t.mobile, t.is_active, t.specialization,
               (SELECT COUNT(*) FROM (
-                 SELECT a.student_id FROM lecture_sessions l2 JOIN lecture_attendees a ON a.lecture_id = l2.id WHERE l2.teacher_id = t.id
+                 SELECT a.student_id FROM lecture_sessions l2 JOIN lecture_attendees a ON a.lecture_id = l2.id
+                   WHERE l2.teacher_id = t.id AND l2.is_deleted = FALSE
                  UNION
                  SELECT m.student_id FROM student_teacher_mapping m WHERE m.teacher_id = t.id
                ) u) AS total_students,
-              COALESCE((SELECT SUM(l.total_hours) FROM lecture_sessions l WHERE l.teacher_id = t.id),0) AS total_hours_taught,
               COALESCE((SELECT SUM(l.total_hours) FROM lecture_sessions l
-                          WHERE l.teacher_id = t.id AND l.month = DATE_FORMAT(CURDATE(),'%Y-%m')),0) AS month_hours
+                          WHERE l.teacher_id = t.id AND l.is_deleted = FALSE),0) AS total_hours_taught,
+              COALESCE((SELECT SUM(l.total_hours) FROM lecture_sessions l
+                          WHERE l.teacher_id = t.id AND l.is_deleted = FALSE
+                            AND l.month = DATE_FORMAT(CURDATE(),'%Y-%m')),0) AS month_hours
        FROM teachers t
        ORDER BY total_hours_taught DESC`
     );
@@ -180,7 +183,7 @@ router.get(
   wrap((req, res) => pivot(req, res, {
     valueExpr: 'SUM(a.hours_consumed)', valueAlias: 'hours',
     src: 'lecture_attendees a JOIN lecture_sessions l ON l.id = a.lecture_id',
-    where: '1=1', monthCol: 'l.month',
+    where: 'l.is_deleted = FALSE', monthCol: 'l.month',
   }))
 );
 

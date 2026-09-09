@@ -117,15 +117,15 @@ router.get(
         [id]
       ),
       query(
-        `SELECT l.session_date, l.month, l.time_in, l.time_out,
-                a.hours_consumed AS no_of_hours, t.name AS teacher_name,
-                sub.name AS subject_name, l.topic, l.subtopic, l.remark, l.venue,
-                a.attendance_status
+        `SELECT l.id AS lecture_id, l.session_date, l.month, l.time_in, l.time_out,
+                a.hours_consumed AS no_of_hours, l.teacher_id, t.name AS teacher_name,
+                l.subject_id, sub.name AS subject_name, l.topic, l.subtopic, l.remark,
+                l.venue, l.meeting_link, a.attendance_status
          FROM lecture_attendees a
          JOIN lecture_sessions l ON l.id = a.lecture_id
          LEFT JOIN teachers t ON t.id = l.teacher_id
          LEFT JOIN subjects sub ON sub.id = l.subject_id
-         WHERE a.student_id = ? AND l.session_date BETWEEN ? AND ?
+         WHERE a.student_id = ? AND l.session_date BETWEEN ? AND ? AND l.is_deleted = FALSE
          ORDER BY l.session_date, l.time_in`,
         [id, from, to]
       ),

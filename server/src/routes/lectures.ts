@@ -54,7 +54,7 @@ router.get(
     if ((u.role === 'student' || u.role === 'parent')) {
       studentId = u.studentId ?? -1; // force own scope
     }
-    const where: string[] = [];
+    const where: string[] = ['l.is_deleted = FALSE'];
     const params: any[] = [];
     if (studentId) { where.push('a.student_id = ?'); params.push(studentId); }
     // Faculty only ever see their own lectures.
@@ -65,7 +65,7 @@ router.get(
     if (req.query.month) { where.push('l.month = ?'); params.push(req.query.month); }
     if (req.query.from) { where.push('l.session_date >= ?'); params.push(req.query.from); }
     if (req.query.to) { where.push('l.session_date <= ?'); params.push(req.query.to); }
-    const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
+    const whereSql = `WHERE ${where.join(' AND ')}`;
 
     const rows = await query(
       `SELECT l.id, l.session_date, l.month, l.time_in, l.time_out, l.total_hours,
@@ -146,6 +146,71 @@ router.post(
   })
 );
 
+// EDIT a lecture (admin). Times drive the duration, so changing them re-derives
+// total_hours — and with it every attendee's hours_consumed, which is what the
+// student's ledger actually reads. Attendees themselves are not edited here;
+// this is the "I typed the wrong time / topic / teacher" repair.
+const lectureEditSchema = lectureSchema.omit({ attendees: true }).partial();
+
+router.put(
+  '/:id',
+  requireRole('admin'),
+  wrap(async (req, res) => {
+    const b = lectureEditSchema.parse(req.body);
+    const before = await queryOne<any>('SELECT * FROM lecture_sessions WHERE id = ? AND is_deleted = FALSE', [req.params.id]);
+    if (!before) return res.status(404).json({ error: 'Lecture not found' });
+
+    const merged = { ...before, ...b };
+    const timeIn = merged.time_in || null;
+    const timeOut = merged.time_out || null;
+    const totalHours = b.total_hours ?? (timeIn && timeOut ? timeToDecimalHours(timeIn, timeOut) : Number(before.total_hours) || 0);
+    const sessionDate = String(merged.session_date).slice(0, 10);
+
+    const conn = await pool.getConnection();
+    try {
+      await conn.beginTransaction();
+      await conn.query(
+        `UPDATE lecture_sessions
+            SET session_date = ?, month = ?, teacher_id = ?, subject_id = ?, time_in = ?, time_out = ?,
+                total_hours = ?, hours_rounded = ?, topic = ?, subtopic = ?, remark = ?, venue = ?, meeting_link = ?
+          WHERE id = ?`,
+        [
+          sessionDate, deriveMonth(sessionDate), merged.teacher_id ?? null, merged.subject_id ?? null,
+          timeIn, timeOut, totalHours, Math.round(totalHours * 2) / 2,
+          merged.topic || null, merged.subtopic || null, merged.remark || null,
+          merged.venue || null, merged.meeting_link || null, req.params.id,
+        ]
+      );
+      // Attendees are created carrying the session total, so they follow it here.
+      if (Number(before.total_hours) !== totalHours) {
+        await conn.query('UPDATE lecture_attendees SET hours_consumed = ? WHERE lecture_id = ?', [totalHours, req.params.id]);
+      }
+      await conn.commit();
+    } catch (e) {
+      await conn.rollback();
+      throw e;
+    } finally {
+      conn.release();
+    }
+    await audit(req.user!.userId, 'UPDATE', 'lecture', req.params.id, before, { ...b, total_hours: totalHours });
+    res.json({ ok: true, total_hours: totalHours });
+  })
+);
+
+// DELETE a lecture (admin) — soft delete. Every hours query filters on
+// is_deleted, so the attendees' consumed hours come back to the students.
+router.delete(
+  '/:id',
+  requireRole('admin'),
+  wrap(async (req, res) => {
+    const before = await queryOne<any>('SELECT * FROM lecture_sessions WHERE id = ? AND is_deleted = FALSE', [req.params.id]);
+    if (!before) return res.status(404).json({ error: 'Lecture not found' });
+    await query('UPDATE lecture_sessions SET is_deleted = TRUE WHERE id = ?', [req.params.id]);
+    await audit(req.user!.userId, 'DELETE', 'lecture', req.params.id, before, null);
+    res.json({ ok: true });
+  })
+);
+
 // Upcoming / today's classes for a teacher
 router.get(
   '/teacher/:teacherId',
@@ -158,7 +223,7 @@ router.get(
        LEFT JOIN subjects sub ON sub.id = l.subject_id
        JOIN lecture_attendees a ON a.lecture_id = l.id
        JOIN students s ON s.id = a.student_id
-       WHERE l.teacher_id = ?
+       WHERE l.teacher_id = ? AND l.is_deleted = FALSE
        GROUP BY l.id
        ORDER BY l.session_date DESC LIMIT 100`,
       [req.params.teacherId]

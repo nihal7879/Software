@@ -9,6 +9,9 @@ import { DateRangePicker } from '../../components/DateRangePicker';
 import { StudentRegistrationForm } from '../../components/StudentRegistrationForm';
 import { Select } from '../../components/Select';
 import { AdjustHoursModal } from '../../components/AdjustHoursModal';
+import { LectureEditModal } from '../../components/LectureEditModal';
+import { ConfirmModal } from '../../components/ConfirmModal';
+import { CalendarRangePicker } from '../../components/CalendarPicker';
 import { Overlay } from '../../components/Overlay';
 
 // MANAGEMENT per-student report with a DATE RANGE.
@@ -22,6 +25,13 @@ export default function StudentReport() {
   const [editProfile, setEditProfile] = useState(false);
   const [adjustHours, setAdjustHours] = useState(false);
   const [lecTeacher, setLecTeacher] = useState('');
+  // A date window inside the log itself, on top of the report's own range — the
+  // report range is usually a whole year, and "what happened that week" is the
+  // question asked when checking an entry before editing it.
+  const [lecFrom, setLecFrom] = useState('');
+  const [lecTo, setLecTo] = useState('');
+  const [editLecture, setEditLecture] = useState<any | null>(null);
+  const [confirm, setConfirm] = useState<{ title: string; message: string; confirmLabel: string; onConfirm: () => void } | null>(null);
 
   const { data, isLoading } = useQuery({
     queryKey: ['student-report', id, from, to],
@@ -51,6 +61,19 @@ export default function StudentReport() {
       reset();
     },
     onError: (e: any) => toast(e?.response?.data?.error || 'Could not assign teacher', 'error'),
+  });
+
+  const delLecture = useMutation({
+    mutationFn: (lectureId: number) => api.delete(`/lectures/${lectureId}`),
+    onSuccess: () => {
+      // Deleting a lecture hands its hours back to the student, so the ledger
+      // and every workload figure move with it.
+      for (const k of ['student-report', 'lectures', 'ledger', 'ledger-all', 'workload', 'overview', 'trend', 'pivot']) {
+        qc.invalidateQueries({ queryKey: [k] });
+      }
+      toast('Lecture deleted');
+    },
+    onError: (e: any) => toast(e?.response?.data?.error || 'Could not delete the lecture', 'error'),
   });
 
   if (isLoading) return <Spinner />;
@@ -168,23 +191,43 @@ export default function StudentReport() {
       <Section
         title="Lecture Log — per day"
         action={
-          <div className="w-56">
-            <Select
-              value={lecTeacher}
-              onChange={setLecTeacher}
-              options={[{ value: '', label: 'All teachers' }, ...Array.from(new Set((data.lectures || []).map((l: any) => l.teacher_name).filter(Boolean))).map((n: any) => ({ value: n, label: n }))]}
-              placeholder="All teachers"
+          <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+            <div className="w-full sm:w-56">
+              <Select
+                value={lecTeacher}
+                onChange={setLecTeacher}
+                options={[{ value: '', label: 'All teachers' }, ...Array.from(new Set((data.lectures || []).map((l: any) => l.teacher_name).filter(Boolean))).map((n: any) => ({ value: n, label: n }))]}
+                placeholder="All teachers"
+              />
+            </div>
+            <CalendarRangePicker
+              from={lecFrom}
+              to={lecTo}
+              onChange={(f, t) => { setLecFrom(f); setLecTo(t); }}
+              placeholder="Filter by date / month"
+              align="right"
             />
+            {(lecFrom || lecTo) && (
+              <button className="btn-ghost !py-1.5 !px-3 text-sm whitespace-nowrap" onClick={() => { setLecFrom(''); setLecTo(''); }}>
+                Show all
+              </button>
+            )}
           </div>
         }
       >
-        <Table head={['Date', 'Month', 'Teacher', 'Subject', 'Time In', 'Time Out', { label: 'No. of Hours', align: 'right' }, 'Topic', 'Subtopic', 'Remark', 'Venue']}>
+        <Table head={['Date', 'Month', 'Teacher', 'Subject', 'Time In', 'Time Out', { label: 'No. of Hours', align: 'right' }, 'Topic', 'Subtopic', 'Remark', 'Venue', '']}>
           {(() => {
-            const visible = (data.lectures || []).filter((l: any) => !lecTeacher || l.teacher_name === lecTeacher);
+            const visible = (data.lectures || []).filter((l: any) => {
+              if (lecTeacher && l.teacher_name !== lecTeacher) return false;
+              const d = String(l.session_date || '').slice(0, 10);
+              if (lecFrom && d < lecFrom) return false;
+              if (lecTo && d > lecTo) return false;
+              return true;
+            });
             return visible.length === 0 ? (
-            <tr><td className="table-td muted" colSpan={11}>No lectures{lecTeacher ? ' for this teacher' : ' in this range'}.</td></tr>
+            <tr><td className="table-td muted" colSpan={12}>No lectures{lecTeacher ? ' for this teacher' : ''}{lecFrom || lecTo ? ' in these dates' : ' in this range'}.</td></tr>
           ) : visible.map((l: any, i: number) => (
-            <tr key={i}>
+            <tr key={l.lecture_id || i}>
               <td className="table-td whitespace-nowrap">{fmtDate(l.session_date)}</td>
               <td className="table-td">{l.month}</td>
               <td className="table-td">{l.teacher_name || '—'}</td>
@@ -196,6 +239,22 @@ export default function StudentReport() {
               <td className="table-td">{l.subtopic || '—'}</td>
               <td className="table-td">{l.remark || '—'}</td>
               <td className="table-td">{l.venue || '—'}</td>
+              <td className="table-td whitespace-nowrap">
+                <div className="flex items-center gap-1">
+                  <button className="btn-ghost !py-1 !px-2.5 text-xs" onClick={() => setEditLecture(l)}>Edit</button>
+                  <button
+                    className="!py-1 !px-2.5 text-xs rounded-lg border border-red-500/30 text-red-600 hover:bg-red-500/10 transition-colors"
+                    onClick={() => setConfirm({
+                      title: 'Delete lecture',
+                      message: `Delete the ${fmtDate(l.session_date)} lecture${l.teacher_name ? ` with ${l.teacher_name}` : ''} (${hrs(l.no_of_hours)})? The hours go back to the student.`,
+                      confirmLabel: 'Delete',
+                      onConfirm: () => delLecture.mutate(l.lecture_id),
+                    })}
+                  >
+                    Delete
+                  </button>
+                </div>
+              </td>
             </tr>
           ));
           })()}
@@ -247,6 +306,25 @@ export default function StudentReport() {
             />
           </div>
         </Overlay>
+      )}
+
+      {editLecture && (
+        <LectureEditModal
+          lecture={editLecture}
+          onClose={() => setEditLecture(null)}
+        />
+      )}
+
+      {confirm && (
+        <ConfirmModal
+          title={confirm.title}
+          message={confirm.message}
+          confirmLabel={confirm.confirmLabel}
+          danger
+          busy={delLecture.isPending}
+          onConfirm={() => { confirm.onConfirm(); setConfirm(null); }}
+          onClose={() => setConfirm(null)}
+        />
       )}
     </div>
   );
