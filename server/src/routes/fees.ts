@@ -379,6 +379,102 @@ router.post(
   })
 );
 
+// Parent / guardian search, for assigning a payment by who sent it (admin).
+//
+// A bank line names the payer, not the child, so Finance lets the admin search
+// by the parent's or guardian's name — or part of their mobile — and fills the
+// child in. People are grouped by name, so a parent with two children at the
+// institute comes back once, with both children listed to choose from. Names
+// come from the student records (father / mother / guardian) and from the
+// parent logins, which carry their own name.
+const STUDENT_PICK_COLS = `s.id, s.form_no, s.full_name, s.status, s.year_grade, s.relationship,
+  s.father_name, s.father_mobile, s.mother_name, s.mother_mobile,
+  s.guardian_name, s.guardian_mobile, s.parent_mobile`;
+// Mobile numbers are stored however they were typed ("+971 50-123 4567"), so
+// they are compared with spaces, dashes and the plus sign taken out.
+const digitsOf = (col: string) => `REPLACE(REPLACE(REPLACE(COALESCE(${col},''),' ',''),'-',''),'+','')`;
+
+router.get(
+  '/parents',
+  requireRole('admin'),
+  wrap(async (req, res) => {
+    const q = String(req.query.search || '').trim();
+    if (q.length < 2) return res.json({ data: [] });
+    const like = `%${q}%`;
+    const digits = q.replace(/\D/g, '');
+    const byPhone = digits.length >= 4;
+    const phoneLike = `%${digits}%`;
+
+    const fromStudents = await query<any>(
+      `SELECT ${STUDENT_PICK_COLS} FROM students s
+        WHERE s.is_deleted = FALSE
+          AND (s.father_name LIKE ? OR s.mother_name LIKE ? OR s.guardian_name LIKE ?
+               ${byPhone ? `OR ${digitsOf('s.father_mobile')} LIKE ? OR ${digitsOf('s.mother_mobile')} LIKE ?
+                            OR ${digitsOf('s.guardian_mobile')} LIKE ? OR ${digitsOf('s.parent_mobile')} LIKE ?` : ''})
+        LIMIT 300`,
+      byPhone ? [like, like, like, phoneLike, phoneLike, phoneLike, phoneLike] : [like, like, like]
+    );
+    const fromLogins = await query<any>(
+      `SELECT p.name AS login_name, p.mobile AS login_mobile, p.relationship AS login_relation, ${STUDENT_PICK_COLS}
+         FROM parents p JOIN students s ON s.id = p.student_id
+        WHERE p.is_deleted = FALSE AND s.is_deleted = FALSE
+          AND (p.name LIKE ? ${byPhone ? `OR ${digitsOf('p.mobile')} LIKE ?` : ''})
+        LIMIT 300`,
+      byPhone ? [like, phoneLike] : [like]
+    );
+
+    const needle = q.toLowerCase();
+    const matches = (name?: string, mobile?: string) =>
+      !!name && (name.toLowerCase().includes(needle) || (byPhone && String(mobile || '').replace(/\D/g, '').includes(digits)));
+
+    type Group = { key: string; name: string; relations: Set<string>; mobiles: Set<string>; children: Map<number, any> };
+    const groups = new Map<string, Group>();
+    const add = (name: string, relation: string, mobile: string | null | undefined, student: any) => {
+      const key = name.trim().toLowerCase().replace(/\s+/g, ' ');
+      if (!key) return;
+      let g = groups.get(key);
+      if (!g) { g = { key, name: name.trim().replace(/\s+/g, ' '), relations: new Set(), mobiles: new Set(), children: new Map() }; groups.set(key, g); }
+      g.relations.add(relation);
+      if (mobile) g.mobiles.add(String(mobile).trim());
+      if (!g.children.has(student.id)) {
+        const { login_name, login_mobile, login_relation, ...child } = student;
+        g.children.set(student.id, { ...child, relation });
+      }
+    };
+
+    for (const st of fromStudents) {
+      if (matches(st.father_name, st.father_mobile)) add(st.father_name, 'Father', st.father_mobile, st);
+      if (matches(st.mother_name, st.mother_mobile)) add(st.mother_name, 'Mother', st.mother_mobile, st);
+      if (matches(st.guardian_name, st.guardian_mobile)) add(st.guardian_name, 'Guardian', st.guardian_mobile, st);
+      // Matched only on the old shared parent number: file it under whoever pays.
+      if (byPhone && String(st.parent_mobile || '').replace(/\D/g, '').includes(digits)) {
+        const rel = st.relationship === 'Mother' ? 'Mother' : st.relationship === 'Guardian' ? 'Guardian' : 'Father';
+        const nm = rel === 'Mother' ? st.mother_name : rel === 'Guardian' ? st.guardian_name : st.father_name;
+        if (nm) add(nm, rel, st.parent_mobile, st);
+      }
+    }
+    for (const r of fromLogins) {
+      if (matches(r.login_name, r.login_mobile)) add(r.login_name, r.login_relation || 'Parent', r.login_mobile, r);
+    }
+
+    // Names that start with what was typed first, then alphabetical.
+    const data = [...groups.values()]
+      .sort((a, b) => Number(b.key.startsWith(needle)) - Number(a.key.startsWith(needle)) || a.name.localeCompare(b.name))
+      .slice(0, 30)
+      .map((g) => ({
+        key: g.key,
+        name: g.name,
+        relations: [...g.relations],
+        mobiles: [...g.mobiles],
+        // Active students first — the one a new payment is most likely for.
+        children: [...g.children.values()].sort(
+          (a, b) => Number(b.status === 'Active') - Number(a.status === 'Active') || String(a.full_name).localeCompare(String(b.full_name))
+        ),
+      }));
+    res.json({ data });
+  })
+);
+
 // List unresolved import drafts (admin)
 router.get(
   '/drafts',

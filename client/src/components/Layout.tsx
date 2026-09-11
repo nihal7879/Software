@@ -4,7 +4,10 @@ import {
   LayoutDashboard, Users, Clock, Wallet, GraduationCap, BarChart3,
   BookOpen, CalendarDays, User, LogOut, Moon, Sun, ChevronLeft, Menu, Settings,
 } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '../auth/AuthContext';
+import { api } from '../api/client';
+import { getLastSeenRegistration } from '../lib/registrationsSeen';
 import { useTheme } from '../theme/ThemeContext';
 import { roleLabel } from './MonthSelector';
 import { Toaster } from './Toast';
@@ -47,6 +50,18 @@ export function Layout({ children }: { children: ReactNode }) {
   const nav = useNavigate();
   const [open, setOpen] = useState(false);        // mobile drawer
   const [collapsed, setCollapsed] = useState(false); // desktop collapse
+  // New student registrations, as a badge on Students — only ones this admin has
+  // not seen yet, so it clears once they open Registrations and comes back only
+  // for a fresh one. Above the early return below, as hooks must run every render.
+  const pendingRegs = useQuery({
+    queryKey: ['registrations-count', 'unseen'],
+    queryFn: () =>
+      api.get('/registrations/count', { params: { since: getLastSeenRegistration(user?.id) } })
+        .then((r) => Number(r.data.unseen) || 0),
+    enabled: user?.role === 'admin',
+    refetchInterval: 60_000,
+  });
+  const badgeFor = (to: string) => (to === '/admin/students' ? pendingRegs.data || 0 : 0);
   if (!user) return null;
   const items = NAV[user.role] || [];
   const home = items[0]?.to || '/';
@@ -81,6 +96,7 @@ export function Layout({ children }: { children: ReactNode }) {
       <nav className="flex flex-col gap-1 px-3 shrink-0">
         {items.map((it) => {
           const Icon = it.icon;
+          const badge = badgeFor(it.to);
           return (
             <NavLink
               key={it.to}
@@ -95,8 +111,23 @@ export function Layout({ children }: { children: ReactNode }) {
               }
               style={({ isActive }: any) => (isActive ? { background: 'var(--color-card-alt)', color: 'var(--color-primary)' } : {})}
             >
-              <Icon size={19} className="shrink-0" />
+              <span className="relative shrink-0">
+                <Icon size={19} />
+                {/* Collapsed menu: a dot on the icon, since there is no room for the number. */}
+                {mini && badge > 0 && (
+                  <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full" style={{ background: 'var(--color-primary)' }} />
+                )}
+              </span>
               {!mini && <span className="truncate">{it.label}</span>}
+              {!mini && badge > 0 && (
+                <span
+                  className="ml-auto inline-flex items-center justify-center h-[18px] min-w-[18px] px-1 text-[11px] font-bold leading-none text-white rounded-full tabular-nums"
+                  style={{ background: 'var(--color-primary)' }}
+                  title={`${badge} new registration${badge === 1 ? '' : 's'}`}
+                >
+                  {badge}
+                </span>
+              )}
             </NavLink>
           );
         })}

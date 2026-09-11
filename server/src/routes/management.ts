@@ -40,7 +40,8 @@ router.get(
          NULLIF(CASE s.relationship
            WHEN 'Mother' THEN s.mother_name
            WHEN 'Father' THEN s.father_name
-           ELSE COALESCE(s.father_name, s.mother_name)
+           WHEN 'Guardian' THEN s.guardian_name
+           ELSE COALESCE(s.father_name, s.mother_name, s.guardian_name)
          END, '') AS parent_name,
          -- Only claim a relation when that person is actually named. The
          -- relationship column defaults to 'Father', so without this every
@@ -49,7 +50,8 @@ router.get(
          CASE WHEN COALESCE(CASE s.relationship
                 WHEN 'Mother' THEN s.mother_name
                 WHEN 'Father' THEN s.father_name
-                ELSE COALESCE(s.father_name, s.mother_name)
+                WHEN 'Guardian' THEN s.guardian_name
+                ELSE COALESCE(s.father_name, s.mother_name, s.guardian_name)
               END, '') = '' THEN NULL
               ELSE s.relationship END AS paid_by,
          s.parent_mobile,
@@ -111,7 +113,8 @@ router.get(
                 ${PENDING_EXPR}  AS pending_fees,
                 COALESCE((SELECT MAX(rate_per_hour) FROM fee_packages WHERE student_id = s.id AND is_active = TRUE),0) AS rate_per_hour,
                 CASE s.relationship WHEN 'Mother' THEN s.mother_name WHEN 'Father' THEN s.father_name
-                     ELSE COALESCE(s.father_name, s.mother_name) END AS parent_name
+                     WHEN 'Guardian' THEN s.guardian_name
+                     ELSE COALESCE(s.father_name, s.mother_name, s.guardian_name) END AS parent_name
          FROM students s
          WHERE s.id = ?`,
         [id]

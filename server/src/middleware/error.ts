@@ -8,7 +8,10 @@ export function notFound(_req: Request, res: Response) {
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 export function errorHandler(err: any, _req: Request, res: Response, _next: NextFunction) {
   if (err instanceof ZodError) {
-    return res.status(400).json({ error: 'Validation failed', details: err.flatten() });
+    // The first failed rule, in words the form can show as-is ("Password must
+    // include at least one number.") — a bare "Validation failed" told nobody
+    // what to fix. The full breakdown stays in `details`.
+    return res.status(400).json({ error: err.issues[0]?.message || 'Validation failed', details: err.flatten() });
   }
   if (err?.code === 'ER_DUP_ENTRY') {
     return res.status(409).json({ error: 'Duplicate entry', detail: err.sqlMessage });

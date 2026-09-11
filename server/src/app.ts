@@ -12,6 +12,7 @@ import teacherRoutes from './routes/teachers';
 import analyticsRoutes from './routes/analytics';
 import managementRoutes from './routes/management';
 import mastersRoutes from './routes/masters';
+import registrationRoutes from './routes/registrations';
 
 const app = express();
 
@@ -44,6 +45,7 @@ app.use('/api/teachers', teacherRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/management', managementRoutes);
 app.use('/api/masters', mastersRoutes);
+app.use('/api/registrations', registrationRoutes);
 
 app.use(notFound);
 app.use(errorHandler);

@@ -6,6 +6,10 @@ import { api, hrs } from '../../api/client';
 import { Section, Table, Spinner } from '../../components/ui';
 import { ConfirmModal } from '../../components/ConfirmModal';
 import { Overlay } from '../../components/Overlay';
+import { UsernameField } from '../../components/RegisterLayout';
+import { passwordTip } from '../../lib/passwordTip';
+import { EMAIL_RE } from '../../components/StudentRegistrationForm';
+import { passwordProblem } from '../../lib/credentials';
 import { AdminLectureEntryModal } from '../../components/AdminLectureEntryModal';
 import { MultiSelect } from '../../components/MultiSelect';
 
@@ -49,7 +53,7 @@ export default function Teachers() {
     enabled: !!openTeacher,
   });
 
-  const { register, handleSubmit, reset, watch, setValue } = useForm();
+  const { register, handleSubmit, reset, watch, setValue, getValues, formState: { errors } } = useForm<any>();
   const create = useMutation({
     mutationFn: (b: any) => api.post('/teachers', b),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['teachers'] }); qc.invalidateQueries({ queryKey: ['workload'] }); setDrawer(false); reset(); },
@@ -271,13 +275,35 @@ export default function Teachers() {
               </div>
               <div className="rounded-lg p-3 space-y-3" style={{ background: 'var(--color-card-alt)' }}>
                 <div className="text-xs font-semibold">🔑 Teacher login</div>
+                {/* Username (the login) and email (contact — also a way to sign
+                    in) are separate now, the same as self-registration. */}
+                <UsernameField register={register} errors={errors} value={watch('username')} />
                 <div>
-                  <label className="text-xs font-medium muted">Email or Username *</label>
-                  <input className="input mt-1" type="text" autoComplete="off" placeholder="e.g. rahul or rahul@email.com" {...register('email', { required: true })} />
+                  <label className="text-xs font-medium muted">Email</label>
+                  <input
+                    className="input mt-1"
+                    type="email"
+                    autoComplete="off"
+                    placeholder="e.g. rahul@email.com"
+                    {...register('email', { pattern: { value: EMAIL_RE, message: 'Enter a valid email' } })}
+                  />
+                  {errors.email && <span className="text-xs text-red-500">{String((errors.email as any)?.message)}</span>}
                 </div>
                 <div>
-                  <label className="text-xs font-medium muted">Password * (min 6)</label>
-                  <input className="input mt-1" type="text" autoComplete="off" {...register('password', { required: true, minLength: 6 })} />
+                  <label className="text-xs font-medium muted">Password *</label>
+                  <input
+                    className="input mt-1"
+                    type="text"
+                    autoComplete="off"
+                    placeholder="8+ characters, with a letter and a number"
+                    {...register('password', {
+                      required: 'Required',
+                      validate: (v: string) => passwordProblem(v, getValues('username')) || true,
+                    })}
+                  />
+                  {errors.password
+                    ? <span className="text-xs text-red-500">{String((errors.password as any)?.message || 'Required')}</span>
+                    : passwordTip(watch('password') || '', watch('username')) && <span className="text-xs text-amber-600 dark:text-amber-400">{passwordTip(watch('password') || '', watch('username'))}</span>}
                 </div>
               </div>
               {create.isError && (

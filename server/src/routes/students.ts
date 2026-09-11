@@ -5,6 +5,7 @@ import { query, queryOne } from '../db';
 import { requireAuth, requireRole, ensureOwnStudent } from '../middleware/auth';
 import { wrap } from '../middleware/error';
 import { audit } from '../utils/audit';
+import { usernameProblem, passwordProblem } from '../utils/credentials';
 import { clientIp, deviceInfo, getReqCtx } from '../utils/reqContext';
 import { claimFormNo, formNoOrder } from '../utils/formNo';
 
@@ -27,7 +28,11 @@ const studentSchema = z.object({
   school_name: z.string().optional().nullable(),
   exam_board: z.string().optional().nullable(),
   father_name: z.string().optional().nullable(),
+  father_mobile: z.string().optional().nullable(),
   mother_name: z.string().optional().nullable(),
+  mother_mobile: z.string().optional().nullable(),
+  guardian_name: z.string().optional().nullable(),
+  guardian_mobile: z.string().optional().nullable(),
   relationship: z.enum(['Father', 'Mother', 'Guardian']).optional(),
   // Contact email OR a plain username used as the student's login id.
   email: z.string().min(1).optional().nullable().or(z.literal('')),
@@ -111,24 +116,34 @@ router.post(
     // Optional login: management can hand the student credentials at creation.
     const creds = z
       .object({
-        password: z.string().min(6).optional(),
+        // The login. Kept apart from the contact email now, like self-
+        // registration; an older caller that sends only an email still works.
+        username: z.string().trim().toLowerCase().optional(),
+        password: z.string().optional(),
         // Free hours granted to a trial student.
         trial_hours: z.number().positive().optional(),
       })
       .parse(req.body);
 
-    // If an email + password are given, create the student's login account first.
+    // If a login + password are given, create the student's login account first.
     let userId: number | null = null;
-    if (b.email && creds.password) {
-      const exists = await queryOne<any>('SELECT id FROM users WHERE email = ?', [b.email]);
-      if (exists) return res.status(409).json({ error: `This username/email "${b.email}" already exists — choose another` });
+    const login = creds.username || b.email || '';
+    if (login && creds.password) {
+      if (creds.username) {
+        const bad = usernameProblem(creds.username);
+        if (bad) return res.status(400).json({ error: bad });
+      }
+      const weak = passwordProblem(creds.password, login);
+      if (weak) return res.status(400).json({ error: weak });
+      const exists = await queryOne<any>('SELECT id FROM users WHERE email = ?', [login]);
+      if (exists) return res.status(409).json({ error: `The username "${login}" is already taken — choose another` });
       const hash = await bcrypt.hash(creds.password, 10);
       const ctx = getReqCtx();
       const gps = ctx?.lat != null && ctx?.lng != null ? `${ctx.lat},${ctx.lng}` : null;
       const u: any = await query(
         `INSERT INTO users (role, email, password_hash, display_name, registration_ip, registration_gps, registration_device)
          VALUES ('student', ?, ?, ?, ?, ?, ?)`,
-        [b.email, hash, fullName(b) || b.email, clientIp(req), gps, deviceInfo(req)]
+        [login, hash, fullName(b) || login, clientIp(req), gps, deviceInfo(req)]
       );
       userId = (u as any).insertId;
     }
@@ -141,8 +156,9 @@ router.post(
          first_name,middle_name,last_name,full_name,
          year_grade,school_name,exam_board,father_name,mother_name,relationship,
          email,dob,age,gender,nationality,student_mobile,parent_mobile,extra_mobile,
-         fees_received,form_received,branch_id,user_id)
-       VALUES (UUID(),?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+         fees_received,form_received,branch_id,user_id,
+         father_mobile,mother_mobile,guardian_name,guardian_mobile)
+       VALUES (UUID(),?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       [
         b.date_of_joining || null, b.status, b.student_type,
         // A trial's clock starts on the joining date, or today if none given.
@@ -153,8 +169,12 @@ router.post(
         // Left null when not chosen — "who pays" is unknown, not assumed to be the father.
         b.mother_name || null, b.relationship || null, b.email || null, b.dob || null,
         b.age ?? null, b.gender || null, b.nationality || null, b.student_mobile || null,
-        b.parent_mobile || null, b.extra_mobile || null, b.fees_received ?? 0,
+        // parent_mobile is the number every list and search shows; with the
+        // family contacts now entered one by one, it is the first one given.
+        b.parent_mobile || b.father_mobile || b.mother_mobile || b.guardian_mobile || null,
+        b.extra_mobile || null, b.fees_received ?? 0,
         b.form_received ?? false, b.branch_id ?? null, userId,
+        b.father_mobile || null, b.mother_mobile || null, b.guardian_name || null, b.guardian_mobile || null,
       ]
     );
     const id = (result as any).insertId;
@@ -324,11 +344,38 @@ router.patch(
     const merged = { ...before, ...b };
     const full_name = [merged.first_name, merged.middle_name, merged.last_name].filter(Boolean).join(' ').trim();
 
+    // The form asks for each family contact with their own number and no longer
+    // asks "relationship to the child" or a shared "parent mobile". Both columns
+    // are still read everywhere — relationship decides who pays, parent_mobile is
+    // the number every list, search and roster shows — so they are derived here
+    // from what was entered instead of being asked for twice.
+    const txt = (v: any) => String(v ?? '').trim();
+    const named = {
+      Father: !!txt(merged.father_name),
+      Mother: !!txt(merged.mother_name),
+      Guardian: !!txt(merged.guardian_name),
+    } as const;
+    // Keep the existing payer while that person is still on the form; otherwise
+    // the first person named, in the order the form lists them.
+    const current = merged.relationship as keyof typeof named | undefined;
+    const relationship = current && named[current]
+      ? current
+      : (['Father', 'Mother', 'Guardian'] as const).find((r) => named[r]) ?? merged.relationship ?? null;
+    const mobileOf = { Father: merged.father_mobile, Mother: merged.mother_mobile, Guardian: merged.guardian_mobile };
+    const parentMobile = [relationship && mobileOf[relationship as keyof typeof mobileOf], merged.father_mobile, merged.mother_mobile, merged.guardian_mobile]
+      .map(txt).find(Boolean);
+    delete (b as any).relationship;
+    delete (b as any).parent_mobile;
+
     const cols: string[] = [];
     const params: any[] = [];
     const set = (c: string, v: any) => { cols.push(`${c} = ?`); params.push(v); };
     for (const [k, v] of Object.entries(b)) set(k, v as any);
     set('full_name', full_name);
+    if (relationship) set('relationship', relationship);
+    // Only overwrite when there is a number to put there — an older profile
+    // saved before these fields existed keeps its parent_mobile.
+    if (parentMobile) set('parent_mobile', parentMobile);
     set('profile_completed', true);
     cols.push('profile_submitted_at = NOW()');
     params.push(req.params.id);

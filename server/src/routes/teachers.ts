@@ -5,6 +5,7 @@ import { query, queryOne } from '../db';
 import { requireAuth, requireRole } from '../middleware/auth';
 import { wrap } from '../middleware/error';
 import { audit } from '../utils/audit';
+import { usernameProblem, passwordProblem } from '../utils/credentials';
 import { clientIp, deviceInfo, getReqCtx } from '../utils/reqContext';
 import { CREDITED_EXPR, CONSUMED_EXPR, PENDING_EXPR, LAST_LECTURE_EXPR, deriveHours } from '../utils/hoursSummary';
 
@@ -234,12 +235,15 @@ router.delete(
 
 const teacherSchema = z.object({
   name: z.string().min(1),
-  // Login id — may be an email OR a plain username (e.g. "sachin").
+  // The login (e.g. "sachin"). Kept apart from the contact email now, like
+  // self-registration; an older caller that sends only `email` still works.
+  username: z.string().trim().toLowerCase().optional().nullable(),
+  // Contact email — also a way to sign in.
   email: z.string().min(1).optional().nullable().or(z.literal('')),
   mobile: z.string().optional().nullable(),
   specialization: z.string().optional().nullable(),
   branch_id: z.number().int().optional().nullable(),
-  password: z.string().min(6).optional(),
+  password: z.string().optional(),
 });
 
 router.post(
@@ -248,18 +252,25 @@ router.post(
   wrap(async (req, res) => {
     const b = teacherSchema.parse(req.body);
 
-    // If an email + password are given, create the teacher's faculty login first.
+    // If a login + password are given, create the teacher's faculty login first.
     let userId: number | null = null;
-    if (b.email && b.password) {
-      const exists = await queryOne<any>('SELECT id FROM users WHERE email = ?', [b.email]);
-      if (exists) return res.status(409).json({ error: `This username/email "${b.email}" already exists — choose another` });
+    const login = b.username || b.email || '';
+    if (login && b.password) {
+      if (b.username) {
+        const bad = usernameProblem(b.username);
+        if (bad) return res.status(400).json({ error: bad });
+      }
+      const weak = passwordProblem(b.password, login);
+      if (weak) return res.status(400).json({ error: weak });
+      const exists = await queryOne<any>('SELECT id FROM users WHERE email = ?', [login]);
+      if (exists) return res.status(409).json({ error: `The username "${login}" is already taken — choose another` });
       const hash = await bcrypt.hash(b.password, 10);
       const ctx = getReqCtx();
       const gps = ctx?.lat != null && ctx?.lng != null ? `${ctx.lat},${ctx.lng}` : null;
       const u: any = await query(
         `INSERT INTO users (role, email, password_hash, display_name, registration_ip, registration_gps, registration_device)
          VALUES ('faculty', ?, ?, ?, ?, ?, ?)`,
-        [b.email, hash, b.name, clientIp(req), gps, deviceInfo(req)]
+        [login, hash, b.name, clientIp(req), gps, deviceInfo(req)]
       );
       userId = (u as any).insertId;
     }

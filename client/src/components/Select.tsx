@@ -18,6 +18,7 @@ export function Select({
   searchable = true,
   compact = false,
   maxVisible,
+  emptyText = 'No matches.',
 }: {
   value: string | number | '';
   onChange: (v: string) => void;
@@ -35,6 +36,8 @@ export function Select({
   compact?: boolean;
   /** Cap the option list to roughly this many rows; the rest scrolls. */
   maxVisible?: number;
+  /** What an empty list says — e.g. what to type, while a search has not run yet. */
+  emptyText?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState('');
@@ -152,7 +155,7 @@ export function Select({
                 </button>
               )}
               {filtered.length === 0 && !(allowCustom && q.trim()) ? (
-                <div className="px-3 py-2 text-sm muted">No matches.</div>
+                <div className="px-3 py-2 text-sm muted">{emptyText}</div>
               ) : (
                 filtered.map((o) => {
                   const isSel = String(o.value) === String(value);

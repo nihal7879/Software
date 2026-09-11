@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
+import { UserPlus } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { api } from '../../api/client';
@@ -7,6 +8,9 @@ import { Section, StatusBadge, Table, Spinner, Pagination } from '../../componen
 import { StudentRegistrationForm } from '../../components/StudentRegistrationForm';
 import { ConfirmModal } from '../../components/ConfirmModal';
 import { Overlay } from '../../components/Overlay';
+import { UsernameField } from '../../components/RegisterLayout';
+import { passwordTip } from '../../lib/passwordTip';
+import { passwordProblem } from '../../lib/credentials';
 
 // Teachers cell: show 3 chips, then a clickable "+N" that expands/collapses the
 // rest (works on touch — no hover dependency).
@@ -55,7 +59,7 @@ export default function ManagementStudents() {
     }).then((r) => r.data),
   });
 
-  const { register, handleSubmit, reset, watch } = useForm();
+  const { register, handleSubmit, reset, watch, getValues, formState: { errors } } = useForm<any>();
   const isTrial = watch('student_type') === 'Trial';
   const create = useMutation({
     mutationFn: (b: any) => api.post('/students', {
@@ -88,6 +92,13 @@ export default function ManagementStudents() {
   // letting the row quietly renumber itself behind the closed dialog.
   const [enrolled, setEnrolled] = useState<{ name: string; form_no: string; previous_form_no: string } | null>(null);
 
+  const regCount = useQuery({
+    queryKey: ['registrations-count'],
+    queryFn: () => api.get('/registrations/count').then((r) => Number(r.data.pending) || 0),
+    refetchInterval: 60_000,
+  });
+  const pendingRegs = regCount.data || 0;
+
   const rows = data?.data || [];
   const total = data?.total || 0;
   const pages = Math.ceil(total / pageSize) || 1;
@@ -99,7 +110,23 @@ export default function ManagementStudents() {
           <h1 className="text-2xl font-bold">Students — Master</h1>
           <p className="muted text-sm">Parent mapping, who pays, fee status, hours & teachers</p>
         </div>
-        <button className="btn-primary" onClick={() => setDrawer(true)}>+ Add Student</button>
+        <div className="flex items-center gap-2">
+          {/* Self-registrations live on their own page; the badge says when
+              someone is waiting, so nobody has to go and check. */}
+          <Link to="/admin/registrations" className="btn-ghost flex items-center gap-2 whitespace-nowrap" title="Students who registered themselves">
+            <UserPlus size={16} />
+            <span className="font-medium">Registrations</span>
+            {pendingRegs > 0 && (
+              <span
+                className="inline-flex items-center justify-center h-[18px] min-w-[18px] px-1 text-[11px] font-bold leading-none text-white rounded-full tabular-nums"
+                style={{ background: 'var(--color-primary)' }}
+              >
+                {pendingRegs}
+              </span>
+            )}
+          </Link>
+          <button className="btn-primary" onClick={() => setDrawer(true)}>+ Add Student</button>
+        </div>
       </div>
 
       <div className="flex flex-wrap gap-2 items-center">
@@ -231,13 +258,25 @@ export default function ManagementStudents() {
                   {/* Login credentials — management hands these to the student */}
                   <div className="rounded-lg p-3 space-y-3" style={{ background: 'var(--color-card-alt)' }}>
                     <div className="text-xs font-semibold">🔑 Student login (share these with the student)</div>
+                    {/* Same username box as self-registration: same rules, and it
+                        says at once if the name is already taken. The student's
+                        email is asked for in step 2, with the rest of the profile. */}
+                    <UsernameField register={register} errors={errors} value={watch('username')} />
                     <div>
-                      <label className="text-xs font-medium muted">Email or Username *</label>
-                      <input className="input mt-1" type="text" autoComplete="off" placeholder="e.g. aarav or aarav@email.com" {...register('email', { required: true })} />
-                    </div>
-                    <div>
-                      <label className="text-xs font-medium muted">Password * (min 6)</label>
-                      <input className="input mt-1" type="text" autoComplete="off" {...register('password', { required: true, minLength: 6 })} />
+                      <label className="text-xs font-medium muted">Password *</label>
+                      <input
+                        className="input mt-1"
+                        type="text"
+                        autoComplete="off"
+                        placeholder="8+ characters, with a letter and a number"
+                        {...register('password', {
+                          required: 'Required',
+                          validate: (v: string) => passwordProblem(v, getValues('username')) || true,
+                        })}
+                      />
+                      {errors.password
+                        ? <span className="text-xs text-red-500">{String((errors.password as any)?.message || 'Required')}</span>
+                        : passwordTip(watch('password') || '', watch('username')) && <span className="text-xs text-amber-600 dark:text-amber-400">{passwordTip(watch('password') || '', watch('username'))}</span>}
                     </div>
                   </div>
 

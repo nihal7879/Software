@@ -9,6 +9,7 @@ import { ConfirmModal } from '../../components/ConfirmModal';
 import { Overlay } from '../../components/Overlay';
 import { toast } from '../../components/Toast';
 import { parseFeeWorkbook } from '../../lib/excel';
+import { ParentPicker, ChildChooser, type ParentMatch } from '../../components/ParentPicker';
 
 // Where the money came in. 323 of the 367 payments on record arrived as a
 // Mashreq transfer, so that is what a new payment starts as; the rest are one
@@ -45,6 +46,11 @@ export default function Finance() {
     queryFn: () => api.get('/fees/transactions', { params: { search: txSearch, from: fromDate || undefined, to: toDate || undefined, page, limit: pageSize } }).then((r) => r.data),
   });
   const [studentSearch, setStudentSearch] = useState('');
+  // Record Payment by parent: the chosen parent's children (to choose between
+  // when there are several), and those children's rows, which may not be in the
+  // student search results the dropdown is showing.
+  const [drawerChildren, setDrawerChildren] = useState<any[]>([]);
+  const [drawerExtra, setDrawerExtra] = useState<any[]>([]);
   const students = useQuery({ queryKey: ['students-pick', studentSearch], queryFn: () => api.get('/students', { params: { search: studentSearch, limit: 50 } }).then((r) => r.data.data) });
   const drafts = useQuery({ queryKey: ['fee-drafts'], queryFn: () => api.get('/fees/drafts').then((r) => r.data.data) });
 
@@ -61,7 +67,7 @@ export default function Finance() {
   };
 
   const openEdit = (t: any) => { setEditing(t); reset({ ...t, course_package_hours: t.course_package_hours ?? '', discount_hours: t.discount_hours ?? '' }); setDrawer(true); };
-  const closeDrawer = () => { setDrawer(false); setEditing(null); reset(); save.reset(); };
+  const closeDrawer = () => { setDrawer(false); setEditing(null); reset(); save.reset(); setDrawerChildren([]); setDrawerExtra([]); };
 
   const save = useMutation({
     mutationFn: (b: any) => {
@@ -190,12 +196,12 @@ export default function Finance() {
         >
           {draftsOpen && (
             <>
-              <p className="muted text-sm mb-3">These rows from your upload couldn't be auto-matched. Pick the student (fix any field if needed), add a note, then assign — or discard.</p>
+              <p className="muted text-sm mb-3">These rows from your upload couldn't be auto-matched. Search the parent or guardian who paid (or pick the student directly), fix any field if needed, then assign — or discard.</p>
               <div className="overflow-x-auto">
                 <table className="w-full border-collapse">
                   <thead>
                     <tr>
-                      {['Date', 'Transaction', 'Reference', 'Credit', 'Source', 'Assign to student', 'Parent', 'Pkg Hrs', 'Disc Hrs', 'Note', ''].map((h) => <th key={h} className="table-th">{h}</th>)}
+                      {['Date', 'Transaction', 'Reference', 'Credit', 'Source', 'Parent / Guardian', 'Assign to student', 'Pkg Hrs', 'Disc Hrs', 'Note', ''].map((h) => <th key={h} className="table-th">{h}</th>)}
                     </tr>
                   </thead>
                   <tbody>
@@ -308,6 +314,33 @@ export default function Finance() {
             <h2 className="text-lg font-bold mb-4">{editing ? 'Edit Payment' : 'Record Payment'}</h2>
             <form onSubmit={handleSubmit((b) => save.mutate(b))} className="space-y-3">
               <div>
+                <label className="text-xs font-medium muted block mb-1">Parent / Guardian</label>
+                <input type="hidden" {...register('parent_name')} />
+                <ParentPicker
+                  value={watch('parent_name') || ''}
+                  onPick={(g: ParentMatch | null, typed: string) => {
+                    setValue('parent_name', typed);
+                    if (!g) { setDrawerChildren([]); return; }
+                    setDrawerExtra(g.children);
+                    const current = String(watch('student_id') || '');
+                    if (g.children.length === 1) {
+                      setValue('student_id', String(g.children[0].id), { shouldValidate: true });
+                      setDrawerChildren([]);
+                    } else {
+                      // Several: keep the student if it is already one of them,
+                      // otherwise make the choice explicit.
+                      setDrawerChildren(g.children);
+                      if (!g.children.some((c) => String(c.id) === current)) setValue('student_id', '', { shouldValidate: false });
+                    }
+                  }}
+                />
+                <ChildChooser
+                  children={drawerChildren}
+                  selectedId={watch('student_id')}
+                  onChoose={(c) => setValue('student_id', String(c.id), { shouldValidate: true })}
+                />
+              </div>
+              <div>
                 <label className="text-xs font-medium muted block mb-1">Student *</label>
                 <input type="hidden" {...register('student_id', { required: true })} />
                 <Select
@@ -317,11 +350,15 @@ export default function Finance() {
                     // A fee is nearly always paid by the parent on record, so
                     // picking the student fills the payer in. It stays editable
                     // for the relative or third party who sometimes sends it.
-                    const s = (students.data || []).find((x: any) => String(x.id) === String(v));
+                    const s = [...drawerExtra, ...(students.data || [])].find((x: any) => String(x.id) === String(v));
                     const parent = s ? parentOf(s) : '';
                     if (parent) setValue('parent_name', parent);
+                    setDrawerChildren([]);
                   }}
-                  options={(students.data || []).map((s: any) => studentOption(s))}
+                  options={[
+                    ...drawerExtra.filter((c) => !(students.data || []).some((s: any) => String(s.id) === String(c.id))),
+                    ...(students.data || []),
+                  ].map((s: any) => studentOption(s))}
                   onSearch={setStudentSearch}
                   placeholder="Search student…"
                 />
@@ -352,7 +389,6 @@ export default function Finance() {
               </div>
               {[
                 ['transaction_reference', 'Transaction Reference'],
-                ['parent_name', 'Parent Name'],
                 ['course_package_hours', 'Course Package Hours'],
                 ['discount_hours', 'Discount Hours'],
               ].map(([n, l]) => (
@@ -422,6 +458,26 @@ function DraftRow({
   const [pkgHours, setPkgHours] = useState<string>(draft.course_package_hours != null ? String(draft.course_package_hours) : '');
   const [discHours, setDiscHours] = useState<string>(draft.discount_hours != null ? String(draft.discount_hours) : '');
   const [note, setNote] = useState<string>('');
+  // Assigning by parent: their children to choose between (when more than one),
+  // and those children's rows — they may not be in the student search results.
+  const [childChoices, setChildChoices] = useState<any[]>([]);
+  const [extra, setExtra] = useState<any[]>([]);
+  const studentList = [...extra.filter((c) => !students.some((s: any) => String(s.id) === String(c.id))), ...students];
+
+  // The bank line names the payer, so the parent is usually the quicker way in:
+  // one child fills the student straight away; several ask which one.
+  const pickParent = (g: ParentMatch | null, typed: string) => {
+    setParentName(typed);
+    if (!g) { setChildChoices([]); return; }
+    setExtra(g.children);
+    if (g.children.length === 1) {
+      setStudentId(String(g.children[0].id));
+      setChildChoices([]);
+    } else {
+      setChildChoices(g.children);
+      if (!g.children.some((c) => String(c.id) === studentId)) setStudentId('');
+    }
+  };
 
   // Imported fields are locked — only student / hours / note are editable.
   const amount = draft.amount != null ? String(draft.amount) : '';
@@ -446,23 +502,27 @@ function DraftRow({
         <Select value={source} onChange={setSource} options={sourceOptions} allowCustom compact placeholder="Source…" />
       </td>
       <td className="table-td min-w-[220px]">
+        <ParentPicker compact value={parentName} onPick={pickParent} />
+        <ChildChooser children={childChoices} selectedId={studentId} onChoose={(c) => setStudentId(String(c.id))} />
+      </td>
+      <td className="table-td min-w-[220px]">
         <Select
+          compact
           value={studentId}
           onChange={(v) => {
             setStudentId(v);
-            // The bank line rarely names the payer in a usable form, so the
-            // parent on the student's record fills in here — still editable,
-            // because the sender is not always the parent.
-            const s = students.find((x: any) => String(x.id) === String(v));
+            setChildChoices([]);
+            // Picked the student directly: the parent on their record fills in
+            // — still editable, because the sender is not always the parent.
+            const s = studentList.find((x: any) => String(x.id) === String(v));
             const parent = s ? parentOf(s) : '';
             if (parent) setParentName(parent);
           }}
-          options={students.map((s: any) => studentOption(s))}
+          options={studentList.map((s: any) => studentOption(s))}
           onSearch={onStudentSearch}
           placeholder="Search student…"
         />
       </td>
-      <td className="table-td"><input className="input !py-1 w-36" value={parentName} onChange={(e) => setParentName(e.target.value)} placeholder="Parent" /></td>
       <td className="table-td"><input className="input !py-1 w-24" type="number" step="0.01" value={pkgHours} onChange={(e) => setPkgHours(e.target.value)} placeholder="0" /></td>
       <td className="table-td"><input className="input !py-1 w-24" type="number" step="0.01" value={discHours} onChange={(e) => setDiscHours(e.target.value)} placeholder="0" /></td>
       <td className="table-td"><input className="input !py-1 w-40" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Add note…" /></td>

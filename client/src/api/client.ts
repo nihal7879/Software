@@ -89,7 +89,8 @@ export const fmtDate = (d: string | Date | null | undefined) => {
 export const parentOf = (s: any): string =>
   (s?.relationship === 'Mother' ? s.mother_name
     : s?.relationship === 'Father' ? s.father_name
-    : (s?.father_name || s?.mother_name)) || '';
+    : s?.relationship === 'Guardian' ? s.guardian_name
+    : (s?.father_name || s?.mother_name || s?.guardian_name)) || '';
 
 export const studentOption = (s: any) => {
   const parent = parentOf(s);

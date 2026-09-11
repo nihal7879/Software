@@ -115,8 +115,30 @@ export default function StudentReport() {
 
       {/* Date range */}
       <DateRangePicker from={from} to={to} onFrom={setFrom} onTo={setTo}>
-        <div className="muted text-sm pb-2">
-          Parent (pays): <b>{s.parent_name || '—'}</b> ({s.relationship}) · {s.parent_mobile || '—'}
+        <div className="muted text-sm pb-2 flex flex-wrap gap-x-4 gap-y-1">
+          {(() => {
+            // Each family contact beside their own number, as the profile form
+            // now records them. A profile not re-saved since that change only has
+            // the single parent_mobile, so that is shown rather than nothing.
+            const people = [
+              ['Father', s.father_name, s.father_mobile],
+              ['Mother', s.mother_name, s.mother_mobile],
+              ['Guardian', s.guardian_name, s.guardian_mobile],
+            ].filter(([, name]) => name);
+            const ownNumbers = people.some(([, , mob]) => mob);
+            return (
+              <>
+                {people.length === 0 && <span>Family: <b>—</b></span>}
+                {people.map(([rel, name, mob]) => (
+                  <span key={rel}>
+                    {rel}: <b>{name}</b>{mob ? ` · ${mob}` : ''}
+                  </span>
+                ))}
+                {!ownNumbers && s.parent_mobile && <span>Parent mobile: <b>{s.parent_mobile}</b></span>}
+                <span>Pays: <b>{s.parent_name || '—'}</b></span>
+              </>
+            );
+          })()}
         </div>
       </DateRangePicker>
 

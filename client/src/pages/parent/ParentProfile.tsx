@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { User, Mail, Phone, Shield, Lock, GraduationCap } from 'lucide-react';
 import { useAuth } from '../../auth/AuthContext';
+import { passwordProblem } from '../../lib/credentials';
 import { api } from '../../api/client';
 import { Spinner } from '../../components/ui';
 import { StudentRegistrationForm } from '../../components/StudentRegistrationForm';
@@ -42,6 +43,9 @@ export default function ParentProfile() {
   const onSubmitPassword = (b: any) => {
     setError('');
     if (b.newPassword !== b.confirmPassword) { setError('New password and confirmation do not match'); return; }
+    // Today's password rules — the same ones the server enforces (lib/credentials).
+    const weak = passwordProblem(b.newPassword, user?.email);
+    if (weak) { setError(weak); return; }
     change.mutate(b);
   };
 
@@ -142,8 +146,8 @@ export default function ParentProfile() {
                   <input className="input mt-1" type="password" autoComplete="current-password" {...register('currentPassword', { required: true })} />
                 </div>
                 <div>
-                  <label className="text-xs font-medium muted">New Password * (min 6 characters)</label>
-                  <input className="input mt-1" type="password" autoComplete="new-password" {...register('newPassword', { required: true, minLength: 6 })} />
+                  <label className="text-xs font-medium muted">New Password * (8+ characters, a letter and a number)</label>
+                  <input className="input mt-1" type="password" autoComplete="new-password" {...register('newPassword', { required: true })} />
                 </div>
                 <div>
                   <label className="text-xs font-medium muted">Confirm New Password *</label>

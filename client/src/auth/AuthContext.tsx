@@ -17,10 +17,17 @@ export interface AuthUser {
   teacherId?: number | null;
 }
 
+// When an email opens more than one account (siblings sharing it, or a parent
+// with more than one child), sign-in pauses and offers these to choose from.
+export type AccountChoice = { index: number; role: Role; label: string; sub: string };
+export type LoginResult = { signedIn: true } | { signedIn: false; ticket: string; options: AccountChoice[] };
+
 interface AuthCtx {
   user: AuthUser | null;
   loading: boolean;
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<LoginResult>;
+  /** Finish a sign-in that returned a choice. */
+  selectAccount: (ticket: string, index: number) => Promise<void>;
   register: (payload: any) => Promise<void>;
   logout: () => void;
 }
@@ -53,9 +60,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .finally(() => setLoading(false));
   }, []);
 
-  const login = async (email: string, password: string) => {
+  const login = async (email: string, password: string): Promise<LoginResult> => {
     ensureLocation(); // fire-and-forget: starts the GPS fix, never blocks login. IP is server-side.
     const r = await api.post('/auth/login', { email, password });
+    if (r.data.select) return { signedIn: false, ticket: r.data.ticket, options: r.data.options };
+    localStorage.setItem('token', r.data.token);
+    setUser(r.data.user);
+    return { signedIn: true };
+  };
+
+  const selectAccount = async (ticket: string, index: number) => {
+    const r = await api.post('/auth/login/select', { ticket, index });
     localStorage.setItem('token', r.data.token);
     setUser(r.data.user);
   };
@@ -100,5 +115,5 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, [user]);
 
-  return <Ctx.Provider value={{ user, loading, login, register, logout }}>{children}</Ctx.Provider>;
+  return <Ctx.Provider value={{ user, loading, login, selectAccount, register, logout }}>{children}</Ctx.Provider>;
 }

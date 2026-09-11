@@ -4,9 +4,12 @@ import { Layout } from './components/Layout';
 import { Spinner } from './components/ui';
 
 import Login from './pages/Login';
-import Register from './pages/Register';
+import StudentRegister from './pages/StudentRegister';
+import ParentRegister from './pages/ParentRegister';
+import TeacherRegister from './pages/TeacherRegister';
 import AdminDashboard from './pages/admin/AdminDashboard';
 import ManagementStudents from './pages/admin/ManagementStudents';
+import Registrations from './pages/admin/Registrations';
 import StudentReport from './pages/admin/StudentReport';
 import HoursMonthly from './pages/admin/HoursMonthly';
 import HoursStatement from './pages/shared/HoursStatement';
@@ -48,11 +51,17 @@ export default function App() {
   return (
     <Routes>
       <Route path="/login" element={user ? <Navigate to={HOME[user.role]} replace /> : <Login />} />
-      <Route path="/register" element={user ? <Navigate to={HOME[user.role]} replace /> : <Register />} />
+      {/* One registration link per role — nobody gets a form asking them to pick
+          a role. A student's registration waits for an admin; parents and
+          teachers are signed in straight away for now. */}
+      <Route path="/register/student" element={user ? <Navigate to={HOME[user.role]} replace /> : <StudentRegister />} />
+      <Route path="/register/parent" element={user ? <Navigate to={HOME[user.role]} replace /> : <ParentRegister />} />
+      <Route path="/register/teacher" element={user ? <Navigate to={HOME[user.role]} replace /> : <TeacherRegister />} />
 
       {/* Management (admin role) */}
       <Route path="/admin" element={<Protected roles={['admin']}><AdminDashboard /></Protected>} />
       <Route path="/admin/students" element={<Protected roles={['admin']}><ManagementStudents /></Protected>} />
+      <Route path="/admin/registrations" element={<Protected roles={['admin']}><Registrations /></Protected>} />
       <Route path="/admin/student/:id" element={<Protected roles={['admin']}><StudentReport /></Protected>} />
       <Route path="/admin/hours" element={<Protected roles={['admin']}><HoursMonthly /></Protected>} />
       <Route path="/admin/finance" element={<Protected roles={['admin']}><Finance /></Protected>} />
