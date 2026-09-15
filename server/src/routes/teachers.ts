@@ -74,13 +74,16 @@ router.patch(
   })
 );
 
-// My assigned students (only mine)
+// My assigned students (only mine). ?for=lecture narrows it to the students a
+// lecture can be logged for — Active ones; the teacher's dashboard and student
+// list still show everyone assigned, including students who have left.
 router.get(
   '/me/students',
   requireRole('faculty', 'admin'),
   wrap(async (req, res) => {
     const tid = await myTeacherId(req);
     if (!tid) return res.json({ data: [] });
+    const forLecture = req.query.for === 'lecture';
     const rows = await query<any>(
       `SELECT s.id, s.form_no, s.full_name, s.year_grade, s.school_name, s.status, s.parent_mobile,
               GROUP_CONCAT(DISTINCT sub.name SEPARATOR ', ') AS subjects,
@@ -90,7 +93,7 @@ router.get(
        FROM student_teacher_mapping m
        JOIN students s ON s.id = m.student_id
        LEFT JOIN subjects sub ON sub.id = m.subject_id
-       WHERE m.teacher_id = ?
+       WHERE m.teacher_id = ? AND s.is_deleted = FALSE${forLecture ? " AND s.status = 'Active'" : ''}
        GROUP BY s.id, s.form_no, s.full_name, s.year_grade, s.school_name, s.status, s.parent_mobile
        ORDER BY s.full_name`,
       [tid]
@@ -392,20 +395,22 @@ router.get(
                           WHERE l.teacher_id = ? AND a.student_id = s.id
                             AND l.is_deleted = FALSE),0) AS hours_with_teacher
        FROM students s
-       WHERE s.id IN (
-         SELECT a.student_id FROM lecture_sessions l JOIN lecture_attendees a ON a.lecture_id = l.id
-           WHERE l.teacher_id = ? AND l.is_deleted = FALSE
-         UNION
-         SELECT m.student_id FROM student_teacher_mapping m WHERE m.teacher_id = ?
-       )
+       -- Only students assigned to this teacher AND Active: the ones the teacher
+       -- actually works with now. Students who have left, or were only ever
+       -- taught without an assignment, are not listed (their lectures still are,
+       -- on the Lectures tab).
+       WHERE s.is_deleted = FALSE AND s.status = 'Active'
+         AND s.id IN (SELECT m.student_id FROM student_teacher_mapping m WHERE m.teacher_id = ?)
        ORDER BY s.full_name`,
-      [tid, tid, tid, tid, tid]
+      [tid, tid, tid, tid]
     );
     res.json({ data: rows });
   })
 );
 
-// Students assigned to a teacher (faculty may only query their own id)
+// Students a lecture can be logged for with this teacher — assigned to them AND
+// Active (used by the admin's "+ Lecture"). A student who has left stays
+// assigned on record but is not offered here. Faculty may only query their own id.
 router.get(
   '/:teacherId/students',
   requireRole('admin', 'faculty'),
@@ -422,7 +427,7 @@ router.get(
        FROM student_teacher_mapping m
        JOIN students s ON s.id = m.student_id
        LEFT JOIN subjects sub ON sub.id = m.subject_id
-       WHERE m.teacher_id = ?
+       WHERE m.teacher_id = ? AND s.is_deleted = FALSE AND s.status = 'Active'
        GROUP BY s.id, s.form_no, s.full_name, s.year_grade, s.status, s.parent_mobile
        ORDER BY s.full_name`,
       [req.params.teacherId]

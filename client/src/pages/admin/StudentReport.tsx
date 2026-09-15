@@ -135,7 +135,6 @@ export default function StudentReport() {
                   </span>
                 ))}
                 {!ownNumbers && s.parent_mobile && <span>Parent mobile: <b>{s.parent_mobile}</b></span>}
-                <span>Pays: <b>{s.parent_name || '—'}</b></span>
               </>
             );
           })()}

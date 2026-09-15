@@ -129,7 +129,7 @@ export function AdminLectureEntryModal({
             <input className="input mt-1" placeholder="Search student by name / form no…" value={stuSearch} onChange={(e) => setStuSearch(e.target.value)} />
             <div className="card p-2 mt-1 max-h-48 overflow-y-auto grid grid-cols-1 sm:grid-cols-2 gap-1">
               {students.isLoading ? <Spinner /> : visibleStudents.length === 0 ? (
-                <div className="muted text-sm p-2">{(students.data || []).length === 0 ? 'No students assigned to this teacher yet.' : 'No students match.'}</div>
+                <div className="muted text-sm p-2">{(students.data || []).length === 0 ? 'No active students assigned to this teacher yet — assign them from Teachers → View → Students.' : 'No students match.'}</div>
               ) : visibleStudents.map((s: any) => (
                 <label key={s.id} className="flex items-center gap-2 text-sm px-2 py-1 rounded hover:bg-black/5 dark:hover:bg-white/5 cursor-pointer">
                   <input type="checkbox" className="shrink-0" checked={attendees.includes(s.id)} onChange={() => toggle(s.id)} />

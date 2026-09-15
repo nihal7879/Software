@@ -19,7 +19,10 @@ export default function LectureEntry() {
 
   // Only MY students can be attendees; teacher is forced to me server-side.
   const me = useQuery({ queryKey: ['teacher-me'], queryFn: () => api.get('/teachers/me').then((r) => r.data) });
-  const students = useQuery({ queryKey: ['me-students'], queryFn: () => api.get('/teachers/me/students').then((r) => r.data.data) });
+  // Only students a lecture can be logged for: assigned to me AND Active. Its own
+  // cache key — the dashboard and My Students share 'me-students' and keep
+  // showing every assigned student, including those who have left.
+  const students = useQuery({ queryKey: ['me-students', 'lecture'], queryFn: () => api.get('/teachers/me/students', { params: { for: 'lecture' } }).then((r) => r.data.data) });
   const subjects = useQuery({ queryKey: ['subjects'], queryFn: () => api.get('/teachers/subjects').then((r) => r.data.data) });
   const masters = useMasters();
 
@@ -123,7 +126,7 @@ export default function LectureEntry() {
             <input className="input mt-1" placeholder="Search student by name / form no…" value={stuSearch} onChange={(e) => setStuSearch(e.target.value)} />
             <div className="card p-2 mt-1 max-h-48 overflow-y-auto grid grid-cols-1 sm:grid-cols-2 gap-1">
               {students.isLoading ? <Spinner /> : visibleStudents.length === 0 ? (
-                <div className="muted text-sm p-2">{(students.data || []).length === 0 ? 'No students assigned to you yet. Your admin will assign students to you.' : 'No students match.'}</div>
+                <div className="muted text-sm p-2">{(students.data || []).length === 0 ? 'No active students assigned to you yet. Your admin assigns students to you.' : 'No students match.'}</div>
               ) : visibleStudents.map((s: any) => (
                 <label key={s.id} className="flex items-center gap-2 text-sm px-2 py-1 rounded hover:bg-black/5 dark:hover:bg-white/5 cursor-pointer">
                   <input type="checkbox" className="shrink-0" checked={attendees.includes(s.id)} onChange={() => toggle(s.id)} />

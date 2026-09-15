@@ -24,10 +24,14 @@ router.get(
 
     const studentType = (req.query.student_type as string) || '';
     const typeSql = studentType ? ' AND s.student_type = ?' : '';
-    const searchSql = (search ? ' AND (s.full_name LIKE ? OR s.form_no LIKE ?)' : '') + typeSql;
+    // Active / Inactive, alongside Trial / Enrolled — the two combine.
+    const status = ['Active', 'Inactive'].includes(String(req.query.status)) ? String(req.query.status) : '';
+    const statusSql = status ? ' AND s.status = ?' : '';
+    const searchSql = (search ? ' AND (s.full_name LIKE ? OR s.form_no LIKE ?)' : '') + typeSql + statusSql;
     const searchParams = [
       ...(search ? [`%${search}%`, `%${search}%`] : []),
       ...(studentType ? [studentType] : []),
+      ...(status ? [status] : []),
     ];
 
     const [rows, totalRows] = await Promise.all([
@@ -55,6 +59,10 @@ router.get(
               END, '') = '' THEN NULL
               ELSE s.relationship END AS paid_by,
          s.parent_mobile,
+         -- every family contact with their own number, as the profile records them
+         s.father_name, s.father_mobile, s.mother_name, s.mother_mobile,
+         s.guardian_name, s.guardian_mobile,
+         s.email AS student_email, s.student_mobile,
          s.fees_received,
          -- hours summary, computed scoped to this student (no full-table view)
          ${CREDITED_EXPR} AS total_hours_credited,

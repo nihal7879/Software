@@ -1,6 +1,9 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { UserPlus } from 'lucide-react';
+import { ColumnPicker, useColumnVisibility } from '../../components/ColumnPicker';
+import { FilterMenu, FilterField } from '../../components/FilterMenu';
+import { Select } from '../../components/Select';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { api } from '../../api/client';
@@ -39,7 +42,53 @@ function TeacherChips({ teachers }: { teachers?: string }) {
   );
 }
 
-// MANAGEMENT master: one row per student — parent (who pays), fee paid status,
+type Person = 'Father' | 'Mother' | 'Guardian';
+const PEOPLE: Person[] = ['Father', 'Mother', 'Guardian'];
+
+// Where a profile saved before father / mother / guardian had their own numbers
+// keeps its single old parent number. That profile also recorded whose number it
+// was, so it is shown under that person. When it did not say, the number sits
+// with the first parent named and is marked as not recorded — never guessed.
+// (Who pays is still stored, but not shown anywhere; this only places a number.)
+function oldNumberOwner(r: any): { person: Person; known: boolean } | null {
+  const hasOwn = r.father_mobile || r.mother_mobile || r.guardian_mobile;
+  if (hasOwn || !r.parent_mobile) return null;
+  const named = (p: Person) => !!String(r[`${p.toLowerCase()}_name`] ?? '').trim();
+  if (PEOPLE.includes(r.relationship) && named(r.relationship)) return { person: r.relationship, known: true };
+  return { person: PEOPLE.find(named) || 'Father', known: false };
+}
+
+// One family member's cell: the name, and their number underneath — the same two
+// lines in every row, so names and numbers line up down the column.
+function PersonCell({ row: r, person }: { row: any; person: Person }) {
+  const key = person.toLowerCase();
+  const name = String(r[`${key}_name`] ?? '').trim();
+  const old = oldNumberOwner(r);
+  const mobile = String(r[`${key}_mobile`] ?? '').trim() || (old?.person === person ? String(r.parent_mobile) : '');
+  if (!name && !mobile) return <span className="muted">—</span>;
+  return (
+    <div className="leading-tight">
+      <div className="font-medium text-sm">{name || <span className="muted font-normal">—</span>}</div>
+      <div className="text-xs muted tabular-nums mt-0.5 whitespace-nowrap">
+        {mobile || 'No mobile'}
+        {old?.person === person && !old.known && <span className="italic"> · whose not recorded</span>}
+      </div>
+    </div>
+  );
+}
+
+// The optional columns, switched on and off from the Columns menu.
+const OPTIONAL_COLUMNS = [
+  { key: 'profile', label: 'Profile' },
+  // One switch for both parents: ticking Parent shows the Father and Mother columns.
+  { key: 'parent', label: 'Parent' },
+  { key: 'guardian', label: 'Guardian' },
+  { key: 'email', label: 'Student Email' },
+  { key: 'mobile', label: 'Student Mobile' },
+  { key: 'teachers', label: 'Teachers' },
+];
+
+// MANAGEMENT master: one row per student — family contacts, fee paid status,
 // hours, teachers. Month selector scopes the fees-paid / hours figures.
 export default function ManagementStudents() {
   const qc = useQueryClient();
@@ -49,13 +98,28 @@ export default function ManagementStudents() {
   const [drawer, setDrawer] = useState(false);
   // '' = all. Trial students are people on a free trial, not yet enrolled.
   const [typeFilter, setTypeFilter] = useState<'' | 'Trial' | 'Enrolled'>('');
+  // Status lives in the Filters menu, and the list opens on Active students —
+  // the ones being worked with day to day. Combines with Trial / Enrolled.
+  const [statusFilter, setStatusFilter] = useState<'' | 'Active' | 'Inactive'>('Active');
+  // Family and teacher columns start hidden — the list opens compact, with the
+  // student's own contact details — and can be switched on from Columns.
+  const cols = useColumnVisibility(
+    'students-master.columns.v3',
+    OPTIONAL_COLUMNS.map((c) => c.key),
+    ['profile', 'email', 'mobile'],
+  );
+  const show = (k: string) => cols.visible.has(k);
   // After step 1 (create) we keep the new student id to fill the full profile form (step 2).
   const [newStudentId, setNewStudentId] = useState<number | null>(null);
 
   const { data, isLoading } = useQuery({
-    queryKey: ['mgmt-master', search, page, pageSize, typeFilter],
+    queryKey: ['mgmt-master', search, page, pageSize, typeFilter, statusFilter],
     queryFn: () => api.get('/management/master', {
-      params: { search, page, limit: pageSize, ...(typeFilter ? { student_type: typeFilter } : {}) },
+      params: {
+        search, page, limit: pageSize,
+        ...(typeFilter ? { student_type: typeFilter } : {}),
+        ...(statusFilter ? { status: statusFilter } : {}),
+      },
     }).then((r) => r.data),
   });
 
@@ -108,7 +172,7 @@ export default function ManagementStudents() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold">Students — Master</h1>
-          <p className="muted text-sm">Parent mapping, who pays, fee status, hours & teachers</p>
+          <p className="muted text-sm">Parents &amp; guardians, profile, status and teachers</p>
         </div>
         <div className="flex items-center gap-2">
           {/* Self-registrations live on their own page; the badge says when
@@ -145,6 +209,23 @@ export default function ManagementStudents() {
             </button>
           ))}
         </div>
+        <div className="ml-auto flex items-center gap-2">
+          <FilterMenu count={statusFilter ? 1 : 0} onClear={() => { setStatusFilter(''); setPage(1); }}>
+            <FilterField label="Status">
+              <Select
+                searchable={false}
+                value={statusFilter}
+                options={[
+                  { value: '', label: 'All statuses' },
+                  { value: 'Active', label: 'Active' },
+                  { value: 'Inactive', label: 'Inactive' },
+                ]}
+                onChange={(v) => { setStatusFilter(v as '' | 'Active' | 'Inactive'); setPage(1); }}
+              />
+            </FilterField>
+          </FilterMenu>
+          <ColumnPicker columns={OPTIONAL_COLUMNS} visible={cols.visible} onToggle={cols.toggle} />
+        </div>
       </div>
 
       <Section title={`${total} students`}>
@@ -152,7 +233,17 @@ export default function ManagementStudents() {
           <p className="muted text-sm">No students found.</p>
         ) : (
           <>
-          <Table head={['Student', 'Profile', 'Parent (pays)', 'Relation', 'Status', 'Teachers', '']}>
+          <Table head={[
+            'Student',
+            ...(show('profile') ? ['Profile'] : []),
+            ...(show('parent') ? ['Father', 'Mother'] : []),
+            ...(show('guardian') ? ['Guardian'] : []),
+            ...(show('email') ? ['Student Email'] : []),
+            ...(show('mobile') ? ['Student Mobile'] : []),
+            'Status',
+            ...(show('teachers') ? ['Teachers'] : []),
+            '',
+          ]}>
             {rows.map((r: any) => (
               <tr key={r.id}>
                 {/* Student — name + form + grade */}
@@ -171,29 +262,35 @@ export default function ManagementStudents() {
                 </td>
 
                 {/* Profile completion */}
-                <td className="table-td">
-                  {r.profile_completed
-                    ? <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-600"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />Completed</span>
-                    : <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-600"><span className="w-1.5 h-1.5 rounded-full bg-amber-500" />Pending</span>}
-                </td>
+                {show('profile') && (
+                  <td className="table-td">
+                    {r.profile_completed
+                      ? <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-600 whitespace-nowrap"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />Completed</span>
+                      : <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-600 whitespace-nowrap"><span className="w-1.5 h-1.5 rounded-full bg-amber-500" />Pending</span>}
+                  </td>
+                )}
 
-                {/* Parent (who pays) name + mobile */}
-                <td className="table-td min-w-[160px]">
-                  <div className="font-medium">{r.parent_name || <span className="muted italic font-normal">Not set</span>}</div>
-                  <div className="text-xs muted mt-0.5">{r.parent_mobile || 'No mobile'}</div>
-                </td>
+                {/* Father / Mother / Guardian — each with their own number */}
+                {show('parent') && <td className="table-td min-w-[150px]"><PersonCell row={r} person="Father" /></td>}
+                {show('parent') && <td className="table-td min-w-[150px]"><PersonCell row={r} person="Mother" /></td>}
+                {show('guardian') && <td className="table-td min-w-[130px]"><PersonCell row={r} person="Guardian" /></td>}
 
-                {/* Relation (who pays) */}
-                <td className="table-td">
-                  {r.paid_by
-                    ? <span className={`text-xs px-2 py-0.5 rounded-full whitespace-nowrap ${r.paid_by === 'Mother' ? 'bg-pink-500/15 text-pink-600' : 'bg-blue-500/15 text-blue-600'}`}>{r.paid_by}</span>
-                    : <span className="muted">—</span>}
-                </td>
+                {/* The student's own contact details */}
+                {show('email') && (
+                  <td className="table-td text-sm max-w-[220px]">
+                    {r.student_email ? <span className="block truncate" title={r.student_email}>{r.student_email}</span> : <span className="muted">—</span>}
+                  </td>
+                )}
+                {show('mobile') && (
+                  <td className="table-td text-sm tabular-nums whitespace-nowrap">{r.student_mobile || <span className="muted">—</span>}</td>
+                )}
 
                 <td className="table-td whitespace-nowrap"><StatusBadge status={r.status} /></td>
-                <td className="table-td max-w-[220px] text-sm">
-                  <TeacherChips teachers={r.teachers} />
-                </td>
+                {show('teachers') && (
+                  <td className="table-td max-w-[220px] text-sm">
+                    <TeacherChips teachers={r.teachers} />
+                  </td>
+                )}
                 <td className="table-td">
                   <div className="flex gap-1.5 whitespace-nowrap">
                     <Link to={`/admin/student/${r.id}`} className="btn-ghost !py-1 !px-2.5 text-xs">Report →</Link>

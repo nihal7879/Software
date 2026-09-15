@@ -78,12 +78,10 @@ router.get(
   wrap(async (_req, res) => {
     const rows = await query(
       `SELECT t.id, t.name, t.mobile, t.is_active, t.specialization,
-              (SELECT COUNT(*) FROM (
-                 SELECT a.student_id FROM lecture_sessions l2 JOIN lecture_attendees a ON a.lecture_id = l2.id
-                   WHERE l2.teacher_id = t.id AND l2.is_deleted = FALSE
-                 UNION
-                 SELECT m.student_id FROM student_teacher_mapping m WHERE m.teacher_id = t.id
-               ) u) AS total_students,
+              -- Assigned and Active — the same students the teacher's View → Students lists.
+              (SELECT COUNT(DISTINCT m.student_id) FROM student_teacher_mapping m
+                 JOIN students st ON st.id = m.student_id
+                WHERE m.teacher_id = t.id AND st.status = 'Active' AND st.is_deleted = FALSE) AS total_students,
               COALESCE((SELECT SUM(l.total_hours) FROM lecture_sessions l
                           WHERE l.teacher_id = t.id AND l.is_deleted = FALSE),0) AS total_hours_taught,
               COALESCE((SELECT SUM(l.total_hours) FROM lecture_sessions l

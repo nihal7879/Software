@@ -214,6 +214,85 @@ router.delete(
   })
 );
 
+// A teacher's lectures, each with the students recorded on it (admin) — for the
+// Teachers page, where a wrongly added student can be taken off a lecture.
+// Newest first, a page at a time (?page=&limit=); optional ?from=&to=
+// (YYYY-MM-DD) narrows the dates. The totals cover every lecture in the filter,
+// not just the page shown.
+router.get(
+  '/by-teacher/:teacherId',
+  requireRole('admin'),
+  wrap(async (req, res) => {
+    const page = Math.max(1, Number(req.query.page) || 1);
+    const limit = Math.min(1000, Math.max(1, Number(req.query.limit) || 20));
+    const offset = (page - 1) * limit;
+    const where = ['l.teacher_id = ?', 'l.is_deleted = FALSE'];
+    const params: any[] = [req.params.teacherId];
+    const iso = /^\d{4}-\d{2}-\d{2}$/;
+    if (iso.test(String(req.query.from || ''))) { where.push('l.session_date >= ?'); params.push(req.query.from); }
+    if (iso.test(String(req.query.to || ''))) { where.push('l.session_date <= ?'); params.push(req.query.to); }
+
+    const [sessions, [totals]] = await Promise.all([
+      query<any>(
+        // Everything the Edit Lecture window needs, as well as what the list shows.
+        `SELECT l.id, l.id AS lecture_id, l.session_date, l.time_in, l.time_out, l.total_hours,
+                l.teacher_id, l.subject_id, l.topic, l.subtopic, l.remark, l.venue, l.meeting_link,
+                sub.name AS subject_name
+           FROM lecture_sessions l
+           LEFT JOIN subjects sub ON sub.id = l.subject_id
+          WHERE ${where.join(' AND ')}
+          ORDER BY l.session_date DESC, l.time_in DESC, l.id DESC
+          LIMIT ? OFFSET ?`,
+        [...params, limit, offset]
+      ),
+      query<any>(
+        `SELECT COUNT(*) AS total, COALESCE(SUM(l.total_hours), 0) AS total_hours
+           FROM lecture_sessions l WHERE ${where.join(' AND ')}`,
+        params
+      ),
+    ]);
+    const meta = { page, limit, total: Number(totals.total) || 0, total_hours: Number(totals.total_hours) || 0 };
+    if (sessions.length === 0) return res.json({ data: [], ...meta });
+
+    const attendees = await query<any>(
+      `SELECT a.lecture_id, a.student_id, a.hours_consumed, s.form_no, s.full_name, s.status
+         FROM lecture_attendees a JOIN students s ON s.id = a.student_id
+        WHERE a.lecture_id IN (?)
+        ORDER BY s.full_name`,
+      [sessions.map((l) => l.id)]
+    );
+    const byLecture = new Map<number, any[]>();
+    for (const a of attendees) {
+      if (!byLecture.has(a.lecture_id)) byLecture.set(a.lecture_id, []);
+      byLecture.get(a.lecture_id)!.push(a);
+    }
+    res.json({ data: sessions.map((l) => ({ ...l, students: byLecture.get(l.id) || [] })), ...meta });
+  })
+);
+
+// Take a student off a lecture they were wrongly recorded on (admin). Their
+// hours for it come back at once — consumed hours are the sum of attendee rows.
+// The last student cannot be removed: a lecture with nobody on it is not a
+// lecture, so that is a job for deleting the lecture itself.
+router.delete(
+  '/:id/attendees/:studentId',
+  requireRole('admin'),
+  wrap(async (req, res) => {
+    const lecture = await queryOne<any>('SELECT id, session_date, teacher_id FROM lecture_sessions WHERE id = ? AND is_deleted = FALSE', [req.params.id]);
+    if (!lecture) return res.status(404).json({ error: 'Lecture not found' });
+    const row = await queryOne<any>('SELECT * FROM lecture_attendees WHERE lecture_id = ? AND student_id = ?', [lecture.id, req.params.studentId]);
+    if (!row) return res.status(404).json({ error: 'That student is not on this lecture.' });
+    const others = await queryOne<any>('SELECT COUNT(*) AS n FROM lecture_attendees WHERE lecture_id = ? AND student_id <> ?', [lecture.id, req.params.studentId]);
+    if (!Number(others?.n)) {
+      return res.status(400).json({ error: 'This is the only student on the lecture. To remove it completely, delete the lecture instead.' });
+    }
+    await query('DELETE FROM lecture_attendees WHERE id = ?', [row.id]);
+    // The removed row is kept in full in the audit log, so it can be put back.
+    await audit(req.user!.userId, 'REMOVE_ATTENDEE', 'lecture', lecture.id, row, { removed_student_id: row.student_id });
+    res.json({ ok: true, hours_returned: Number(row.hours_consumed) || 0 });
+  })
+);
+
 // Upcoming / today's classes for a teacher
 router.get(
   '/teacher/:teacherId',

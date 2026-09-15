@@ -2,7 +2,9 @@ import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
-import { api, hrs } from '../../api/client';
+import { api, hrs, studentOption } from '../../api/client';
+import { Select } from '../../components/Select';
+import { toast } from '../../components/Toast';
 import { Section, Table, Spinner } from '../../components/ui';
 import { ConfirmModal } from '../../components/ConfirmModal';
 import { Overlay } from '../../components/Overlay';
@@ -11,6 +13,7 @@ import { passwordTip } from '../../lib/passwordTip';
 import { EMAIL_RE } from '../../components/StudentRegistrationForm';
 import { passwordProblem } from '../../lib/credentials';
 import { AdminLectureEntryModal } from '../../components/AdminLectureEntryModal';
+import { TeacherLectures } from '../../components/TeacherLectures';
 import { MultiSelect } from '../../components/MultiSelect';
 
 // Chips with a clickable "+N" that expands/collapses the rest (touch-friendly).
@@ -35,10 +38,73 @@ function ChipList({ value }: { value?: string }) {
   );
 }
 
+// Assign a student to the opened teacher, for a subject — the same assignment a
+// student's Report makes, from the teacher's side. Only Active students are
+// offered, and the teacher's own subjects are listed first.
+function AssignStudentForm({ teacher, subjects }: { teacher: { id: number; name: string; spec?: string }; subjects: any[] }) {
+  const qc = useQueryClient();
+  const [studentSearch, setStudentSearch] = useState('');
+  const [studentId, setStudentId] = useState('');
+  const [subjectId, setSubjectId] = useState('');
+  const [error, setError] = useState('');
+
+  const found = useQuery({
+    queryKey: ['assign-student-search', studentSearch],
+    queryFn: () => api.get('/students', { params: { search: studentSearch, status: 'Active', limit: 50 } }).then((r) => r.data.data),
+  });
+
+  const spec = String(teacher.spec || '').split(',').map((x) => x.trim().toLowerCase()).filter(Boolean);
+  const theirs = subjects.filter((s: any) => spec.includes(String(s.name).toLowerCase()));
+  const subjectOptions = (theirs.length ? theirs : subjects).map((s: any) => ({ value: String(s.id), label: s.name }));
+
+  const assign = useMutation({
+    mutationFn: () => api.post('/teachers/assign', { student_id: Number(studentId), teacher_id: teacher.id, subject_id: Number(subjectId) }),
+    onSuccess: () => {
+      const st = (found.data || []).find((x: any) => String(x.id) === studentId);
+      const sub = subjectOptions.find((o) => o.value === subjectId);
+      toast(`${st?.full_name || 'Student'} assigned to ${teacher.name}${sub ? ` for ${sub.label}` : ''}`);
+      for (const k of ['teacher-roster', 'workload', 'teachers-of', 'me-students']) qc.invalidateQueries({ queryKey: [k] });
+      setStudentId(''); setSubjectId(''); setError('');
+    },
+    onError: (e: any) => setError(e?.response?.data?.error || 'Could not assign the student.'),
+  });
+
+  return (
+    <div className="rounded-xl p-3 mb-4" style={{ background: 'var(--color-card-alt)' }}>
+      <div className="text-xs font-semibold mb-2">Assign a student to {teacher.name}</div>
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="w-full sm:w-72">
+          <Select
+            value={studentId}
+            onChange={setStudentId}
+            onSearch={setStudentSearch}
+            options={(found.data || []).map((s: any) => studentOption(s))}
+            placeholder="Search active student…"
+          />
+        </div>
+        <div className="w-full sm:w-48">
+          <Select searchable={false} value={subjectId} onChange={setSubjectId} options={subjectOptions} placeholder="Subject…" />
+        </div>
+        <button
+          className="btn-primary !py-2"
+          disabled={!studentId || !subjectId || assign.isPending}
+          onClick={() => assign.mutate()}
+        >
+          {assign.isPending ? 'Assigning…' : 'Assign'}
+        </button>
+      </div>
+      {error && <div className="text-sm text-red-500 mt-2">{error}</div>}
+    </div>
+  );
+}
+
 export default function Teachers() {
   const qc = useQueryClient();
   const [drawer, setDrawer] = useState(false);
-  const [openTeacher, setOpenTeacher] = useState<{ id: number; name: string } | null>(null);
+  const [openTeacher, setOpenTeacher] = useState<{ id: number; name: string; spec?: string } | null>(null);
+  // The opened teacher's panel opens on their students; their lectures (with the
+  // students on each) are the second tab.
+  const [panelTab, setPanelTab] = useState<'lectures' | 'students'>('students');
   const rosterRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (openTeacher) rosterRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -156,7 +222,7 @@ export default function Teachers() {
       <Section title="Workload" action={
         <input className="input max-w-[220px]" placeholder="Search teacher…" value={workloadSearch} onChange={(e) => setWorkloadSearch(e.target.value)} />
       }>
-        <p className="muted text-sm mb-3">Click a teacher to see the students assigned to them. Assign teachers from a student's Report.</p>
+        <p className="muted text-sm mb-3">Click a teacher to see their students and lectures. Assign teachers from a student's Report.</p>
         {workload.isLoading ? <Spinner /> : visibleWorkload.length === 0 ? (
           <p className="muted text-sm">No teachers match “{workloadSearch}”.</p>
         ) : (
@@ -165,7 +231,16 @@ export default function Teachers() {
               const active = Number(t.is_active) === 1;
               return (
               <tr key={t.id}>
-                <td className="table-td font-medium">{t.name}</td>
+                <td className="table-td font-medium">
+                  <button
+                    type="button"
+                    className="font-medium text-left hover:underline"
+                    style={openTeacher?.id === t.id ? { color: 'var(--color-primary)' } : undefined}
+                    onClick={() => { setPanelTab('students'); setOpenTeacher(openTeacher?.id === t.id ? null : { id: t.id, name: t.name, spec: t.specialization }); }}
+                  >
+                    {t.name}
+                  </button>
+                </td>
                 <td className="table-td max-w-[260px]">
                   <ChipList value={t.specialization} />
                 </td>
@@ -181,9 +256,9 @@ export default function Teachers() {
                   <div className="flex gap-1.5 whitespace-nowrap">
                     <button
                       className="btn-ghost !py-1 !px-2.5 text-xs"
-                      onClick={() => setOpenTeacher(openTeacher?.id === t.id ? null : { id: t.id, name: t.name })}
+                      onClick={() => { setPanelTab('students'); setOpenTeacher(openTeacher?.id === t.id ? null : { id: t.id, name: t.name, spec: t.specialization }); }}
                     >
-                      {openTeacher?.id === t.id ? 'Hide students' : 'View students'}
+                      {openTeacher?.id === t.id ? 'Hide' : 'View'}
                     </button>
                     <button
                       className="!py-1 !px-2.5 text-xs rounded-lg border border-slate-500/30 text-slate-600 hover:bg-slate-500/10 transition-colors"
@@ -223,11 +298,33 @@ export default function Teachers() {
 
       {openTeacher && (
         <div ref={rosterRef}>
-        <Section title={`Students of ${openTeacher.name}`}>
-          {students.isLoading ? <Spinner /> : (
-            <Table head={['Form', 'Student', 'Grade', 'Subject', { label: 'Hours Taught', align: 'right' }, 'Assignment', 'Status', '']}>
+        <Section
+          title={openTeacher.name}
+          action={
+            <div className="flex gap-1 rounded-lg p-0.5" style={{ background: 'var(--color-card-alt)' }}>
+              {([['students', 'Students'], ['lectures', 'Lectures']] as const).map(([v, label]) => (
+                <button
+                  key={v}
+                  type="button"
+                  onClick={() => setPanelTab(v)}
+                  className={`text-xs px-3 py-1.5 rounded-md transition-colors ${
+                    panelTab === v ? 'bg-[var(--color-card)] font-semibold shadow-sm' : 'muted hover:text-[var(--color-primary)]'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          }
+        >
+          {panelTab === 'lectures' ? (
+            <TeacherLectures teacherId={openTeacher.id} teacherName={openTeacher.name} />
+          ) : students.isLoading ? <Spinner /> : (
+            <>
+            <AssignStudentForm teacher={openTeacher} subjects={subjects.data || []} />
+            <Table head={['Form', 'Student', 'Grade', 'Subject', { label: 'Hours Taught', align: 'right' }, '']}>
               {(students.data || []).length === 0 ? (
-                <tr><td className="table-td muted" colSpan={8}>No students taught or assigned to this teacher yet.</td></tr>
+                <tr><td className="table-td muted" colSpan={6}>No active students assigned to this teacher yet.</td></tr>
               ) : (students.data || []).map((s: any) => (
                 <tr key={s.id}>
                   <td className="table-td font-mono">{s.form_no}</td>
@@ -235,16 +332,11 @@ export default function Teachers() {
                   <td className="table-td">{s.year_grade || '—'}</td>
                   <td className="table-td">{s.subjects || '—'}</td>
                   <td className="table-td text-right tabular-nums">{hrs(s.hours_with_teacher)}</td>
-                  <td className="table-td">
-                    {Number(s.is_assigned) === 1
-                      ? <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-600">Assigned</span>
-                      : <span className="text-xs px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-600">Taught only</span>}
-                  </td>
-                  <td className="table-td">{s.status}</td>
                   <td className="table-td"><Link to={`/admin/student/${s.id}`} className="btn-ghost !py-1 !px-2.5 text-xs whitespace-nowrap">Report →</Link></td>
                 </tr>
               ))}
             </Table>
+            </>
           )}
         </Section>
         </div>
