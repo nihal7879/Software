@@ -361,10 +361,12 @@ router.post(
         [first, b.last_name?.trim() || null, b.email, b.username, b.student_mobile?.trim() || null, hash, ip, gps, ua]
       );
       await audit(undefined, 'REGISTER_REQUEST', 'student_registration', r.insertId, null, { username: b.username, email: b.email });
-      // Tell the admin someone is waiting. Not awaited: a slow or unavailable
-      // mail server must never hold up, or fail, the registration itself.
+      // Tell the admin someone is waiting. Awaited, because on Vercel the function
+      // can be frozen as soon as the response goes out, cutting off an email
+      // still being sent. sendMail never throws — a mail failure is recorded in
+      // email_log and the registration still succeeds.
       const notify = registrationAdminEmail({ first_name: first, last_name: b.last_name, username: b.username, email: b.email, mobile: b.student_mobile });
-      void sendMail({ kind: 'registration_admin', to: config.mail.adminNotify, ...notify });
+      await sendMail({ kind: 'registration_admin', to: config.mail.adminNotify, ...notify });
       return res.status(201).json({ pending: true, id: r.insertId });
     }
 

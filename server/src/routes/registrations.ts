@@ -124,10 +124,11 @@ router.post(
       await conn.commit();
       await audit(req.user!.userId, 'APPROVE_REGISTRATION', 'student_registration', reg.id, { email: reg.email },
         { student_id: st.insertId, form_no: formNo, student_type: b.student_type, trial_hours: b.trial_hours ?? null });
-      // Tell the student they are in: sign in and complete the profile. Not
-      // awaited — the approval is done whether or not the email goes out.
+      // Tell the student they are in: sign in and complete the profile. Awaited
+      // (Vercel may freeze the function once the response is sent); sendMail
+      // never throws, so the approval — already committed — cannot fail on it.
       const welcome = registrationApprovedEmail({ name: fullName, username: login, approvedAs: b.student_type, formNo });
-      void sendMail({ kind: 'registration_approved', to: reg.email, ...welcome, studentId: st.insertId, sentBy: req.user!.userId });
+      await sendMail({ kind: 'registration_approved', to: reg.email, ...welcome, studentId: st.insertId, sentBy: req.user!.userId });
       res.json({ ok: true, student_id: st.insertId, form_no: formNo, username: login });
     } catch (e) {
       await conn.rollback();
