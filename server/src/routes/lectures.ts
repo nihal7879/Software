@@ -5,6 +5,7 @@ import { requireAuth, requireRole } from '../middleware/auth';
 import { wrap } from '../middleware/error';
 import { timeToDecimalHours, deriveMonth } from '../utils/hours';
 import { audit } from '../utils/audit';
+import { blockLockedStudents } from '../utils/settings';
 
 const router = Router();
 router.use(requireAuth);
@@ -46,8 +47,10 @@ const lectureSchema = z.object({
 });
 
 // LIST lectures — supports ?studentId=, ?month=YYYY-MM, ?from=&to= (date range)
+// (A student's request is refused while student dashboards are locked.)
 router.get(
   '/',
+  blockLockedStudents,
   wrap(async (req, res) => {
     const u = req.user!;
     let studentId = req.query.studentId ? Number(req.query.studentId) : undefined;

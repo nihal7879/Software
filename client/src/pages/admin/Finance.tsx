@@ -103,12 +103,29 @@ export default function Finance() {
   // ---- Excel import -------------------------------------------------------
   const importMut = useMutation({
     mutationFn: async (file: File) => {
-      const rows = await parseFeeWorkbook(file);
-      if (rows.length === 0) throw new Error('No rows found in the sheet.');
-      return api.post('/fees/import', { rows }).then((r) => r.data);
+      const { rows, info } = await parseFeeWorkbook(file);
+      if (rows.length === 0) {
+        const nonFee = info.skippedNonFee.length ? ` (${info.skippedNonFee.length} non-fee credit(s) left out)` : '';
+        throw new Error((info.format === 'statement' ? 'No fee credits found in this bank statement.' : 'No rows found in the sheet.') + nonFee);
+      }
+      return api.post('/fees/import', { rows }).then((r) => ({ ...r.data, info }));
     },
     onSuccess: (r) => {
-      setImportMsg(`Imported ${r.imported} payment(s); ${r.drafted} sent to drafts (of ${r.total} rows).`);
+      const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+      const dupes = r.duplicates ? ` ${plural(r.duplicates, 'is', 'are')} flagged as duplicate.` : '';
+      // Name what was left out as not a fee, so it is never a silent drop.
+      const nonFee = r.info?.skippedNonFee?.length
+        ? ` Left out as not a student fee: ${r.info.skippedNonFee
+            .map((x: any) => `${x.who} (AED ${Number(x.amount).toLocaleString('en-AE')} — ${x.reason})`)
+            .join('; ')}.`
+        : '';
+      setImportMsg(
+        r.info?.format === 'statement'
+          ? `Bank statement: ${plural(r.total, 'credit entry', 'credit entries')} read` +
+            ` (${plural(r.info.skippedDebit, 'debit row', 'debit rows')} and ${plural(r.info.skippedEmpty + r.info.skippedBalance, 'balance / empty row', 'balance / empty rows')} left out).` +
+            ` ${r.imported} recorded, ${r.drafted} sent to drafts.${dupes}${nonFee}`
+          : `Imported ${r.imported} payment(s); ${r.drafted} sent to drafts (of ${r.total} rows).${dupes}${nonFee}`
+      );
       invalidateFeeViews();
       qc.invalidateQueries({ queryKey: ['fee-drafts'] });
     },
@@ -201,7 +218,7 @@ export default function Finance() {
                 <table className="w-full border-collapse">
                   <thead>
                     <tr>
-                      {['Date', 'Transaction', 'Reference', 'Credit', 'Source', 'Parent / Guardian', 'Assign to student', 'Pkg Hrs', 'Disc Hrs', 'Note', ''].map((h) => <th key={h} className="table-th">{h}</th>)}
+                      {['Flag', 'Date', 'Transaction', 'Reference', 'Credit', 'Source', 'Parent / Guardian', 'Assign to student', 'Pkg Hrs', 'Disc Hrs', 'Note', ''].map((h) => <th key={h} className="table-th">{h}</th>)}
                     </tr>
                   </thead>
                   <tbody>
@@ -435,6 +452,36 @@ export default function Finance() {
 }
 
 // One editable draft row: pick student, fix amount/date, then assign or discard.
+// Whether a draft is a payment the system has not seen, or one it already has:
+// recorded as a payment (the same bank reference — a split sibling payment
+// counts, since the transfer was handled), or waiting in drafts twice. Worked
+// out by the server on every read, so it stays right as other drafts are
+// assigned or discarded.
+function DraftFlag({ draft }: { draft: any }) {
+  const pill = 'inline-block px-2 py-0.5 rounded-full text-xs font-semibold whitespace-nowrap';
+  if (draft.dup_flag === 'recorded') {
+    const list: any[] = draft.dup_recorded || [];
+    const who = list.map((t) => `${t.form_no} ${t.student}`).join(', ');
+    const detail = list.map((t) => `${t.form_no} ${t.student} · AED ${num(t.amount)} · ${t.date}`).join('\n');
+    return (
+      <div title={`Already recorded as:\n${detail}`}>
+        <span className={`${pill} bg-red-500/15 text-red-600 dark:text-red-400`}>Duplicate</span>
+        <div className="text-[11px] muted mt-0.5 max-w-[150px] truncate">Recorded: {who}</div>
+      </div>
+    );
+  }
+  if (draft.dup_flag === 'draft') {
+    const n = Number(draft.dup_draft_count) || 1;
+    return (
+      <div title="Another draft with the same bank reference is waiting — keep one, discard the rest">
+        <span className={`${pill} bg-amber-500/15 text-amber-700 dark:text-amber-400`}>Duplicate</span>
+        <div className="text-[11px] muted mt-0.5 whitespace-nowrap">Also in drafts{n > 1 ? ` ×${n}` : ''}</div>
+      </div>
+    );
+  }
+  return <span className={`${pill} bg-emerald-500/15 text-emerald-600 dark:text-emerald-400`} title="Not in the system yet">New</span>;
+}
+
 function DraftRow({
   draft,
   students,
@@ -492,6 +539,7 @@ function DraftRow({
 
   return (
     <tr>
+      <td className="table-td"><DraftFlag draft={draft} /></td>
       <td className="table-td whitespace-nowrap text-sm">{date || '—'}</td>
       <td className="table-td max-w-[260px]">
         <div className="text-xs whitespace-pre-wrap break-words" title={transaction}>{transaction}</div>

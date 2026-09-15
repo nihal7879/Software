@@ -21,6 +21,7 @@ import FacultyStudents from './pages/faculty/FacultyStudents';
 import FacultyStudentDetail from './pages/faculty/FacultyStudentDetail';
 import LectureEntry from './pages/faculty/LectureEntry';
 import StudentDashboard from './pages/student/StudentDashboard';
+import { StudentGate } from './components/StudentLock';
 import LectureHistory from './pages/student/LectureHistory';
 import StudentFees from './pages/student/StudentFees';
 import StudentProfile from './pages/student/StudentProfile';
@@ -77,11 +78,14 @@ export default function App() {
       <Route path="/faculty/settings" element={<Protected roles={['faculty', 'admin']}><Settings /></Protected>} />
 
       {/* Student */}
-      <Route path="/student" element={<Protected roles={['student']}><StudentDashboard /></Protected>} />
-      <Route path="/student/tracker" element={<Protected roles={['student']}><Tracker /></Protected>} />
-      <Route path="/student/lectures" element={<Protected roles={['student']}><LectureHistory /></Protected>} />
-      <Route path="/student/hours" element={<Protected roles={['student']}><HoursStatement /></Protected>} />
-      <Route path="/student/fees" element={<Protected roles={['student']}><StudentFees /></Protected>} />
+      {/* Data pages sit behind the student lock (admin Settings → Student access).
+          Profile and settings stay open so a locked student can still finish
+          their profile and change their password. */}
+      <Route path="/student" element={<Protected roles={['student']}><StudentGate><StudentDashboard /></StudentGate></Protected>} />
+      <Route path="/student/tracker" element={<Protected roles={['student']}><StudentGate><Tracker /></StudentGate></Protected>} />
+      <Route path="/student/lectures" element={<Protected roles={['student']}><StudentGate><LectureHistory /></StudentGate></Protected>} />
+      <Route path="/student/hours" element={<Protected roles={['student']}><StudentGate><HoursStatement /></StudentGate></Protected>} />
+      <Route path="/student/fees" element={<Protected roles={['student']}><StudentGate><StudentFees /></StudentGate></Protected>} />
       <Route path="/student/profile" element={<Protected roles={['student']}><StudentProfile /></Protected>} />
       <Route path="/student/settings" element={<Protected roles={['student']}><Settings /></Protected>} />
 

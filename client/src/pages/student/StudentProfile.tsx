@@ -1,5 +1,6 @@
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { User, Mail, Phone, Shield, Lock } from 'lucide-react';
 import { useAuth } from '../../auth/AuthContext';
@@ -16,7 +17,9 @@ export default function StudentProfile() {
   const id = user?.studentId!;
   const qc = useQueryClient();
   const [saved, setSaved] = useState(false);
-  const [tab, setTab] = useState<'info' | 'password'>('info');
+  // The locked-dashboard screen links straight to the password tab.
+  const location = useLocation();
+  const [tab, setTab] = useState<'info' | 'password'>((location.state as any)?.tab === 'password' ? 'password' : 'info');
   const [error, setError] = useState('');
 
   const student = useQuery({ queryKey: ['student', id], queryFn: () => api.get(`/students/${id}`).then((r) => r.data), enabled: !!id });

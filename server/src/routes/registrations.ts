@@ -5,6 +5,7 @@ import { requireAuth, requireRole } from '../middleware/auth';
 import { wrap } from '../middleware/error';
 import { audit } from '../utils/audit';
 import { claimFormNo } from '../utils/formNo';
+import { sendMail, registrationApprovedEmail } from '../utils/mailer';
 
 // Student self-registrations waiting for an administrator. A registration is
 // only a request (see POST /auth/register): approving it is what creates the
@@ -123,6 +124,10 @@ router.post(
       await conn.commit();
       await audit(req.user!.userId, 'APPROVE_REGISTRATION', 'student_registration', reg.id, { email: reg.email },
         { student_id: st.insertId, form_no: formNo, student_type: b.student_type, trial_hours: b.trial_hours ?? null });
+      // Tell the student they are in: sign in and complete the profile. Not
+      // awaited — the approval is done whether or not the email goes out.
+      const welcome = registrationApprovedEmail({ name: fullName, username: login, approvedAs: b.student_type, formNo });
+      void sendMail({ kind: 'registration_approved', to: reg.email, ...welcome, studentId: st.insertId, sentBy: req.user!.userId });
       res.json({ ok: true, student_id: st.insertId, form_no: formNo, username: login });
     } catch (e) {
       await conn.rollback();

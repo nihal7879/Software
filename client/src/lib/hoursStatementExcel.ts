@@ -5,10 +5,12 @@ import ExcelJS from 'exceljs';
 // fees received, then the per-lecture detail with the columns DATE / Month /
 // Form No / Student Name / Time In / Time Out / No of Hrs / Name of Teacher.
 //
-// The only thing added to that format is the "Exported On" stamp at the top.
-// No masthead, no title block, no summary panel — the client reads this sheet
-// against their own and anything extra just gets in the way. The student name
-// and form number are already columns in the detail table.
+// The only things added to that format are two lines at the top: "Created On"
+// (when this file was made) and "Lectures recorded till" (the date of the last
+// lecture in it), so a parent can tell how current it is. No masthead, no title
+// block, no summary panel — the client reads this sheet against their own and
+// anything extra just gets in the way. The student name and form number are
+// already columns in the detail table.
 //
 // exceljs rather than the xlsx already in the project: the community build of
 // xlsx writes no cell styling at all (fills, fonts and borders are a paid
@@ -77,7 +79,15 @@ export type StatementInput = {
   to?: string;
 };
 
-export async function downloadHoursStatement(input: StatementInput): Promise<string> {
+// d-Mon-yyyy, e.g. 12-Sep-2026 — the format the dates in the sheet use.
+const dayLabel = (d?: string | null) => {
+  if (!d) return '';
+  const [y, m, day] = String(d).slice(0, 10).split('-').map(Number);
+  return y ? `${day}-${MONTHS[m - 1]}-${y}` : '';
+};
+
+/** Builds the statement workbook — shared by "Export Excel" and "Email to parent". */
+export async function buildHoursStatement(input: StatementInput): Promise<{ buffer: ArrayBuffer; fileName: string }> {
   const { student, summary } = input;
   const num = (v: any) => Number(v || 0);
 
@@ -143,12 +153,21 @@ export async function downloadHoursStatement(input: StatementInput): Promise<str
 
   let r = 1;
 
-  // ---- the one addition to the client's format -----------------------------
-  ws.getCell(r, 1).value = 'Exported On';
-  ws.getCell(r, 1).font = { name: 'Calibri', size: 10, bold: true, color: { argb: argb('#475569') } };
-  ws.getCell(r, 2).value = stamp;
-  ws.getCell(r, 2).font = { name: 'Calibri', size: 10 };
-  r += 2;
+  // ---- the two additions to the client's format ----------------------------
+  // "Lectures recorded till" is the last lecture in this file — the sheet is
+  // complete up to that date, whatever day it was created.
+  const lastLecture = lectures.length ? String(lectures[lectures.length - 1].session_date).slice(0, 10) : '';
+  const stampRow = (label: string, value: string) => {
+    ws.getCell(r, 1).value = label;
+    ws.getCell(r, 1).font = { name: 'Calibri', size: 10, bold: true, color: { argb: argb('#475569') } };
+    ws.getCell(r, 2).value = value;
+    ws.getCell(r, 2).font = { name: 'Calibri', size: 10 };
+    r++;
+  };
+  stampRow('Created On', stamp);
+  stampRow('Lectures recorded till', lastLecture ? dayLabel(lastLecture) : 'No lectures recorded yet');
+  ws.getColumn(1).width = 22; // fits "Lectures recorded till"
+  r++;
 
   // ---- month pivot ---------------------------------------------------------
   ws.getCell(r, 1).value = '';
@@ -247,7 +266,7 @@ export async function downloadHoursStatement(input: StatementInput): Promise<str
   }
 
   // ---- widths --------------------------------------------------------------
-  ws.getColumn(1).width = 15;
+  ws.getColumn(1).width = 22;
   ws.getColumn(2).width = 11;
   ws.getColumn(3).width = 10;
   ws.getColumn(4).width = 26;
@@ -257,17 +276,21 @@ export async function downloadHoursStatement(input: StatementInput): Promise<str
   ws.getColumn(8).width = 22;
   for (let c = 9; c <= width; c++) ws.getColumn(c).width = 11;
 
-  ws.headerFooter.oddFooter = `&C &P of &N &R Exported ${stamp}`;
+  ws.headerFooter.oddFooter = `&C &P of &N &R Created ${stamp}`;
 
-  // ---- download ------------------------------------------------------------
-  const buf = await wb.xlsx.writeBuffer();
+  const buffer = (await wb.xlsx.writeBuffer()) as ArrayBuffer;
   const safe = (s: string) => s.replace(/[^A-Za-z0-9]+/g, '-').replace(/^-|-$/g, '');
   const fileName =
     `Hours-Statement_${safe(student.form_no || 'NA')}_${safe(student.full_name || 'student')}` +
     `_${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}` +
     `-${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}.xlsx`;
+  return { buffer, fileName };
+}
 
-  const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+/** Builds the statement and saves it to the computer. */
+export async function downloadHoursStatement(input: StatementInput): Promise<string> {
+  const { buffer, fileName } = await buildHoursStatement(input);
+  const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;

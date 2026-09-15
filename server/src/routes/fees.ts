@@ -6,6 +6,8 @@ import { wrap } from '../middleware/error';
 import { deriveMonth } from '../utils/hours';
 import { HOURS_COLUMNS, deriveHours, CREDITED_EXPR, CONSUMED_EXPR, LAST_LECTURE_EXPR } from '../utils/hoursSummary';
 import { audit } from '../utils/audit';
+// Student dashboard data is refused while an admin has student dashboards locked.
+import { blockLockedStudents } from '../utils/settings';
 import { formNoOrder } from '../utils/formNo';
 
 const router = Router();
@@ -16,6 +18,7 @@ router.use(requireAuth);
 router.get(
   '/ledger/:id',
   ensureOwnStudent,
+  blockLockedStudents,
   wrap(async (req, res) => {
     const row = await queryOne<any>(
       `SELECT s.id AS student_id, s.form_no, s.full_name AS student_name, s.status, ${HOURS_COLUMNS}
@@ -99,6 +102,7 @@ router.get(
 router.get(
   '/transactions/:id',
   ensureOwnStudent,
+  blockLockedStudents,
   wrap(async (req, res) => {
     const rows = await query(
       'SELECT * FROM fee_transactions WHERE student_id = ? AND is_deleted = FALSE ORDER BY payment_date DESC',
@@ -317,6 +321,29 @@ async function matchStudent(formNo?: string | null, name?: string | null): Promi
   return null;
 }
 
+// Is this bank transaction already in the system? Judged on the bank's reference,
+// which is unique per transfer — but NOT per payment: one transfer is sometimes
+// split across siblings (the same reference on two payments), so a reference
+// that is already recorded means "this transfer was handled", not "this exact
+// payment exists". Without a reference, the same date + amount + bank line.
+async function alreadyRecorded(ref: string | null | undefined, date: string | null, amount: number, narration?: string | null) {
+  const r = String(ref ?? '').trim();
+  if (r) {
+    return query<any>('SELECT id, student_id, amount FROM fee_transactions WHERE is_deleted = FALSE AND TRIM(transaction_reference) = ?', [r]);
+  }
+  const n = String(narration ?? '').trim();
+  if (!n || !date || !Number.isFinite(amount)) return [];
+  return query<any>(
+    'SELECT id, student_id, amount FROM fee_transactions WHERE is_deleted = FALSE AND payment_date = ? AND amount = ? AND TRIM(transaction_narration) = ?',
+    [date, amount, n]
+  );
+}
+async function alreadyInDrafts(ref: string | null | undefined) {
+  const r = String(ref ?? '').trim();
+  if (!r) return false;
+  return !!(await queryOne<any>("SELECT id FROM fee_import_drafts WHERE status = 'draft' AND TRIM(transaction_reference) = ? LIMIT 1", [r]));
+}
+
 router.post(
   '/import',
   requireRole('admin'),
@@ -324,6 +351,10 @@ router.post(
     const body = z.object({ rows: z.array(importRowSchema).max(5000) }).parse(req.body);
     let imported = 0;
     let drafted = 0;
+    // Rows that were already in the system when they arrived — recorded as a
+    // payment, or already waiting in drafts. They are kept and flagged in the
+    // drafts list, not silently dropped, so the admin sees and decides.
+    let duplicates = 0;
 
     for (const row of body.rows) {
       const amount = row.amount == null || row.amount === '' ? NaN : Number(row.amount);
@@ -334,7 +365,14 @@ router.post(
       const month = date ? deriveMonth(date) : null;
 
       const amountOk = Number.isFinite(amount) && amount > 0;
-      const ready = studentId != null && amountOk && !!date;
+      const recorded = await alreadyRecorded(row.transaction_reference, date, amount, row.transaction_narration);
+      const isDuplicate = recorded.length > 0 || (await alreadyInDrafts(row.transaction_reference));
+      if (isDuplicate) duplicates++;
+      // The one case a matched row does NOT go straight in: this student already
+      // has this very payment (same reference and amount). A sibling sharing the
+      // reference is a different payment and is recorded as before.
+      const samePayment = studentId != null && recorded.some((t) => t.student_id === studentId && Number(t.amount) === amount);
+      const ready = studentId != null && amountOk && !!date && !samePayment;
 
       if (ready) {
         const tr: any = await query(
@@ -355,7 +393,8 @@ router.post(
         }
         imported++;
       } else {
-        const reason = studentId == null ? 'No matching student'
+        const reason = samePayment ? 'Duplicate — already recorded for this student'
+          : studentId == null ? 'No matching student'
           : !amountOk ? 'Missing / invalid amount'
           : !date ? 'Missing / invalid date'
           : 'Needs review';
@@ -374,8 +413,8 @@ router.post(
       }
     }
 
-    await audit(req.user!.userId, 'IMPORT', 'fee_transaction', 'bulk', null, { imported, drafted, total: body.rows.length });
-    res.json({ imported, drafted, total: body.rows.length });
+    await audit(req.user!.userId, 'IMPORT', 'fee_transaction', 'bulk', null, { imported, drafted, duplicates, total: body.rows.length });
+    res.json({ imported, drafted, duplicates, total: body.rows.length });
   })
 );
 
@@ -480,14 +519,49 @@ router.get(
   '/drafts',
   requireRole('admin'),
   wrap(async (_req, res) => {
-    const rows = await query(
-      `SELECT d.*, s.full_name AS matched_student_name, s.form_no AS matched_form_no
+    const rows = await query<any>(
+      `SELECT d.*, s.full_name AS matched_student_name, s.form_no AS matched_form_no,
+              -- other drafts still waiting with the same bank reference
+              (SELECT COUNT(*) FROM fee_import_drafts d2
+                WHERE d2.status = 'draft' AND d2.id <> d.id
+                  AND TRIM(COALESCE(d.transaction_reference, '')) <> ''
+                  AND TRIM(d2.transaction_reference) = TRIM(d.transaction_reference)) AS dup_draft_count
        FROM fee_import_drafts d
        LEFT JOIN students s ON s.id = d.student_id
        WHERE d.status = 'draft'
        ORDER BY d.created_at DESC, d.id DESC`
     );
-    res.json({ data: rows });
+    // The payments each draft is already recorded as — worked out fresh on every
+    // read, so the flag stays true after other drafts are assigned or discarded.
+    // Same rule as the import: the reference, or date + amount + bank line.
+    const recorded = rows.length
+      ? await query<any>(
+          `SELECT ft.id, ft.payment_date, ft.amount, TRIM(ft.transaction_reference) AS ref, ft.transaction_narration,
+                  st.form_no, st.full_name
+             FROM fee_transactions ft JOIN students st ON st.id = ft.student_id
+            WHERE ft.is_deleted = FALSE
+              AND (TRIM(ft.transaction_reference) IN (?) OR ft.payment_date IN (?))`,
+          [
+            [...new Set(rows.map((d) => String(d.transaction_reference ?? '').trim()).filter(Boolean)), '\u0000'],
+            [...new Set(rows.filter((d) => !String(d.transaction_reference ?? '').trim() && d.payment_date).map((d) => d.payment_date)), '1900-01-01'],
+          ]
+        )
+      : [];
+    const data = rows.map((d) => {
+      const ref = String(d.transaction_reference ?? '').trim();
+      const narration = String(d.transaction_narration ?? '').trim();
+      const matches = recorded.filter((t) =>
+        ref
+          ? t.ref === ref
+          : !!narration && t.payment_date === d.payment_date && Number(t.amount) === Number(d.amount) && String(t.transaction_narration ?? '').trim() === narration
+      );
+      return {
+        ...d,
+        dup_recorded: matches.map((t) => ({ id: t.id, form_no: t.form_no, student: t.full_name, amount: t.amount, date: t.payment_date })),
+        dup_flag: matches.length > 0 ? 'recorded' : Number(d.dup_draft_count) > 0 ? 'draft' : 'new',
+      };
+    });
+    res.json({ data });
   })
 );
 
@@ -574,6 +648,7 @@ router.delete(
 router.get(
   '/packages/:id',
   ensureOwnStudent,
+  blockLockedStudents,
   wrap(async (req, res) => {
     // Include the REAL amount actually paid (from the linked transaction) so the
     // statement shows the true package fee, not a rate×hours estimate.
@@ -681,6 +756,7 @@ router.post(
 router.get(
   '/adjustments/:id',
   ensureOwnStudent,
+  blockLockedStudents,
   wrap(async (req, res) => {
     const rows = await query(
       'SELECT id, delta, reason, created_at FROM hours_adjustments WHERE student_id = ? ORDER BY created_at',
@@ -694,6 +770,7 @@ router.get(
 router.post(
   '/pay/:id',
   ensureOwnStudent,
+  blockLockedStudents,
   wrap(async (_req, res) => {
     res.status(501).json({
       error: 'Online payment not yet enabled',

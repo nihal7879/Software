@@ -13,6 +13,8 @@ import analyticsRoutes from './routes/analytics';
 import managementRoutes from './routes/management';
 import mastersRoutes from './routes/masters';
 import registrationRoutes from './routes/registrations';
+import settingsRoutes from './routes/settings';
+import emailRoutes from './routes/email';
 
 const app = express();
 
@@ -46,6 +48,8 @@ app.use('/api/analytics', analyticsRoutes);
 app.use('/api/management', managementRoutes);
 app.use('/api/masters', mastersRoutes);
 app.use('/api/registrations', registrationRoutes);
+app.use('/api/settings', settingsRoutes);
+app.use('/api/email', emailRoutes);
 
 app.use(notFound);
 app.use(errorHandler);

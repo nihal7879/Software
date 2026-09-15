@@ -2,12 +2,13 @@ import { ReactNode, useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, Users, Clock, Wallet, GraduationCap, BarChart3,
-  BookOpen, CalendarDays, User, LogOut, Moon, Sun, ChevronLeft, Menu, Settings,
+  BookOpen, CalendarDays, User, LogOut, Moon, Sun, ChevronLeft, Menu, Settings, Lock,
 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '../auth/AuthContext';
 import { api } from '../api/client';
 import { getLastSeenRegistration } from '../lib/registrationsSeen';
+import { useStudentAccess } from './StudentLock';
 import { useTheme } from '../theme/ThemeContext';
 import { roleLabel } from './MonthSelector';
 import { Toaster } from './Toast';
@@ -62,6 +63,9 @@ export function Layout({ children }: { children: ReactNode }) {
     refetchInterval: 60_000,
   });
   const badgeFor = (to: string) => (to === '/admin/students' ? pendingRegs.data || 0 : 0);
+  // Students see a lock on Dashboard while an admin has student dashboards locked.
+  const studentAccess = useStudentAccess(user?.role === 'student');
+  const lockedFor = (to: string) => user?.role === 'student' && to === '/student' && studentAccess.data !== false;
   if (!user) return null;
   const items = NAV[user.role] || [];
   const home = items[0]?.to || '/';
@@ -119,6 +123,7 @@ export function Layout({ children }: { children: ReactNode }) {
                 )}
               </span>
               {!mini && <span className="truncate">{it.label}</span>}
+              {!mini && lockedFor(it.to) && <Lock size={14} className="ml-auto muted shrink-0" aria-label="Locked" />}
               {!mini && badge > 0 && (
                 <span
                   className="ml-auto inline-flex items-center justify-center h-[18px] min-w-[18px] px-1 text-[11px] font-bold leading-none text-white rounded-full tabular-nums"

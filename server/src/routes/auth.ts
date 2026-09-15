@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { config } from '../config';
 import { usernameProblem, passwordProblem } from '../utils/credentials';
+import { sendMail, registrationAdminEmail } from '../utils/mailer';
 import { z } from 'zod';
 import { pool, query, queryOne } from '../db';
 import { signToken } from '../utils/jwt';
@@ -360,6 +361,10 @@ router.post(
         [first, b.last_name?.trim() || null, b.email, b.username, b.student_mobile?.trim() || null, hash, ip, gps, ua]
       );
       await audit(undefined, 'REGISTER_REQUEST', 'student_registration', r.insertId, null, { username: b.username, email: b.email });
+      // Tell the admin someone is waiting. Not awaited: a slow or unavailable
+      // mail server must never hold up, or fail, the registration itself.
+      const notify = registrationAdminEmail({ first_name: first, last_name: b.last_name, username: b.username, email: b.email, mobile: b.student_mobile });
+      void sendMail({ kind: 'registration_admin', to: config.mail.adminNotify, ...notify });
       return res.status(201).json({ pending: true, id: r.insertId });
     }
 

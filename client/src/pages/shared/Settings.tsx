@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
-import { User, Mail, Phone, Shield, BookOpen, Lock, Pencil } from 'lucide-react';
+import { User, Mail, Phone, Shield, BookOpen, Lock, LockOpen, Pencil } from 'lucide-react';
+import { useStudentAccess } from '../../components/StudentLock';
 import { api } from '../../api/client';
 import { useAuth } from '../../auth/AuthContext';
 import { passwordProblem } from '../../lib/credentials';
@@ -17,6 +18,59 @@ function Field({ icon, label, value }: { icon: React.ReactNode; label: string; v
         <div className="text-xs muted">{label}</div>
         {value ? <div className="font-semibold truncate">{value}</div> : <div className="italic muted">Not set</div>}
       </div>
+    </div>
+  );
+}
+
+// Admin only: lock or unlock every student's dashboard at once. While locked,
+// students sign in to a "locked for now" screen and can only reach their profile
+// and password; the server refuses their hours / fees / lectures as well.
+function StudentAccessCard() {
+  const qc = useQueryClient();
+  const access = useStudentAccess();
+  const [confirming, setConfirming] = useState(false);
+  const locked = access.data !== false;
+  const flip = useMutation({
+    mutationFn: (next: boolean) => api.put('/settings/student-access', { locked: next }).then((r) => !!r.data.locked),
+    onSuccess: (next) => {
+      qc.setQueryData(['student-access'], next);
+      toast(next ? 'Student dashboards locked' : 'Student dashboards unlocked');
+      setConfirming(false);
+    },
+    onError: (e: any) => toast(e?.response?.data?.error || 'Could not change student access', 'error'),
+  });
+
+  return (
+    <div className="card p-5 flex flex-wrap items-center gap-4">
+      <span className="grid place-items-center w-11 h-11 rounded-full shrink-0" style={{ background: 'var(--color-card-alt)', color: locked ? '#ef4444' : '#10b981' }}>
+        {locked ? <Lock size={20} /> : <LockOpen size={20} />}
+      </span>
+      <div className="min-w-0 flex-1">
+        <div className="font-bold flex items-center gap-2">
+          Student dashboards
+          <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${locked ? 'bg-red-500/15 text-red-600 dark:text-red-400' : 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'}`}>
+            {access.isLoading ? '…' : locked ? 'Locked' : 'Open'}
+          </span>
+        </div>
+        <p className="muted text-sm">
+          {locked
+            ? 'Students can sign in, complete their profile and change their password — but their dashboard, hours, fees and lectures are locked.'
+            : 'Students can see their dashboard, hours, fees and lectures.'}
+        </p>
+      </div>
+      {confirming ? (
+        <div className="flex items-center gap-2">
+          <span className="text-sm">{locked ? 'Open every student dashboard?' : 'Lock every student dashboard?'}</span>
+          <button className="btn-primary !py-1.5 !px-3 text-sm" disabled={flip.isPending} onClick={() => flip.mutate(!locked)}>
+            {flip.isPending ? 'Saving…' : locked ? 'Yes, unlock' : 'Yes, lock'}
+          </button>
+          <button className="btn-ghost !py-1.5 !px-3 text-sm" onClick={() => setConfirming(false)}>Cancel</button>
+        </div>
+      ) : (
+        <button className="btn-ghost !py-1.5 !px-3 text-sm whitespace-nowrap" disabled={access.isLoading} onClick={() => setConfirming(true)}>
+          {locked ? 'Unlock for all students' : 'Lock for all students'}
+        </button>
+      )}
     </div>
   );
 }
@@ -77,6 +131,8 @@ export default function Settings() {
         <h1 className="text-2xl font-bold">Profile Settings</h1>
         <p className="muted text-sm">Your personal information and account security.</p>
       </div>
+
+      {user?.role === 'admin' && <StudentAccessCard />}
 
       <div className="grid grid-cols-1 lg:grid-cols-[300px_1fr] gap-5 items-start">
         {/* Left — profile summary card */}

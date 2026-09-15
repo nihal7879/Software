@@ -7,6 +7,7 @@ import { FilterMenu, FilterField } from '../../components/FilterMenu';
 import { CalendarRangePicker } from '../../components/CalendarPicker';
 import { AdjustHoursModal } from '../../components/AdjustHoursModal';
 import { downloadHoursStatement } from '../../lib/hoursStatementExcel';
+import { EmailStatementDialog } from '../../components/EmailStatementDialog';
 
 // Student Hours Statement — pick a student to see their hours summary and a
 // chronological ledger: hours credited (with discount) when a package is added,
@@ -146,30 +147,36 @@ export default function HoursMonthly() {
 
   // The Excel export follows whatever date filter is on screen, and says so in
   // its header, so a filtered statement can never be mistaken for a full one.
+  // What goes into the statement — the same for downloading it and emailing it.
+  const statementInput = () => {
+    const s = (students.data || []).find((x: any) => String(x.id) === String(studentId)) || {};
+    return {
+      student: {
+        form_no: l.form_no,
+        full_name: l.student_name,
+        year_grade: s.year_grade,
+        school_name: s.school_name,
+      },
+      summary: {
+        total_hours_credited: l.total_hours_credited,
+        total_hours_consumed: l.total_hours_consumed,
+        hours_left: l.hours_left,
+        fee_status: l.fee_status,
+      },
+      lectures: lectures.data || [],
+      packages: packages.data || [],
+      from: fromDate || undefined,
+      to: toDate || undefined,
+    };
+  };
+  const [emailOpen, setEmailOpen] = useState(false);
+
   const exportExcel = async () => {
     if (!l) return;
     setExporting(true);
     setExportErr('');
     try {
-      const s = (students.data || []).find((x: any) => String(x.id) === String(studentId)) || {};
-      await downloadHoursStatement({
-        student: {
-          form_no: l.form_no,
-          full_name: l.student_name,
-          year_grade: s.year_grade,
-          school_name: s.school_name,
-        },
-        summary: {
-          total_hours_credited: l.total_hours_credited,
-          total_hours_consumed: l.total_hours_consumed,
-          hours_left: l.hours_left,
-          fee_status: l.fee_status,
-        },
-        lectures: lectures.data || [],
-        packages: packages.data || [],
-        from: fromDate || undefined,
-        to: toDate || undefined,
-      });
+      await downloadHoursStatement(statementInput());
     } catch (e: any) {
       setExportErr(e?.message || 'Could not build the Excel file.');
     } finally {
@@ -306,8 +313,25 @@ export default function HoursMonthly() {
             >
               {exporting ? 'Preparing…' : '⤓ Export Excel'}
             </button>
+            <button
+              className="btn-ghost !py-1.5 !px-3 text-sm"
+              onClick={() => setEmailOpen(true)}
+              disabled={!l}
+              title="Email this statement to the parent, as the same Excel file"
+            >
+              ✉ Email to parent
+            </button>
             {exportErr && <span className="text-sm text-red-500">{exportErr}</span>}
           </div>
+
+          {emailOpen && l && (
+            <EmailStatementDialog
+              studentId={Number(studentId)}
+              studentName={l.student_name}
+              input={statementInput}
+              onClose={() => setEmailOpen(false)}
+            />
+          )}
 
           <Section
             title="Hours statement — credited & consumed"
