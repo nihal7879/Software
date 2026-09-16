@@ -13,14 +13,14 @@ const activePkg = (col: string) =>
 // total_hours_credited = package + discount + adjusted(package) + adjustments ledger
 export const CREDITED_EXPR =
   `(${activePkg('package_hours')} + ${activePkg('discount_hours')} + ${activePkg('adjusted_hours')} ` +
-  `+ COALESCE((SELECT SUM(delta) FROM hours_adjustments WHERE student_id = s.id),0))`;
+  `+ COALESCE((SELECT SUM(delta) FROM hours_adjustments WHERE student_id = s.id AND is_deleted = FALSE),0))`;
 
 // `l.is_deleted = FALSE` throughout: a deleted lecture must stop consuming the
 // student's hours, or deleting one changes nothing anybody can see.
 export const CONSUMED_EXPR =
   `COALESCE((SELECT SUM(a.hours_consumed) FROM lecture_attendees a ` +
   `JOIN lecture_sessions l ON l.id = a.lecture_id ` +
-  `WHERE a.student_id = s.id AND l.is_deleted = FALSE),0)`;
+  `WHERE a.student_id = s.id AND l.is_deleted = FALSE AND a.is_deleted = FALSE),0)`;
 
 export const PENDING_EXPR =
   `COALESCE((SELECT pending_fees FROM ledger_adjustments WHERE student_id = s.id),0)`;
@@ -28,7 +28,7 @@ export const PENDING_EXPR =
 export const LAST_LECTURE_EXPR =
   `(SELECT MAX(l.session_date) FROM lecture_attendees a ` +
   `JOIN lecture_sessions l ON l.id = a.lecture_id ` +
-  `WHERE a.student_id = s.id AND l.is_deleted = FALSE)`;
+  `WHERE a.student_id = s.id AND l.is_deleted = FALSE AND a.is_deleted = FALSE)`;
 
 // Full column list matching the VIEW's output (minus hours_left / fee_status,
 // which are derived in JS by deriveHours below). Prefix the SELECT with this.
@@ -36,7 +36,7 @@ export const HOURS_COLUMNS = `
   s.student_type AS student_type,
   ${activePkg('package_hours')}  AS hours_committed,
   ${activePkg('discount_hours')} AS discount_hours,
-  ${activePkg('adjusted_hours')} + COALESCE((SELECT SUM(delta) FROM hours_adjustments WHERE student_id = s.id),0) AS adjusted_hours,
+  ${activePkg('adjusted_hours')} + COALESCE((SELECT SUM(delta) FROM hours_adjustments WHERE student_id = s.id AND is_deleted = FALSE),0) AS adjusted_hours,
   ${CREDITED_EXPR} AS total_hours_credited,
   ${CONSUMED_EXPR} AS total_hours_consumed,
   COALESCE((SELECT MAX(rate_per_hour) FROM fee_packages WHERE student_id = s.id AND is_active = TRUE),0) AS rate_per_hour,

@@ -28,7 +28,8 @@ export default function HoursStatement() {
     const events: Ev[] = [];
     for (const a of adjustments.data || []) {
       const delta = Number(a.delta || 0);
-      events.push({ kind: 'adjustment', date: String(a.created_at || '').slice(0, 10) || '—', reason: a.reason, adjusted: delta, totalCredited: delta });
+      // The day the adjustment is for, falling back to when it was entered.
+      events.push({ kind: 'adjustment', date: String(a.adjusted_on || a.created_at || '').slice(0, 10) || '—', reason: a.reason, adjusted: delta, totalCredited: delta });
     }
     for (const p of packages.data || []) {
       const credited = Number(p.package_hours || 0);

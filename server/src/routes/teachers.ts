@@ -31,7 +31,7 @@ router.get(
     const row = await queryOne(
       `SELECT t.*,
         (SELECT COUNT(DISTINCT a.student_id)
-           FROM lecture_sessions l JOIN lecture_attendees a ON a.lecture_id = l.id
+           FROM lecture_sessions l JOIN lecture_attendees a ON a.lecture_id = l.id AND a.is_deleted = FALSE
            WHERE l.teacher_id = t.id AND l.is_deleted = FALSE) AS taught_students,
         (SELECT COUNT(DISTINCT m.student_id) FROM student_teacher_mapping m WHERE m.teacher_id = t.id) AS assigned_students,
         (SELECT COALESCE(SUM(l.total_hours),0) FROM lecture_sessions l
@@ -115,7 +115,7 @@ router.get(
               GROUP_CONCAT(DISTINCT s.full_name SEPARATOR ', ') AS students
        FROM lecture_sessions l
        LEFT JOIN subjects sub ON sub.id = l.subject_id
-       JOIN lecture_attendees a ON a.lecture_id = l.id
+       JOIN lecture_attendees a ON a.lecture_id = l.id AND a.is_deleted = FALSE
        JOIN students s ON s.id = a.student_id
        WHERE l.teacher_id = ? AND l.is_deleted = FALSE
        GROUP BY l.id
@@ -175,7 +175,7 @@ router.get(
        JOIN lecture_sessions l ON l.id = a.lecture_id
        LEFT JOIN teachers t ON t.id = l.teacher_id
        LEFT JOIN subjects sub ON sub.id = l.subject_id
-       WHERE a.student_id = ? AND l.session_date BETWEEN ? AND ? AND l.is_deleted = FALSE ${teacherFilter}
+       WHERE a.student_id = ? AND a.is_deleted = FALSE AND l.session_date BETWEEN ? AND ? AND l.is_deleted = FALSE ${teacherFilter}
        ORDER BY l.session_date`,
       params
     );
@@ -393,7 +393,7 @@ router.get(
               COALESCE((SELECT SUM(a.hours_consumed) FROM lecture_attendees a
                           JOIN lecture_sessions l ON l.id = a.lecture_id
                           WHERE l.teacher_id = ? AND a.student_id = s.id
-                            AND l.is_deleted = FALSE),0) AS hours_with_teacher
+                            AND l.is_deleted = FALSE AND a.is_deleted = FALSE),0) AS hours_with_teacher
        FROM students s
        -- Only students assigned to this teacher AND Active: the ones the teacher
        -- actually works with now. Students who have left, or were only ever

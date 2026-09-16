@@ -77,7 +77,7 @@ router.get(
               a.student_id, s.form_no, s.full_name AS student_name, a.hours_consumed,
               a.attendance_status, a.homework, a.notes, a.performance_rating
        FROM lecture_sessions l
-       JOIN lecture_attendees a ON a.lecture_id = l.id
+       JOIN lecture_attendees a ON a.lecture_id = l.id AND a.is_deleted = FALSE
        JOIN students s ON s.id = a.student_id
        LEFT JOIN teachers t ON t.id = l.teacher_id
        LEFT JOIN subjects sub ON sub.id = l.subject_id
@@ -89,6 +89,53 @@ router.get(
     res.json({ data: rows });
   })
 );
+
+// One lecture and its attendees, written on an open transaction. Shared by the
+// single create below and the batch save the entry grid uses.
+async function insertLecture(conn: any, b: any, teacherId: number | null, userId: number) {
+  let totalHours = b.total_hours;
+  if (totalHours == null && b.time_in && b.time_out) {
+    totalHours = timeToDecimalHours(b.time_in, b.time_out);
+  }
+  totalHours = totalHours ?? 0;
+  const month = deriveMonth(b.session_date);
+
+  const [r]: any = await conn.query(
+    `INSERT INTO lecture_sessions
+      (session_date,month,teacher_id,subject_id,time_in,time_out,total_hours,hours_rounded,topic,subtopic,remark,venue,meeting_link,branch_id,created_by)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+    [
+      b.session_date, month, teacherId, b.subject_id ?? null,
+      b.time_in || null, b.time_out || null, totalHours, Math.round(totalHours * 2) / 2,
+      b.topic || null, b.subtopic || null, b.remark || null, b.venue || null,
+      b.meeting_link || null, b.branch_id ?? null, userId,
+    ]
+  );
+  const lectureId = r.insertId;
+  for (const a of b.attendees) {
+    // A student taken off this lecture before is only marked removed, and the
+    // (lecture, student) pair is unique — so putting them back updates that
+    // same row rather than failing on the key.
+    await conn.query(
+      `INSERT INTO lecture_attendees
+        (lecture_id,student_id,hours_consumed,attendance_status,homework,notes,performance_rating)
+       VALUES (?,?,?,?,?,?,?)
+       ON DUPLICATE KEY UPDATE
+         hours_consumed = VALUES(hours_consumed),
+         attendance_status = VALUES(attendance_status),
+         homework = VALUES(homework),
+         notes = VALUES(notes),
+         performance_rating = VALUES(performance_rating),
+         is_deleted = FALSE`,
+      [
+        lectureId, a.student_id, a.hours_consumed ?? totalHours,
+        a.attendance_status || 'Present', a.homework || null,
+        a.notes || null, a.performance_rating ?? null,
+      ]
+    );
+  }
+  return { id: lectureId, total_hours: totalHours };
+}
 
 // CREATE lecture (faculty/admin). Auto-calc duration; decrement happens via the
 // hours view (consumption = SUM of attendee hours), so we just record attendees.
@@ -103,45 +150,62 @@ router.post(
       teacherId = await myTeacherId(req);
       if (!teacherId) return res.status(403).json({ error: 'No teacher record linked to this account' });
     }
-    let totalHours = b.total_hours;
-    if (totalHours == null && b.time_in && b.time_out) {
-      totalHours = timeToDecimalHours(b.time_in, b.time_out);
-    }
-    totalHours = totalHours ?? 0;
-    const month = deriveMonth(b.session_date);
 
     const conn = await pool.getConnection();
     try {
       await conn.beginTransaction();
-      const [r]: any = await conn.query(
-        `INSERT INTO lecture_sessions
-          (session_date,month,teacher_id,subject_id,time_in,time_out,total_hours,hours_rounded,topic,subtopic,remark,venue,meeting_link,branch_id,created_by)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-        [
-          b.session_date, month, teacherId, b.subject_id ?? null,
-          b.time_in || null, b.time_out || null, totalHours, Math.round(totalHours * 2) / 2,
-          b.topic || null, b.subtopic || null, b.remark || null, b.venue || null,
-          b.meeting_link || null, b.branch_id ?? null, req.user!.userId,
-        ]
-      );
-      const lectureId = r.insertId;
-      for (const a of b.attendees) {
-        await conn.query(
-          `INSERT INTO lecture_attendees
-            (lecture_id,student_id,hours_consumed,attendance_status,homework,notes,performance_rating)
-           VALUES (?,?,?,?,?,?,?)`,
-          [
-            lectureId, a.student_id, a.hours_consumed ?? totalHours,
-            a.attendance_status || 'Present', a.homework || null,
-            a.notes || null, a.performance_rating ?? null,
-          ]
-        );
-      }
+      const made = await insertLecture(conn, b, teacherId, req.user!.userId);
       await conn.commit();
-      await audit(req.user!.userId, 'CREATE', 'lecture', lectureId, null, b);
-      res.status(201).json({ id: lectureId, total_hours: totalHours });
+      await audit(req.user!.userId, 'CREATE', 'lecture', made.id, null, b);
+      res.status(201).json(made);
     } catch (e) {
       await conn.rollback();
+      throw e;
+    } finally {
+      conn.release();
+    }
+  })
+);
+
+// CREATE several lectures at once — the entry grid, where a teacher fills a
+// day's classes as rows and saves them together. All or nothing: a row that
+// fails takes the whole save with it, so the grid is never half written and the
+// teacher never has to work out which rows got through.
+router.post(
+  '/batch',
+  requireRole('admin', 'faculty'),
+  wrap(async (req, res) => {
+    const rows = z.array(lectureSchema).min(1, 'Add at least one row').max(50).parse(req.body?.lectures);
+
+    const conn = await pool.getConnection();
+    try {
+      await conn.beginTransaction();
+      const made = [];
+      for (const b of rows) {
+        let teacherId = b.teacher_id ?? null;
+        if (req.user!.role === 'faculty') {
+          teacherId = await myTeacherId(req);
+          if (!teacherId) {
+            await conn.rollback();
+            return res.status(403).json({ error: 'No teacher record linked to this account' });
+          }
+        }
+        made.push(await insertLecture(conn, b, teacherId, req.user!.userId));
+      }
+      await conn.commit();
+      for (const m of made) await audit(req.user!.userId, 'CREATE', 'lecture', m.id, null, { batch: true });
+      res.status(201).json({
+        created: made.length,
+        total_hours: made.reduce((a, m) => a + Number(m.total_hours || 0), 0),
+        ids: made.map((m) => m.id),
+      });
+    } catch (e: any) {
+      await conn.rollback();
+      // A student or teacher that has since gone is the one failure the grid can
+      // reach; say so plainly rather than handing back the database's wording.
+      if (e?.code === 'ER_NO_REFERENCED_ROW_2' || e?.code === 'ER_NO_REFERENCED_ROW') {
+        return res.status(400).json({ error: 'A student or teacher on one of the rows no longer exists — nothing was saved.' });
+      }
       throw e;
     } finally {
       conn.release();
@@ -186,7 +250,7 @@ router.put(
       );
       // Attendees are created carrying the session total, so they follow it here.
       if (Number(before.total_hours) !== totalHours) {
-        await conn.query('UPDATE lecture_attendees SET hours_consumed = ? WHERE lecture_id = ?', [totalHours, req.params.id]);
+        await conn.query('UPDATE lecture_attendees SET hours_consumed = ? WHERE lecture_id = ? AND is_deleted = FALSE', [totalHours, req.params.id]);
       }
       await conn.commit();
     } catch (e) {
@@ -257,7 +321,7 @@ router.get(
     const attendees = await query<any>(
       `SELECT a.lecture_id, a.student_id, a.hours_consumed, s.form_no, s.full_name, s.status
          FROM lecture_attendees a JOIN students s ON s.id = a.student_id
-        WHERE a.lecture_id IN (?)
+        WHERE a.lecture_id IN (?) AND a.is_deleted = FALSE
         ORDER BY s.full_name`,
       [sessions.map((l) => l.id)]
     );
@@ -280,14 +344,16 @@ router.delete(
   wrap(async (req, res) => {
     const lecture = await queryOne<any>('SELECT id, session_date, teacher_id FROM lecture_sessions WHERE id = ? AND is_deleted = FALSE', [req.params.id]);
     if (!lecture) return res.status(404).json({ error: 'Lecture not found' });
-    const row = await queryOne<any>('SELECT * FROM lecture_attendees WHERE lecture_id = ? AND student_id = ?', [lecture.id, req.params.studentId]);
+    const row = await queryOne<any>('SELECT * FROM lecture_attendees WHERE lecture_id = ? AND student_id = ? AND is_deleted = FALSE', [lecture.id, req.params.studentId]);
     if (!row) return res.status(404).json({ error: 'That student is not on this lecture.' });
-    const others = await queryOne<any>('SELECT COUNT(*) AS n FROM lecture_attendees WHERE lecture_id = ? AND student_id <> ?', [lecture.id, req.params.studentId]);
+    const others = await queryOne<any>('SELECT COUNT(*) AS n FROM lecture_attendees WHERE lecture_id = ? AND student_id <> ? AND is_deleted = FALSE', [lecture.id, req.params.studentId]);
     if (!Number(others?.n)) {
       return res.status(400).json({ error: 'This is the only student on the lecture. To remove it completely, delete the lecture instead.' });
     }
-    await query('DELETE FROM lecture_attendees WHERE id = ?', [row.id]);
-    // The removed row is kept in full in the audit log, so it can be put back.
+    // Marked removed, not deleted: the row stays for the record and can be put
+    // back. Every query that counts attendance skips is_deleted rows, so the
+    // student's hours come back immediately either way.
+    await query('UPDATE lecture_attendees SET is_deleted = TRUE WHERE id = ?', [row.id]);
     await audit(req.user!.userId, 'REMOVE_ATTENDEE', 'lecture', lecture.id, row, { removed_student_id: row.student_id });
     res.json({ ok: true, hours_returned: Number(row.hours_consumed) || 0 });
   })
@@ -303,7 +369,7 @@ router.get(
               GROUP_CONCAT(s.full_name SEPARATOR ', ') AS students
        FROM lecture_sessions l
        LEFT JOIN subjects sub ON sub.id = l.subject_id
-       JOIN lecture_attendees a ON a.lecture_id = l.id
+       JOIN lecture_attendees a ON a.lecture_id = l.id AND a.is_deleted = FALSE
        JOIN students s ON s.id = a.student_id
        WHERE l.teacher_id = ? AND l.is_deleted = FALSE
        GROUP BY l.id

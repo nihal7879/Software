@@ -344,7 +344,7 @@ export default function Teachers() {
 
       {drawer && (
         <Overlay onClose={() => setDrawer(false)}>
-          <div className="w-full max-w-md h-full p-6" style={{ background: 'var(--color-card)' }} onClick={(e) => e.stopPropagation()}>
+          <div className="w-full max-w-md h-full p-6 overflow-y-auto" style={{ background: 'var(--color-card)' }} onClick={(e) => e.stopPropagation()}>
             <h2 className="text-lg font-bold mb-1">Add Teacher</h2>
             <p className="muted text-sm mb-4">Set the email &amp; password — these are the teacher's login (share them with the teacher).</p>
             <form onSubmit={handleSubmit((b) => create.mutate(b))} className="space-y-3">

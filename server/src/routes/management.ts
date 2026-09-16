@@ -78,7 +78,8 @@ router.get(
          COALESCE((
            SELECT SUM(a.hours_consumed) FROM lecture_attendees a
            JOIN lecture_sessions l ON l.id = a.lecture_id
-           WHERE a.student_id = s.id AND (? IS NULL OR l.month = ?)
+           WHERE a.student_id = s.id AND a.is_deleted = FALSE AND l.is_deleted = FALSE
+             AND (? IS NULL OR l.month = ?)
          ),0) AS hours_in_period,
          -- assigned teachers
          (SELECT GROUP_CONCAT(DISTINCT t.name SEPARATOR ', ')
@@ -136,7 +137,7 @@ router.get(
          JOIN lecture_sessions l ON l.id = a.lecture_id
          LEFT JOIN teachers t ON t.id = l.teacher_id
          LEFT JOIN subjects sub ON sub.id = l.subject_id
-         WHERE a.student_id = ? AND l.session_date BETWEEN ? AND ? AND l.is_deleted = FALSE
+         WHERE a.student_id = ? AND a.is_deleted = FALSE AND l.session_date BETWEEN ? AND ? AND l.is_deleted = FALSE
          ORDER BY l.session_date, l.time_in`,
         [id, from, to]
       ),
@@ -180,7 +181,7 @@ router.get(
       `SELECT s.form_no, s.full_name AS student_name, s.status, l.month,
               SUM(a.hours_consumed) AS hours
        FROM lecture_attendees a
-       JOIN lecture_sessions l ON l.id = a.lecture_id
+       JOIN lecture_sessions l ON l.id = a.lecture_id AND a.is_deleted = FALSE
        JOIN students s ON s.id = a.student_id
        WHERE l.month IS NOT NULL
        GROUP BY s.form_no, s.full_name, s.status, l.month

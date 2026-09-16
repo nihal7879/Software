@@ -1,0 +1,631 @@
+{
+  "taken_at": "2026-09-16T07:37:07.138Z",
+  "note": "before attaching a fee_package to payments that had none",
+  "students": [
+    {
+      "id": 18,
+      "form_no": "2",
+      "full_name": "Dhanvir Dhaval Jasani"
+    },
+    {
+      "id": 23,
+      "form_no": "7",
+      "full_name": "Muhammad Suleman Atif"
+    },
+    {
+      "id": 28,
+      "form_no": "12",
+      "full_name": "Shenon Dsouza"
+    },
+    {
+      "id": 29,
+      "form_no": "13",
+      "full_name": "Praney Thakur"
+    },
+    {
+      "id": 51,
+      "form_no": "35",
+      "full_name": "Zaara Atif"
+    },
+    {
+      "id": 62,
+      "form_no": "46",
+      "full_name": "Siya Dhanak"
+    },
+    {
+      "id": 89,
+      "form_no": "73",
+      "full_name": "Yogith"
+    },
+    {
+      "id": 104,
+      "form_no": "88",
+      "full_name": "Kareem Ahmad sarhan"
+    },
+    {
+      "id": 124,
+      "form_no": "108",
+      "full_name": "Shiven Handa"
+    },
+    {
+      "id": 126,
+      "form_no": "110",
+      "full_name": "Jeshal Mohapatra"
+    },
+    {
+      "id": 129,
+      "form_no": "113",
+      "full_name": "Okasha"
+    },
+    {
+      "id": 162,
+      "form_no": "146",
+      "full_name": "Arya Awasthi"
+    },
+    {
+      "id": 177,
+      "form_no": "160",
+      "full_name": "Ashmitha Parthiban"
+    }
+  ],
+  "fee_packages": [
+    {
+      "id": 13,
+      "student_id": 18,
+      "transaction_id": null,
+      "course_name": null,
+      "package_hours": "0.00",
+      "rate_per_hour": "0.00",
+      "discount_hours": "0.00",
+      "adjusted_hours": "0.20",
+      "start_date": null,
+      "is_active": 0,
+      "is_deleted": 1,
+      "created_at": "2026-07-04T12:21:34.000Z"
+    },
+    {
+      "id": 18,
+      "student_id": 23,
+      "transaction_id": null,
+      "course_name": null,
+      "package_hours": "0.00",
+      "rate_per_hour": "0.00",
+      "discount_hours": "0.00",
+      "adjusted_hours": "0.00",
+      "start_date": null,
+      "is_active": 0,
+      "is_deleted": 1,
+      "created_at": "2026-07-04T12:21:34.000Z"
+    },
+    {
+      "id": 23,
+      "student_id": 28,
+      "transaction_id": null,
+      "course_name": null,
+      "package_hours": "0.00",
+      "rate_per_hour": "0.00",
+      "discount_hours": "0.00",
+      "adjusted_hours": "0.00",
+      "start_date": null,
+      "is_active": 0,
+      "is_deleted": 1,
+      "created_at": "2026-07-04T12:21:34.000Z"
+    },
+    {
+      "id": 24,
+      "student_id": 29,
+      "transaction_id": null,
+      "course_name": null,
+      "package_hours": "0.00",
+      "rate_per_hour": "0.00",
+      "discount_hours": "0.00",
+      "adjusted_hours": "0.00",
+      "start_date": null,
+      "is_active": 0,
+      "is_deleted": 1,
+      "created_at": "2026-07-04T12:21:34.000Z"
+    },
+    {
+      "id": 46,
+      "student_id": 51,
+      "transaction_id": null,
+      "course_name": null,
+      "package_hours": "0.00",
+      "rate_per_hour": "0.00",
+      "discount_hours": "0.00",
+      "adjusted_hours": "0.00",
+      "start_date": null,
+      "is_active": 0,
+      "is_deleted": 1,
+      "created_at": "2026-07-04T12:21:34.000Z"
+    },
+    {
+      "id": 57,
+      "student_id": 62,
+      "transaction_id": null,
+      "course_name": null,
+      "package_hours": "0.00",
+      "rate_per_hour": "0.00",
+      "discount_hours": "0.00",
+      "adjusted_hours": "0.00",
+      "start_date": null,
+      "is_active": 0,
+      "is_deleted": 1,
+      "created_at": "2026-07-04T12:21:34.000Z"
+    },
+    {
+      "id": 84,
+      "student_id": 89,
+      "transaction_id": null,
+      "course_name": null,
+      "package_hours": "0.00",
+      "rate_per_hour": "0.00",
+      "discount_hours": "0.00",
+      "adjusted_hours": "0.00",
+      "start_date": null,
+      "is_active": 0,
+      "is_deleted": 1,
+      "created_at": "2026-07-04T12:21:34.000Z"
+    },
+    {
+      "id": 99,
+      "student_id": 104,
+      "transaction_id": null,
+      "course_name": null,
+      "package_hours": "0.00",
+      "rate_per_hour": "0.00",
+      "discount_hours": "0.00",
+      "adjusted_hours": "0.00",
+      "start_date": null,
+      "is_active": 0,
+      "is_deleted": 1,
+      "created_at": "2026-07-04T12:21:34.000Z"
+    },
+    {
+      "id": 512,
+      "student_id": 104,
+      "transaction_id": 380,
+      "course_name": null,
+      "package_hours": "30.00",
+      "rate_per_hour": "140.00",
+      "discount_hours": "0.00",
+      "adjusted_hours": "0.00",
+      "start_date": "2026-08-24T18:30:00.000Z",
+      "is_active": 0,
+      "is_deleted": 1,
+      "created_at": "2026-09-02T05:34:48.000Z"
+    },
+    {
+      "id": 119,
+      "student_id": 124,
+      "transaction_id": null,
+      "course_name": null,
+      "package_hours": "0.00",
+      "rate_per_hour": "0.00",
+      "discount_hours": "0.00",
+      "adjusted_hours": "0.00",
+      "start_date": null,
+      "is_active": 0,
+      "is_deleted": 1,
+      "created_at": "2026-07-04T12:21:34.000Z"
+    },
+    {
+      "id": 121,
+      "student_id": 126,
+      "transaction_id": null,
+      "course_name": null,
+      "package_hours": "0.00",
+      "rate_per_hour": "0.00",
+      "discount_hours": "0.00",
+      "adjusted_hours": "0.00",
+      "start_date": null,
+      "is_active": 0,
+      "is_deleted": 1,
+      "created_at": "2026-07-04T12:21:34.000Z"
+    },
+    {
+      "id": 124,
+      "student_id": 129,
+      "transaction_id": null,
+      "course_name": null,
+      "package_hours": "0.00",
+      "rate_per_hour": "0.00",
+      "discount_hours": "0.00",
+      "adjusted_hours": "0.00",
+      "start_date": null,
+      "is_active": 0,
+      "is_deleted": 1,
+      "created_at": "2026-07-04T12:21:34.000Z"
+    },
+    {
+      "id": 157,
+      "student_id": 162,
+      "transaction_id": null,
+      "course_name": null,
+      "package_hours": "0.00",
+      "rate_per_hour": "0.00",
+      "discount_hours": "0.00",
+      "adjusted_hours": "0.00",
+      "start_date": null,
+      "is_active": 0,
+      "is_deleted": 1,
+      "created_at": "2026-07-04T12:21:34.000Z"
+    },
+    {
+      "id": 172,
+      "student_id": 177,
+      "transaction_id": null,
+      "course_name": null,
+      "package_hours": "0.00",
+      "rate_per_hour": "0.00",
+      "discount_hours": "0.00",
+      "adjusted_hours": "0.00",
+      "start_date": null,
+      "is_active": 0,
+      "is_deleted": 1,
+      "created_at": "2026-07-04T12:21:34.000Z"
+    }
+  ],
+  "fee_transactions": [
+    {
+      "id": 165,
+      "student_id": 18,
+      "form_no": "2",
+      "full_name": "Dhanvir Dhaval Jasani",
+      "amount": "6000.00",
+      "payment_date": "2025-12-23T18:30:00.000Z",
+      "course_package_hours": null,
+      "discount_hours": null
+    },
+    {
+      "id": 33,
+      "student_id": 23,
+      "form_no": "7",
+      "full_name": "Muhammad Suleman Atif",
+      "amount": "7000.00",
+      "payment_date": "2025-07-12T18:30:00.000Z",
+      "course_package_hours": null,
+      "discount_hours": null
+    },
+    {
+      "id": 302,
+      "student_id": 23,
+      "form_no": "7",
+      "full_name": "Muhammad Suleman Atif",
+      "amount": "9000.00",
+      "payment_date": "2026-05-01T18:30:00.000Z",
+      "course_package_hours": null,
+      "discount_hours": null
+    },
+    {
+      "id": 363,
+      "student_id": 23,
+      "form_no": "7",
+      "full_name": "Muhammad Suleman Atif",
+      "amount": "11900.00",
+      "payment_date": "2026-07-14T18:30:00.000Z",
+      "course_package_hours": null,
+      "discount_hours": null
+    },
+    {
+      "id": 31,
+      "student_id": 28,
+      "form_no": "12",
+      "full_name": "Shenon Dsouza",
+      "amount": "1500.00",
+      "payment_date": "2025-07-04T18:30:00.000Z",
+      "course_package_hours": null,
+      "discount_hours": null
+    },
+    {
+      "id": 116,
+      "student_id": 28,
+      "form_no": "12",
+      "full_name": "Shenon Dsouza",
+      "amount": "1500.00",
+      "payment_date": "2025-10-24T18:30:00.000Z",
+      "course_package_hours": null,
+      "discount_hours": null
+    },
+    {
+      "id": 193,
+      "student_id": 28,
+      "form_no": "12",
+      "full_name": "Shenon Dsouza",
+      "amount": "1500.00",
+      "payment_date": "2026-01-15T18:30:00.000Z",
+      "course_package_hours": null,
+      "discount_hours": null
+    },
+    {
+      "id": 295,
+      "student_id": 28,
+      "form_no": "12",
+      "full_name": "Shenon Dsouza",
+      "amount": "1500.00",
+      "payment_date": "2026-04-19T18:30:00.000Z",
+      "course_package_hours": null,
+      "discount_hours": null
+    },
+    {
+      "id": 359,
+      "student_id": 28,
+      "form_no": "12",
+      "full_name": "Shenon Dsouza",
+      "amount": "1500.00",
+      "payment_date": "2026-07-08T18:30:00.000Z",
+      "course_package_hours": null,
+      "discount_hours": null
+    },
+    {
+      "id": 103,
+      "student_id": 29,
+      "form_no": "13",
+      "full_name": "Praney Thakur",
+      "amount": "350.00",
+      "payment_date": "2025-10-07T18:30:00.000Z",
+      "course_package_hours": null,
+      "discount_hours": null
+    },
+    {
+      "id": 119,
+      "student_id": 29,
+      "form_no": "13",
+      "full_name": "Praney Thakur",
+      "amount": "350.00",
+      "payment_date": "2025-11-07T18:30:00.000Z",
+      "course_package_hours": null,
+      "discount_hours": null
+    },
+    {
+      "id": 186,
+      "student_id": 29,
+      "form_no": "13",
+      "full_name": "Praney Thakur",
+      "amount": "350.00",
+      "payment_date": "2026-01-12T18:30:00.000Z",
+      "course_package_hours": null,
+      "discount_hours": null
+    },
+    {
+      "id": 202,
+      "student_id": 29,
+      "form_no": "13",
+      "full_name": "Praney Thakur",
+      "amount": "350.00",
+      "payment_date": "2026-02-05T18:30:00.000Z",
+      "course_package_hours": null,
+      "discount_hours": null
+    },
+    {
+      "id": 254,
+      "student_id": 29,
+      "form_no": "13",
+      "full_name": "Praney Thakur",
+      "amount": "375.00",
+      "payment_date": "2026-03-22T18:30:00.000Z",
+      "course_package_hours": null,
+      "discount_hours": null
+    },
+    {
+      "id": 286,
+      "student_id": 29,
+      "form_no": "13",
+      "full_name": "Praney Thakur",
+      "amount": "500.00",
+      "payment_date": "2026-04-03T18:30:00.000Z",
+      "course_package_hours": null,
+      "discount_hours": null
+    },
+    {
+      "id": 316,
+      "student_id": 29,
+      "form_no": "13",
+      "full_name": "Praney Thakur",
+      "amount": "500.00",
+      "payment_date": "2026-05-07T18:30:00.000Z",
+      "course_package_hours": null,
+      "discount_hours": null
+    },
+    {
+      "id": 342,
+      "student_id": 29,
+      "form_no": "13",
+      "full_name": "Praney Thakur",
+      "amount": "500.00",
+      "payment_date": "2026-06-05T18:30:00.000Z",
+      "course_package_hours": null,
+      "discount_hours": null
+    },
+    {
+      "id": 362,
+      "student_id": 29,
+      "form_no": "13",
+      "full_name": "Praney Thakur",
+      "amount": "500.00",
+      "payment_date": "2026-07-12T18:30:00.000Z",
+      "course_package_hours": null,
+      "discount_hours": null
+    },
+    {
+      "id": 372,
+      "student_id": 29,
+      "form_no": "13",
+      "full_name": "Praney Thakur",
+      "amount": "500.00",
+      "payment_date": "2026-08-06T18:30:00.000Z",
+      "course_package_hours": null,
+      "discount_hours": null
+    },
+    {
+      "id": 405,
+      "student_id": 29,
+      "form_no": "13",
+      "full_name": "Praney Thakur",
+      "amount": "500.00",
+      "payment_date": "2026-09-06T18:30:00.000Z",
+      "course_package_hours": null,
+      "discount_hours": null
+    },
+    {
+      "id": 34,
+      "student_id": 51,
+      "form_no": "35",
+      "full_name": "Zaara Atif",
+      "amount": "6500.00",
+      "payment_date": "2025-07-12T18:30:00.000Z",
+      "course_package_hours": null,
+      "discount_hours": null
+    },
+    {
+      "id": 364,
+      "student_id": 51,
+      "form_no": "35",
+      "full_name": "Zaara Atif",
+      "amount": "7350.00",
+      "payment_date": "2026-07-14T18:30:00.000Z",
+      "course_package_hours": null,
+      "discount_hours": null
+    },
+    {
+      "id": 65,
+      "student_id": 62,
+      "form_no": "46",
+      "full_name": "Siya Dhanak",
+      "amount": "6000.00",
+      "payment_date": "2025-09-09T18:30:00.000Z",
+      "course_package_hours": null,
+      "discount_hours": null
+    },
+    {
+      "id": 192,
+      "student_id": 62,
+      "form_no": "46",
+      "full_name": "Siya Dhanak",
+      "amount": "5000.00",
+      "payment_date": "2026-01-15T18:30:00.000Z",
+      "course_package_hours": null,
+      "discount_hours": null
+    },
+    {
+      "id": 279,
+      "student_id": 62,
+      "form_no": "46",
+      "full_name": "Siya Dhanak",
+      "amount": "5000.00",
+      "payment_date": "2026-03-30T18:30:00.000Z",
+      "course_package_hours": null,
+      "discount_hours": null
+    },
+    {
+      "id": 120,
+      "student_id": 89,
+      "form_no": "73",
+      "full_name": "Yogith",
+      "amount": "1000.00",
+      "payment_date": "2025-11-07T18:30:00.000Z",
+      "course_package_hours": null,
+      "discount_hours": null
+    },
+    {
+      "id": 79,
+      "student_id": 104,
+      "form_no": "88",
+      "full_name": "Kareem Ahmad sarhan",
+      "amount": "7150.00",
+      "payment_date": "2025-09-18T18:30:00.000Z",
+      "course_package_hours": null,
+      "discount_hours": null
+    },
+    {
+      "id": 86,
+      "student_id": 124,
+      "form_no": "108",
+      "full_name": "Shiven Handa",
+      "amount": "1100.00",
+      "payment_date": "2025-09-24T18:30:00.000Z",
+      "course_package_hours": null,
+      "discount_hours": null
+    },
+    {
+      "id": 125,
+      "student_id": 124,
+      "form_no": "108",
+      "full_name": "Shiven Handa",
+      "amount": "650.00",
+      "payment_date": "2025-11-09T18:30:00.000Z",
+      "course_package_hours": null,
+      "discount_hours": null
+    },
+    {
+      "id": 48,
+      "student_id": 126,
+      "form_no": "110",
+      "full_name": "Jeshal Mohapatra",
+      "amount": "5000.00",
+      "payment_date": "2025-08-17T18:30:00.000Z",
+      "course_package_hours": null,
+      "discount_hours": null
+    },
+    {
+      "id": 188,
+      "student_id": 129,
+      "form_no": "113",
+      "full_name": "Okasha",
+      "amount": "8000.00",
+      "payment_date": "2026-01-09T18:30:00.000Z",
+      "course_package_hours": null,
+      "discount_hours": null
+    },
+    {
+      "id": 197,
+      "student_id": 162,
+      "form_no": "146",
+      "full_name": "Arya Awasthi",
+      "amount": "1050.00",
+      "payment_date": "2026-01-22T18:30:00.000Z",
+      "course_package_hours": null,
+      "discount_hours": null
+    },
+    {
+      "id": 292,
+      "student_id": 162,
+      "form_no": "146",
+      "full_name": "Arya Awasthi",
+      "amount": "1500.00",
+      "payment_date": "2026-04-19T18:30:00.000Z",
+      "course_package_hours": null,
+      "discount_hours": null
+    },
+    {
+      "id": 357,
+      "student_id": 162,
+      "form_no": "146",
+      "full_name": "Arya Awasthi",
+      "amount": "1500.00",
+      "payment_date": "2026-07-06T18:30:00.000Z",
+      "course_package_hours": null,
+      "discount_hours": null
+    },
+    {
+      "id": 296,
+      "student_id": 177,
+      "form_no": "160",
+      "full_name": "Ashmitha Parthiban",
+      "amount": "1500.00",
+      "payment_date": "2026-04-22T18:30:00.000Z",
+      "course_package_hours": null,
+      "discount_hours": null
+    },
+    {
+      "id": 367,
+      "student_id": 177,
+      "form_no": "160",
+      "full_name": "Ashmitha Parthiban",
+      "amount": "1500.00",
+      "payment_date": "2026-07-16T18:30:00.000Z",
+      "course_package_hours": null,
+      "discount_hours": null
+    }
+  ]
+}

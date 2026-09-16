@@ -1,31 +1,45 @@
 import { useState } from 'react';
 import { Overlay } from './Overlay';
+import { CalendarPicker } from './CalendarPicker';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api/client';
 
+/** An adjustment already on the statement, when this modal is correcting one. */
+export type AdjustmentRow = { id: number; delta: number | string; reason?: string | null; adjusted_on?: string | null };
+
 // Admin modal to add/deduct hours from a student's balance — e.g. to correct a
-// missed lecture entry (deduct) or grant extra hours (add).
+// missed lecture entry (deduct) or grant extra hours (add). Passing `editing`
+// turns it into a correction of that entry instead of a new one.
 export function AdjustHoursModal({
   studentId,
   studentName,
+  editing,
   onClose,
   onSaved,
 }: {
   studentId: number;
   studentName: string;
+  editing?: AdjustmentRow | null;
   onClose: () => void;
   onSaved?: () => void;
 }) {
   const qc = useQueryClient();
-  const [hours, setHours] = useState('');
-  const [mode, setMode] = useState<'add' | 'deduct'>('deduct');
-  const [reason, setReason] = useState('');
+  const startDelta = Number(editing?.delta || 0);
+  const [hours, setHours] = useState(editing ? String(Math.abs(startDelta)) : '');
+  const [mode, setMode] = useState<'add' | 'deduct'>(editing && startDelta < 0 ? 'deduct' : editing ? 'add' : 'deduct');
+  const [reason, setReason] = useState(editing?.reason || '');
+  // The day the adjustment is FOR — often not today. Left empty it sits on the
+  // day it was entered, which is how every existing entry behaves.
+  const [onDate, setOnDate] = useState(String(editing?.adjusted_on || '').slice(0, 10));
 
   const save = useMutation({
     mutationFn: () => {
       const magnitude = Math.abs(Number(hours));
       const delta = mode === 'deduct' ? -magnitude : magnitude;
-      return api.post(`/fees/ledger/${studentId}/adjust-hours`, { delta, reason: reason || null });
+      const body = { delta, reason: reason || null, adjusted_on: onDate || null };
+      return editing
+        ? api.put(`/fees/adjustments/entry/${editing.id}`, body)
+        : api.post(`/fees/ledger/${studentId}/adjust-hours`, body);
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['ledger'] });
@@ -45,7 +59,7 @@ export function AdjustHoursModal({
     <Overlay align="center" onClose={onClose}>
       <div className="card w-full max-w-sm p-6" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-1">
-          <h2 className="text-lg font-bold">Adjust Hours</h2>
+          <h2 className="text-lg font-bold">{editing ? 'Edit Adjustment' : 'Adjust Hours'}</h2>
           <button className="btn-ghost !py-1 !px-2.5 text-sm" onClick={onClose}>Close</button>
         </div>
         <p className="muted text-sm mb-4">{studentName}</p>
@@ -78,6 +92,17 @@ export function AdjustHoursModal({
           onChange={(e) => setHours(e.target.value)}
         />
 
+        <label className="text-xs font-medium muted block mt-3">Date (optional)</label>
+        <div className="mt-1 flex items-center gap-2">
+          <div className="flex-1"><CalendarPicker value={onDate} onChange={setOnDate} placeholder="Pick a date…" /></div>
+          {onDate && (
+            <button type="button" className="btn-ghost !py-1.5 !px-3 text-sm whitespace-nowrap" onClick={() => setOnDate('')}>
+              Clear
+            </button>
+          )}
+        </div>
+        <p className="muted text-xs mt-1">The day these hours belong to. Leave empty to use today.</p>
+
         <label className="text-xs font-medium muted block mt-3">Reason (optional)</label>
         <input
           className="input mt-1"
@@ -100,7 +125,7 @@ export function AdjustHoursModal({
 
         <div className="flex gap-2 pt-4">
           <button className="btn-primary flex-1" disabled={!valid || save.isPending} onClick={() => save.mutate()}>
-            {save.isPending ? 'Saving…' : mode === 'deduct' ? 'Deduct Hours' : 'Add Hours'}
+            {save.isPending ? 'Saving…' : editing ? 'Save Changes' : mode === 'deduct' ? 'Deduct Hours' : 'Add Hours'}
           </button>
           <button className="btn-ghost" onClick={onClose}>Cancel</button>
         </div>

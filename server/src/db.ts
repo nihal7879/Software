@@ -32,3 +32,23 @@ export async function queryOne<T = any>(sql: string, params: any[] = []): Promis
   const rows = await query<T>(sql, params);
   return rows[0] ?? null;
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

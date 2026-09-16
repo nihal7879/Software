@@ -1,13 +1,17 @@
-import { useMemo, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useEffect, useMemo, useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Pencil, Trash2 } from 'lucide-react';
 import { api, hrs, num, studentOption } from '../../api/client';
 import { Section, Table, Spinner, KpiCard, HoursValue, StatusBadge, Pagination, type Sort } from '../../components/ui';
 import { Select } from '../../components/Select';
 import { FilterMenu, FilterField } from '../../components/FilterMenu';
 import { CalendarRangePicker } from '../../components/CalendarPicker';
-import { AdjustHoursModal } from '../../components/AdjustHoursModal';
+import { AdjustHoursModal, type AdjustmentRow } from '../../components/AdjustHoursModal';
+import { ConfirmModal } from '../../components/ConfirmModal';
+import { toast } from '../../components/Toast';
 import { downloadHoursStatement } from '../../lib/hoursStatementExcel';
 import { EmailStatementDialog } from '../../components/EmailStatementDialog';
+import { FollowUpCell, FollowUpNotesDialog } from '../../components/FollowUpNotes';
 
 // Student Hours Statement — pick a student to see their hours summary and a
 // chronological ledger: hours credited (with discount) when a package is added,
@@ -17,6 +21,14 @@ export default function HoursMonthly() {
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
   const [adjustOpen, setAdjustOpen] = useState(false);
+  // An adjustment entered wrong can be corrected or taken off the statement.
+  const [editAdjustment, setEditAdjustment] = useState<AdjustmentRow | null>(null);
+  const [deleteAdjustment, setDeleteAdjustment] = useState<AdjustmentRow | null>(null);
+  // The statement runs to hundreds of lines for a long-standing student, so it
+  // is paged like every other list. The running balance and the totals row are
+  // worked out over the whole statement, not the page on screen.
+  const [stmtPage, setStmtPage] = useState(1);
+  const [stmtSize, setStmtSize] = useState(20);
   const [exporting, setExporting] = useState(false);
   const [exportErr, setExportErr] = useState('');
 
@@ -24,8 +36,25 @@ export default function HoursMonthly() {
   const [summaryPage, setSummaryPage] = useState(1);
   const [summarySize, setSummarySize] = useState(20);
   const [feeStatus, setFeeStatus] = useState('');
-  const [status, setStatus] = useState('');
+  // Opens on Active students — the ones being taught now. Inactive students are
+  // one pick away in Filters, and Clear all shows everybody.
+  const [status, setStatus] = useState('Active');
   const [sort, setSort] = useState<Sort>({ key: 'form_no', dir: 'asc' });
+  // The student whose follow-up notes are open, from the Follow-up column.
+  const [notesFor, setNotesFor] = useState<any | null>(null);
+
+  const qc = useQueryClient();
+  // Removing an adjustment changes the balance, so everything reading it refreshes.
+  const removeAdjustment = useMutation({
+    mutationFn: (id: number) => api.delete(`/fees/adjustments/entry/${id}`),
+    onSuccess: () => {
+      ['ledger', 'ledger-all', 'pkg', 'adjustments', 'student-report', 'mgmt-master']
+        .forEach((k) => qc.invalidateQueries({ queryKey: [k] }));
+      setDeleteAdjustment(null);
+      toast('Adjustment deleted');
+    },
+    onError: (e: any) => toast(e?.response?.data?.error || 'Could not delete the adjustment', 'error'),
+  });
   const allLedger = useQuery({
     queryKey: ['ledger-all', summarySearch, summaryPage, summarySize, status, feeStatus, sort.key, sort.dir],
     queryFn: () => api.get('/fees/ledger', {
@@ -75,6 +104,8 @@ export default function HoursMonthly() {
       date: string;
       teacher?: string; subject?: string; time_in?: string; time_out?: string; reason?: string;
       fees?: number; credited?: number; discount?: number; adjusted?: number; totalCredited?: number; used?: number;
+      // Carried on adjustment rows only — they are the ones that can be corrected.
+      adjustment?: any;
     };
     const events: Ev[] = [];
 
@@ -82,8 +113,9 @@ export default function HoursMonthly() {
       const delta = Number(a.delta || 0);
       events.push({
         kind: 'adjustment',
-        date: String(a.created_at || '').slice(0, 10) || '—',
-        reason: a.reason, adjusted: delta, totalCredited: delta,
+        // The day it is FOR, falling back to when it was entered.
+        date: String(a.adjusted_on || a.created_at || '').slice(0, 10) || '—',
+        reason: a.reason, adjusted: delta, totalCredited: delta, adjustment: a,
       });
     }
 
@@ -130,6 +162,12 @@ export default function HoursMonthly() {
     if (toDate && r.date > toDate) return false;
     return true;
   });
+
+  // Another student, or a different date range, is a different statement.
+  useEffect(() => { setStmtPage(1); }, [studentId, fromDate, toDate]);
+  const stmtPages = Math.max(1, Math.ceil(visibleRows.length / stmtSize));
+  const page = Math.min(stmtPage, stmtPages);
+  const pagedRows = visibleRows.slice((page - 1) * stmtSize, page * stmtSize);
 
   const totals = visibleRows.reduce(
     (a: any, r: any) => ({
@@ -263,6 +301,7 @@ export default function HoursMonthly() {
                 { label: 'Remaining', align: 'right', sortKey: 'hours_left' },
                 'Fee Status',
                 { label: 'Last Lecture', sortKey: 'last_attended_lecture' },
+                'Follow-up',
               ]}
             >
               {(allLedger.data?.data || [])
@@ -276,10 +315,11 @@ export default function HoursMonthly() {
                     <td className="table-td text-right tabular-nums"><HoursValue value={r.hours_left} /></td>
                     <td className="table-td"><StatusBadge status={r.fee_status} /></td>
                     <td className="table-td whitespace-nowrap">{r.last_attended_lecture || '—'}</td>
+                    <td className="table-td whitespace-nowrap"><FollowUpCell row={r} onOpen={() => setNotesFor(r)} /></td>
                   </tr>
                 ))}
               {(allLedger.data?.data || []).length === 0 && (
-                <tr><td className="table-td muted" colSpan={8}>No students match this filter.</td></tr>
+                <tr><td className="table-td muted" colSpan={9}>No students match this filter.</td></tr>
               )}
             </Table>
             {(() => { const total = allLedger.data?.total || 0; const pages = Math.ceil(total / summarySize) || 1; return (
@@ -362,22 +402,58 @@ export default function HoursMonthly() {
               <p className="muted text-sm">No entries in this date range.</p>
             ) : (
               <Table head={['Date', 'Month', 'Detail', 'In', 'Out', { label: 'Fees (AED)', align: 'right' }, { label: 'Hours Credited', align: 'right' }, { label: 'Discount', align: 'right' }, { label: 'Adjusted', align: 'right' }, { label: 'Total Credited', align: 'right' }, { label: 'Used', align: 'right' }, { label: 'Hours Remaining', align: 'right' }]}>
-                {visibleRows.map((r: any, i: number) => (
+                {pagedRows.map((r: any, i: number) => (
                   <tr key={i} style={r.kind !== 'lecture' ? { background: 'var(--color-card-alt)' } : undefined}>
                     <td className="table-td whitespace-nowrap">{r.date || '—'}</td>
                     <td className="table-td whitespace-nowrap muted">{r.month}</td>
-                    <td className="table-td">
-                      {r.kind === 'credit'
-                        ? <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-600 whitespace-nowrap">Package added</span>
-                        : r.kind === 'adjustment'
-                        ? <span className="whitespace-nowrap"><span className="text-xs px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-600">Hours adjusted</span>{r.reason ? <span className="muted"> · {r.reason}</span> : ''}</span>
-                        : <span className="whitespace-nowrap">{r.teacher || '—'}{r.subject ? ` · ${r.subject}` : ''}</span>}
-                    </td>
-                    <td className="table-td">{r.time_in || '—'}</td>
-                    <td className="table-td">{r.time_out || '—'}</td>
-                    <td className="table-td text-right tabular-nums">{r.kind === 'credit' && r.fees ? num(r.fees) : '—'}</td>
-                    <td className="table-td text-right tabular-nums text-emerald-600">{r.kind === 'credit' ? num(r.credited) : '—'}</td>
-                    <td className="table-td text-right tabular-nums">{r.kind === 'credit' ? num(r.discount) : '—'}</td>
+                    {/* An adjustment carries a written reason, which can run to a
+                        whole sentence. In a cell of its own it stretched the Detail
+                        column and squashed every other row, so it runs across the
+                        columns it has no figures for (Detail → Discount) and is cut
+                        off with an ellipsis, with the full text on hover. `max-w-0`
+                        is what lets a table cell truncate at all. */}
+                    {r.kind === 'adjustment' ? (
+                      <td className="table-td max-w-0" colSpan={6}>
+                        <span className="flex items-center gap-1.5">
+                          <span className="text-xs px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-600 whitespace-nowrap shrink-0">Hours adjusted</span>
+                          {r.reason ? <span className="muted truncate" title={r.reason}>· {r.reason}</span> : null}
+                          {/* Only adjustments can be changed after the fact — a
+                              package follows its payment and a lecture is edited
+                              where it was logged. */}
+                          <button
+                            type="button"
+                            className="muted hover:text-[var(--color-primary)] rounded-lg p-1 shrink-0 ml-auto"
+                            title="Edit this adjustment"
+                            aria-label="Edit this adjustment"
+                            onClick={() => setEditAdjustment(r.adjustment)}
+                          >
+                            <Pencil size={13} />
+                          </button>
+                          <button
+                            type="button"
+                            className="text-red-500 hover:bg-red-500/10 rounded-lg p-1 shrink-0"
+                            title="Delete this adjustment"
+                            aria-label="Delete this adjustment"
+                            onClick={() => setDeleteAdjustment(r.adjustment)}
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        </span>
+                      </td>
+                    ) : (
+                      <>
+                        <td className="table-td">
+                          {r.kind === 'credit'
+                            ? <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-600 whitespace-nowrap">Package added</span>
+                            : <span className="whitespace-nowrap">{r.teacher || '—'}{r.subject ? ` · ${r.subject}` : ''}</span>}
+                        </td>
+                        <td className="table-td">{r.time_in || '—'}</td>
+                        <td className="table-td">{r.time_out || '—'}</td>
+                        <td className="table-td text-right tabular-nums">{r.kind === 'credit' && r.fees ? num(r.fees) : '—'}</td>
+                        <td className="table-td text-right tabular-nums text-emerald-600">{r.kind === 'credit' ? num(r.credited) : '—'}</td>
+                        <td className="table-td text-right tabular-nums">{r.kind === 'credit' ? num(r.discount) : '—'}</td>
+                      </>
+                    )}
                     <td className="table-td text-right tabular-nums">{r.kind === 'credit' || r.kind === 'adjustment' ? num(r.adjusted) : '—'}</td>
                     <td className="table-td text-right tabular-nums font-medium">{r.kind === 'credit' || r.kind === 'adjustment' ? num(r.totalCredited) : '—'}</td>
                     <td className="table-td text-right tabular-nums text-red-500">{r.kind === 'lecture' ? num(r.used) : '—'}</td>
@@ -396,15 +472,49 @@ export default function HoursMonthly() {
                 </tr>
               </Table>
             )}
+            {visibleRows.length > 0 && (
+              <Pagination
+                page={page}
+                pages={stmtPages}
+                total={visibleRows.length}
+                noun="entries"
+                pageSize={stmtSize}
+                onPage={setStmtPage}
+                onPageSize={(n) => { setStmtSize(n); setStmtPage(1); }}
+                note="the Total row and the running balance cover the whole statement"
+              />
+            )}
           </Section>
         </>
       )}
 
-      {adjustOpen && studentId && (
+      {notesFor && (
+        <FollowUpNotesDialog
+          studentId={Number(notesFor.student_id)}
+          studentName={notesFor.student_name}
+          formNo={notesFor.form_no}
+          onClose={() => setNotesFor(null)}
+        />
+      )}
+
+      {(adjustOpen || editAdjustment) && studentId && (
         <AdjustHoursModal
           studentId={Number(studentId)}
           studentName={options.find((o: any) => String(o.value) === studentId)?.label || 'Student'}
-          onClose={() => setAdjustOpen(false)}
+          editing={editAdjustment}
+          onClose={() => { setAdjustOpen(false); setEditAdjustment(null); }}
+        />
+      )}
+
+      {deleteAdjustment && (
+        <ConfirmModal
+          title="Delete this adjustment?"
+          message={`${num(Number(deleteAdjustment.delta))} hours will come off the balance. The entry is kept on record and can be restored.`}
+          confirmLabel="Delete"
+          danger
+          busy={removeAdjustment.isPending}
+          onConfirm={() => removeAdjustment.mutate(deleteAdjustment.id)}
+          onClose={() => setDeleteAdjustment(null)}
         />
       )}
     </div>

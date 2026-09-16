@@ -87,8 +87,18 @@ router.get(
 
     const [rows, totalRows] = await Promise.all([
       query<any>(
-        `SELECT s.id AS student_id, s.form_no, s.full_name AS student_name, s.status, ${HOURS_COLUMNS}
-         FROM students s ${whereSql}
+        // The latest follow-up note comes with the row — the list shows it, and
+        // pulling it per student would be one request per row.
+        `SELECT s.id AS student_id, s.form_no, s.full_name AS student_name, s.status, ${HOURS_COLUMNS},
+                f.note AS last_note, f.follow_up_on AS last_note_due, f.created_at AS last_note_at,
+                fu.display_name AS last_note_by,
+                (SELECT COUNT(*) FROM student_follow_ups c WHERE c.student_id = s.id AND c.is_deleted = FALSE) AS note_count
+         FROM students s
+         LEFT JOIN student_follow_ups f
+                ON f.id = (SELECT MAX(f2.id) FROM student_follow_ups f2
+                            WHERE f2.student_id = s.id AND f2.is_deleted = FALSE)
+         LEFT JOIN users fu ON fu.id = f.created_by
+         ${whereSql}
          ORDER BY ${orderSql} LIMIT ? OFFSET ?`,
         [...params, limit, offset]
       ),
@@ -736,30 +746,81 @@ router.put(
 // Quick +/- hours adjustment (admin) — logged as its own dated ledger event so
 // it shows in the student's hours statement. Corrects a missed lecture entry or
 // grants extra hours.
+//
+// `adjusted_on` is the day the adjustment is FOR, which is often not the day it
+// was typed in: "adjusted till 16 May" entered in September belongs on the
+// statement in May, or the running balance reads wrong from May onwards. Left
+// out, the entry falls back to when it was made.
+const ADJUST_DATE = /^\d{4}-\d{2}-\d{2}$/;
+const adjustSchema = z.object({
+  delta: z.number(),
+  reason: z.string().trim().max(200).optional().nullable(),
+  adjusted_on: z.string().regex(ADJUST_DATE).optional().nullable().or(z.literal('')),
+});
+
 router.post(
   '/ledger/:id/adjust-hours',
   requireRole('admin'),
   wrap(async (req, res) => {
-    const b = z.object({ delta: z.number(), reason: z.string().optional().nullable() }).parse(req.body);
+    const b = adjustSchema.parse(req.body);
     if (!b.delta) return res.status(400).json({ error: 'Enter a non-zero number of hours' });
 
     const r: any = await query(
-      'INSERT INTO hours_adjustments (student_id, delta, reason, created_by) VALUES (?,?,?,?)',
-      [req.params.id, b.delta, b.reason || null, req.user!.userId]
+      'INSERT INTO hours_adjustments (student_id, delta, reason, adjusted_on, created_by) VALUES (?,?,?,?,?)',
+      [req.params.id, b.delta, b.reason || null, b.adjusted_on || null, req.user!.userId]
     );
-    await audit(req.user!.userId, 'ADJUST_HOURS', 'student', req.params.id, null, { delta: b.delta, reason: b.reason ?? null });
+    await audit(req.user!.userId, 'ADJUST_HOURS', 'student', req.params.id, null,
+      { delta: b.delta, reason: b.reason ?? null, adjusted_on: b.adjusted_on || null });
     res.status(201).json({ id: r.insertId });
   })
 );
 
-// List hours adjustments for a student (for the statement timeline).
+// Correct an adjustment that was entered wrong — the figure, the note or the
+// date it belongs on.
+router.put(
+  '/adjustments/entry/:adjId',
+  requireRole('admin'),
+  wrap(async (req, res) => {
+    const b = adjustSchema.parse(req.body);
+    if (!b.delta) return res.status(400).json({ error: 'Enter a non-zero number of hours' });
+    const row = await queryOne<any>('SELECT * FROM hours_adjustments WHERE id = ? AND is_deleted = FALSE', [req.params.adjId]);
+    if (!row) return res.status(404).json({ error: 'Adjustment not found' });
+
+    await query(
+      'UPDATE hours_adjustments SET delta = ?, reason = ?, adjusted_on = ? WHERE id = ?',
+      [b.delta, b.reason || null, b.adjusted_on || null, row.id]
+    );
+    await audit(req.user!.userId, 'EDIT_ADJUST_HOURS', 'student', String(row.student_id), row,
+      { delta: b.delta, reason: b.reason ?? null, adjusted_on: b.adjusted_on || null });
+    res.json({ ok: true });
+  })
+);
+
+// Remove one — marked removed, not erased, so it stays on record. The hours it
+// carried come off the balance straight away.
+router.delete(
+  '/adjustments/entry/:adjId',
+  requireRole('admin'),
+  wrap(async (req, res) => {
+    const row = await queryOne<any>('SELECT * FROM hours_adjustments WHERE id = ? AND is_deleted = FALSE', [req.params.adjId]);
+    if (!row) return res.status(404).json({ error: 'Adjustment not found' });
+    await query('UPDATE hours_adjustments SET is_deleted = TRUE WHERE id = ?', [row.id]);
+    await audit(req.user!.userId, 'DELETE_ADJUST_HOURS', 'student', String(row.student_id), row, null);
+    res.json({ ok: true, delta: row.delta });
+  })
+);
+
+// List hours adjustments for a student (for the statement timeline). Ordered by
+// the day each one is for, so it lands in the right place on the statement.
 router.get(
   '/adjustments/:id',
   ensureOwnStudent,
   blockLockedStudents,
   wrap(async (req, res) => {
     const rows = await query(
-      'SELECT id, delta, reason, created_at FROM hours_adjustments WHERE student_id = ? ORDER BY created_at',
+      `SELECT id, delta, reason, adjusted_on, created_at FROM hours_adjustments
+        WHERE student_id = ? AND is_deleted = FALSE
+        ORDER BY COALESCE(adjusted_on, created_at), id`,
       [req.params.id]
     );
     res.json({ data: rows });

@@ -181,7 +181,7 @@ router.get(
   wrap((req, res) => pivot(req, res, {
     valueExpr: 'SUM(a.hours_consumed)', valueAlias: 'hours',
     src: 'lecture_attendees a JOIN lecture_sessions l ON l.id = a.lecture_id',
-    where: 'l.is_deleted = FALSE', monthCol: 'l.month',
+    where: 'l.is_deleted = FALSE AND a.is_deleted = FALSE', monthCol: 'l.month',
   }))
 );
 

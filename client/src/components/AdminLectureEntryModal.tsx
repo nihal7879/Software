@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Overlay } from './Overlay';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
+import { DictateButton } from './DictateButton';
 import { api } from '../api/client';
 import { useMasters } from '../api/masters';
 import { Spinner } from './ui';
@@ -183,7 +184,12 @@ export function AdminLectureEntryModal({
             </div>
           </div>
           <div>
-            <label className="text-xs font-medium muted">Remark</label>
+            {/* The remark can be spoken instead of typed — handy right after a
+                class, on a phone. What is said is added to what is there. */}
+            <div className="flex items-center justify-between gap-2">
+              <label className="text-xs font-medium muted">Remark</label>
+              <DictateButton value={watch('remark')} onChange={(v) => setValue('remark', v)} />
+            </div>
             <input className="input mt-1" {...register('remark')} placeholder="e.g. Completed, revision needed" />
           </div>
           <div>

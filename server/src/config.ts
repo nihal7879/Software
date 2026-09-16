@@ -24,6 +24,9 @@ export const config = {
     adminNotify: process.env.ADMIN_NOTIFY_EMAIL || '',
     appUrl: (process.env.APP_URL || process.env.CLIENT_ORIGIN || 'http://localhost:5173').replace(/\/$/, ''),
   },
+  // Speech to text (AssemblyAI). Empty until the key is set, so anything using
+  // it can check first rather than calling with no key.
+  assemblyAiKey: process.env.ASSEMBLYAI_API_KEY || '',
 };
 
 

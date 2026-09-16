@@ -15,6 +15,8 @@ import mastersRoutes from './routes/masters';
 import registrationRoutes from './routes/registrations';
 import settingsRoutes from './routes/settings';
 import emailRoutes from './routes/email';
+import followUpRoutes from './routes/followUps';
+import speechRoutes from './routes/speech';
 
 const app = express();
 
@@ -50,6 +52,8 @@ app.use('/api/masters', mastersRoutes);
 app.use('/api/registrations', registrationRoutes);
 app.use('/api/settings', settingsRoutes);
 app.use('/api/email', emailRoutes);
+app.use('/api/follow-ups', followUpRoutes);
+app.use('/api/speech', speechRoutes);
 
 app.use(notFound);
 app.use(errorHandler);
