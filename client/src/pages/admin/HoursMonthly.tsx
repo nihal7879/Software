@@ -36,6 +36,7 @@ export default function HoursMonthly() {
   const [summaryPage, setSummaryPage] = useState(1);
   const [summarySize, setSummarySize] = useState(20);
   const [feeStatus, setFeeStatus] = useState('');
+  const [studentType, setStudentType] = useState('');
   // Opens on Active students — the ones being taught now. Inactive students are
   // one pick away in Filters, and Clear all shows everybody.
   const [status, setStatus] = useState('Active');
@@ -56,11 +57,11 @@ export default function HoursMonthly() {
     onError: (e: any) => toast(e?.response?.data?.error || 'Could not delete the adjustment', 'error'),
   });
   const allLedger = useQuery({
-    queryKey: ['ledger-all', summarySearch, summaryPage, summarySize, status, feeStatus, sort.key, sort.dir],
+    queryKey: ['ledger-all', summarySearch, summaryPage, summarySize, status, feeStatus, studentType, sort.key, sort.dir],
     queryFn: () => api.get('/fees/ledger', {
       params: {
         search: summarySearch, page: summaryPage, limit: summarySize,
-        status, feeStatus, sort: sort.key, dir: sort.dir,
+        status, feeStatus, type: studentType, sort: sort.key, dir: sort.dir,
       },
     }).then((r) => r.data),
   });
@@ -85,8 +86,13 @@ export default function HoursMonthly() {
     { value: 'In Credit', label: 'In Credit' },
     { value: 'Trial', label: 'Trial' },
   ];
-  const activeFilters = [status, feeStatus].filter(Boolean).length;
-  const clearFilters = () => { setStatus(''); setFeeStatus(''); setSummaryPage(1); };
+  const typeOptions = [
+    { value: '', label: 'All' },
+    { value: 'Trial', label: 'Trial' },
+    { value: 'Enrolled', label: 'Enrolled' },
+  ];
+  const activeFilters = [status, feeStatus, studentType].filter(Boolean).length;
+  const clearFilters = () => { setStatus(''); setFeeStatus(''); setStudentType(''); setSummaryPage(1); };
   const [studentSearch, setStudentSearch] = useState('');
   const students = useQuery({ queryKey: ['students-pick', studentSearch], queryFn: () => api.get('/students', { params: { search: studentSearch, limit: 1000 } }).then((r) => r.data.data) });
   const ledger = useQuery({ queryKey: ['ledger', studentId], queryFn: () => api.get(`/fees/ledger/${studentId}`).then((r) => r.data), enabled: !!studentId });
@@ -274,6 +280,14 @@ export default function HoursMonthly() {
                   value={status}
                   options={statusOptions}
                   onChange={(v) => { setStatus(v); setSummaryPage(1); }}
+                />
+              </FilterField>
+              <FilterField label="Type">
+                <Select
+                  searchable={false}
+                  value={studentType}
+                  options={typeOptions}
+                  onChange={(v) => { setStudentType(v); setSummaryPage(1); }}
                 />
               </FilterField>
               <FilterField label="Fee Status">

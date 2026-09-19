@@ -78,6 +78,13 @@ router.get(
       where.push('s.status = ?');
       params.push(status);
     }
+    // Trial or enrolled — a third axis: a trial student who is still active
+    // is a different conversation from an enrolled one owing hours.
+    const type = String(req.query.type || '');
+    if (type === 'Trial' || type === 'Enrolled') {
+      where.push('s.student_type = ?');
+      params.push(type);
+    }
     const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
 
     const sortExpr = LEDGER_SORTS[String(req.query.sort || '')] || LEDGER_SORTS.form_no;

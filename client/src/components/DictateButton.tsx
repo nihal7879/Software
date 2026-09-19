@@ -16,12 +16,20 @@ const MAX_SECONDS = 180;
 const mmss = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 
 /**
- * The punctuated transcript closes with a full stop. A remark is a note, not
- * prose — "Completed, revision needed." reads wrong in the field — so the last
- * one is dropped. Full stops between sentences stay, they keep it readable.
+ * No full stops in a dictated remark. Every pause starts a new "turn" and each
+ * turn comes back closed with a full stop, so "paper solving … and also …
+ * adding the new feature" arrived as "Paper solving. And also. Adding the new
+ * feature". A remark is a note, not prose, so the stops go and the word after
+ * each one drops to lower case — unless it is "I" or an abbreviation like IB,
+ * which stay as spoken. Decimals ("2.5 hours") are left alone: only a full stop
+ * followed by a space or the end counts.
  */
-function dropTrailingStop(text: string) {
-  return text.replace(/\s*\.+\s*$/, '');
+function unpunctuate(text: string) {
+  return text
+    .replace(/\.+(\s+)([A-Z])([a-z])/g, (_m, sp, a, b) => sp + a.toLowerCase() + b)
+    .replace(/\.+(?=\s|$)/g, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
 }
 
 /** Dictated text is added to whatever is already typed, not thrown over it. */
@@ -188,7 +196,7 @@ export function DictateButton({
         // A turn is re-sent as it is heard better, and once more when it is
         // punctuated, so the latest wording replaces the earlier one.
         turns.current.set(m.turn_order ?? 0, String(m.transcript || ''));
-        onChange(appendSpoken(base.current, dropTrailingStop(spokenSoFar())));
+        onChange(appendSpoken(base.current, unpunctuate(spokenSoFar())));
       };
       sock.onerror = () => { if (!stopping.current) toast('Speech to text disconnected.', 'error'); };
       sock.onclose = (e) => {
