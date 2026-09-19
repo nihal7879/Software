@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { api, hrs, fmtDate } from '../../api/client';
+import { api, hrs, fmtDate, todayIso } from '../../api/client';
 import { Section, StatusBadge, Table, Spinner } from '../../components/ui';
 import { DateRangePicker } from '../../components/DateRangePicker';
 
@@ -9,7 +9,8 @@ import { DateRangePicker } from '../../components/DateRangePicker';
 export default function FacultyStudentDetail() {
   const { id } = useParams();
   const [from, setFrom] = useState('2025-09-01');
-  const [to, setTo] = useState('2026-08-31');
+  // Up to today by default — a fixed end date goes stale and hides anything later.
+  const [to, setTo] = useState(todayIso);
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['fac-student', id, from, to],

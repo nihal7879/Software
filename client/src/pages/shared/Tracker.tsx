@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '../../auth/AuthContext';
-import { api, rs, hrs, num, fmtDate } from '../../api/client';
+import { api, rs, hrs, num, fmtDate, todayIso } from '../../api/client';
 import { KpiCard, Section, StatusBadge, Table, HoursValue, Spinner } from '../../components/ui';
 import { DateRangePicker } from '../../components/DateRangePicker';
 
@@ -35,7 +35,8 @@ export default function Tracker() {
   const [gran, setGran] = useState<'month' | 'date'>('month');
   // Date range — filters the summary table and the lecture log (KPIs stay all-time).
   const [from, setFrom] = useState('2025-09-01');
-  const [to, setTo] = useState('2026-08-31');
+  // Up to today by default — a fixed end date goes stale and hides anything later.
+  const [to, setTo] = useState(todayIso);
 
   const lecs = useMemo(() => rawLecs.filter((l) => l.session_date >= from && l.session_date <= to), [rawLecs, from, to]);
   const fees = useMemo(() => rawFees.filter((f) => f.payment_date >= from && f.payment_date <= to), [rawFees, from, to]);

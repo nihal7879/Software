@@ -157,7 +157,7 @@ export function StudentRegistrationForm({
           <div>
             <label className="text-xs font-semibold muted block mb-1">DOB *</label>
             <input type="hidden" {...register('dob', { required: true })} />
-            <CalendarPicker value={watch('dob') || ''} onChange={(v) => setValue('dob', v, { shouldValidate: true })} placeholder="Select date of birth" />
+            <CalendarPicker value={watch('dob') || ''} onChange={(v) => setValue('dob', v, { shouldValidate: true })} placeholder="Select date of birth" openYear={new Date().getFullYear() - 14} />
             {errors.dob && <span className="text-xs text-red-500">Required</span>}
           </div>
           <div>

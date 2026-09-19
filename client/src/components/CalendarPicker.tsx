@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useAnchoredMenu } from './anchoredMenu';
 import { CalendarDays, ChevronDown } from 'lucide-react';
 import { fmtDate } from '../api/client';
@@ -9,6 +9,91 @@ import { fmtDate } from '../api/client';
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 const pad = (n: number) => String(n).padStart(2, '0');
+// Far enough back for any student's or parent's date of birth.
+const THIS_YEAR = new Date().getFullYear();
+const YEARS = Array.from({ length: THIS_YEAR + 5 - 1940 + 1 }, (_, i) => 1940 + i);
+
+type View = 'days' | 'months' | 'years';
+
+// Same cell as a day in the grid, so the month and year pickers look like part
+// of the calendar rather than the browser's own grey dropdown list.
+const cell = (selected: boolean) =>
+  `h-9 rounded-lg text-xs flex items-center justify-center transition ${
+    selected ? 'text-white font-bold' : 'font-semibold hover:bg-[var(--color-card-alt)]'
+  }`;
+const cellStyle = (selected: boolean) => (selected ? { background: 'var(--color-primary)' } : {});
+
+/**
+ * The calendar's top line. Month and year are buttons: click the month for a
+ * grid of months, the year for a grid of years — reaching a date of birth one
+ * month at a time with the arrows took well over a hundred clicks.
+ */
+function CalendarHead({
+  viewY, viewM, view, setView, prevMonth, nextMonth,
+}: {
+  viewY: number; viewM: number; view: View; setView: (v: View) => void;
+  prevMonth: () => void; nextMonth: () => void;
+}) {
+  const toggle = (v: View) => setView(view === v ? 'days' : v);
+  const label = (on: boolean) =>
+    `font-display font-bold text-sm rounded-lg px-2 py-1 inline-flex items-center gap-1 transition ${
+      on ? 'bg-[var(--color-card-alt)]' : 'hover:bg-[var(--color-card-alt)]'
+    }`;
+  return (
+    <div className="flex items-center justify-between gap-1 mb-3">
+      <button type="button" className={`btn-ghost !py-1.5 !px-2.5 ${view === 'days' ? '' : 'invisible'}`} onClick={prevMonth} aria-label="Previous month">‹</button>
+      <div className="flex items-center gap-0.5">
+        <button type="button" className={label(view === 'months')} onClick={() => toggle('months')} aria-label="Pick a month">
+          {MONTHS[viewM].slice(0, 3)} <ChevronDown size={13} className="muted" />
+        </button>
+        <button type="button" className={label(view === 'years')} onClick={() => toggle('years')} aria-label="Pick a year">
+          {viewY} <ChevronDown size={13} className="muted" />
+        </button>
+      </div>
+      <button type="button" className={`btn-ghost !py-1.5 !px-2.5 ${view === 'days' ? '' : 'invisible'}`} onClick={nextMonth} aria-label="Next month">›</button>
+    </div>
+  );
+}
+
+/** Twelve months, or every year, in place of the day grid. Picking one goes back to the days. */
+function MonthYearGrid({
+  view, viewY, viewM, setViewY, setViewM, setView,
+}: {
+  view: View; viewY: number; viewM: number;
+  setViewY: (y: number) => void; setViewM: (m: number) => void; setView: (v: View) => void;
+}) {
+  const current = useRef<HTMLButtonElement>(null);
+  const list = useRef<HTMLDivElement>(null);
+  // Open the year list at the year being viewed, not at 1940. Only the list
+  // scrolls — scrollIntoView would drag the page behind the popover too.
+  useEffect(() => {
+    const box = list.current, btn = current.current;
+    if (box && btn) box.scrollTop = btn.offsetTop - box.offsetTop - box.clientHeight / 2 + btn.clientHeight / 2;
+  }, [view]);
+
+  if (view === 'months') {
+    return (
+      <div className="grid grid-cols-3 gap-1">
+        {MONTHS.map((m, i) => (
+          <button key={m} type="button" className={cell(i === viewM)} style={cellStyle(i === viewM)}
+            onClick={() => { setViewM(i); setView('days'); }}>
+            {m.slice(0, 3)}
+          </button>
+        ))}
+      </div>
+    );
+  }
+  return (
+    <div ref={list} className="grid grid-cols-4 gap-1 max-h-[232px] overflow-y-auto thin-scroll pr-0.5">
+      {YEARS.map((y) => (
+        <button key={y} ref={y === viewY ? current : undefined} type="button" className={cell(y === viewY)} style={cellStyle(y === viewY)}
+          onClick={() => { setViewY(y); setView('months'); }}>
+          {y}
+        </button>
+      ))}
+    </div>
+  );
+}
 
 export function CalendarPicker({
   value,
@@ -17,6 +102,7 @@ export function CalendarPicker({
   highlight,
   className = '',
   align = 'left',
+  openYear,
 }: {
   value: string;
   onChange: (d: string) => void;
@@ -24,11 +110,15 @@ export function CalendarPicker({
   highlight?: Set<string> | string[];
   className?: string;
   align?: 'left' | 'right';
+  /** Year the calendar opens on while empty — a date of birth starts years back, not at today. */
+  openYear?: number;
 }) {
-  const init = value ? new Date(value) : new Date();
+  const init = value ? new Date(value) : openYear ? new Date(openYear, 0, 1) : new Date();
   const [viewY, setViewY] = useState(init.getFullYear());
   const [viewM, setViewM] = useState(init.getMonth()); // 0-11
   const [open, setOpen] = useState(false);
+  const [view, setView] = useState<View>('days');
+  useEffect(() => { if (open) setView('days'); }, [open]);
   const btnRef = useRef<HTMLButtonElement>(null);
   const pos = useAnchoredMenu(open, btnRef, 260, align);
 
@@ -52,12 +142,12 @@ export function CalendarPicker({
         <>
           <div className="fixed inset-0 z-[60]" onClick={() => setOpen(false)} />
           <div className="card p-3 fixed z-[61] w-[260px] overflow-y-auto thin-scroll" style={{ left: pos.left, top: pos.top, bottom: pos.bottom, maxHeight: 360 }}>
-            <div className="flex items-center justify-between mb-3">
-              <button type="button" className="btn-ghost !py-1.5 !px-3" onClick={prevMonth}>‹</button>
-              <div className="font-display font-bold">{MONTHS[viewM]} {viewY}</div>
-              <button type="button" className="btn-ghost !py-1.5 !px-3" onClick={nextMonth}>›</button>
-            </div>
+            <CalendarHead viewY={viewY} viewM={viewM} view={view} setView={setView} prevMonth={prevMonth} nextMonth={nextMonth} />
 
+            {view !== 'days' ? (
+              <MonthYearGrid view={view} viewY={viewY} viewM={viewM} setViewY={setViewY} setViewM={setViewM} setView={setView} />
+            ) : (
+            <>
             <div className="grid grid-cols-7 gap-1 text-center">
               {WEEKDAYS.map((w) => <div key={w} className="text-[11px] font-bold muted py-1">{w}</div>)}
               {Array.from({ length: firstWeekday }).map((_, i) => <div key={`b${i}`} />)}
@@ -88,6 +178,8 @@ export function CalendarPicker({
                 Clear
               </button>
             )}
+            </>
+            )}
           </div>
         </>
       )}
@@ -116,6 +208,8 @@ export function CalendarRangePicker({
   const [viewY, setViewY] = useState(init.getFullYear());
   const [viewM, setViewM] = useState(init.getMonth());
   const [open, setOpen] = useState(false);
+  const [view, setView] = useState<View>('days');
+  useEffect(() => { if (open) setView('days'); }, [open]);
   const btnRef = useRef<HTMLButtonElement>(null);
   const pos = useAnchoredMenu(open, btnRef, 280, align);
 
@@ -156,12 +250,12 @@ export function CalendarRangePicker({
         <>
           <div className="fixed inset-0 z-[60]" onClick={() => setOpen(false)} />
           <div className="card p-3 fixed z-[61] w-[280px] overflow-y-auto thin-scroll" style={{ left: pos.left, top: pos.top, bottom: pos.bottom, maxHeight: 360 }}>
-            <div className="flex items-center justify-between mb-3">
-              <button type="button" className="btn-ghost !py-1.5 !px-3" onClick={prevMonth}>‹</button>
-              <div className="font-display font-bold">{MONTHS[viewM]} {viewY}</div>
-              <button type="button" className="btn-ghost !py-1.5 !px-3" onClick={nextMonth}>›</button>
-            </div>
+            <CalendarHead viewY={viewY} viewM={viewM} view={view} setView={setView} prevMonth={prevMonth} nextMonth={nextMonth} />
 
+            {view !== 'days' ? (
+              <MonthYearGrid view={view} viewY={viewY} viewM={viewM} setViewY={setViewY} setViewM={setViewM} setView={setView} />
+            ) : (
+            <>
             <div className="grid grid-cols-7 gap-1 text-center">
               {WEEKDAYS.map((w) => <div key={w} className="text-[11px] font-bold muted py-1">{w}</div>)}
               {Array.from({ length: firstWeekday }).map((_, i) => <div key={`b${i}`} />)}
@@ -194,6 +288,8 @@ export function CalendarRangePicker({
               </button>
             )}
             <p className="muted text-xs mt-2">Click a start date, then an end date — or use “Select whole month”.</p>
+            </>
+            )}
           </div>
         </>
       )}
