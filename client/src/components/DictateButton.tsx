@@ -13,6 +13,9 @@ const WANT_SAMPLE_RATE = 16000;
 // A remark is a sentence or two — stop on our own if someone forgets to.
 const MAX_SECONDS = 180;
 
+// Hidden for now, everywhere the button is used. Set to true to bring Speak back.
+export const SPEECH_ENABLED = false;
+
 const mmss = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 
 /**
@@ -234,6 +237,8 @@ export function DictateButton({
       toast(e?.response?.data?.error || 'Could not start speech to text.', 'error');
     }
   }
+
+  if (!SPEECH_ENABLED) return null;
 
   if (connecting) {
     return (
