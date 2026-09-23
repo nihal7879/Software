@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { requireAuth, requireRole } from '../middleware/auth';
+import { requireAuth, requireSuperAdmin } from '../middleware/auth';
 import { wrap } from '../middleware/error';
 import { audit } from '../utils/audit';
 import { isStudentPanelLocked, setStudentPanelLocked } from '../utils/settings';
@@ -17,10 +17,11 @@ router.get(
   })
 );
 
-// Lock or unlock every student's dashboard (admin).
+// Lock or unlock every student's dashboard — the super admin's switch, so an
+// admin cannot shut the students out (or let them back in) on their own.
 router.put(
   '/student-access',
-  requireRole('admin'),
+  requireSuperAdmin,
   wrap(async (req, res) => {
     const { locked } = z.object({ locked: z.boolean() }).parse(req.body);
     const before = await isStudentPanelLocked();

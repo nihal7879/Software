@@ -32,6 +32,7 @@ import Settings from './pages/shared/Settings';
 
 const HOME: Record<Role, string> = {
   admin: '/admin',
+  superadmin: '/admin',
   faculty: '/faculty',
   student: '/student',
   parent: '/parent',
@@ -41,7 +42,10 @@ function Protected({ roles, children }: { roles: Role[]; children: JSX.Element }
   const { user, loading } = useAuth();
   if (loading) return <Spinner />;
   if (!user) return <Navigate to="/login" replace />;
-  if (!roles.includes(user.role)) return <Navigate to={HOME[user.role]} replace />;
+  // A super admin is an admin with more, so every admin page opens for them too.
+  // What an admin may NOT see (Pivots) is guarded separately, below and on the server.
+  const allowed = roles.includes(user.role) || (user.role === 'superadmin' && roles.includes('admin'));
+  if (!allowed) return <Navigate to={HOME[user.role]} replace />;
   return <Layout>{children}</Layout>;
 }
 
@@ -67,7 +71,8 @@ export default function App() {
       <Route path="/admin/hours" element={<Protected roles={['admin']}><HoursMonthly /></Protected>} />
       <Route path="/admin/finance" element={<Protected roles={['admin']}><Finance /></Protected>} />
       <Route path="/admin/teachers" element={<Protected roles={['admin']}><Teachers /></Protected>} />
-      <Route path="/admin/pivots" element={<Protected roles={['admin']}><Pivots /></Protected>} />
+      {/* Reports with money in them: the super admin's, not the admin's. */}
+      <Route path="/admin/pivots" element={<Protected roles={['superadmin']}><Pivots /></Protected>} />
       <Route path="/admin/settings" element={<Protected roles={['admin']}><Settings /></Protected>} />
 
       {/* Faculty */}

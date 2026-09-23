@@ -1,7 +1,7 @@
 import jwt, { SignOptions } from 'jsonwebtoken';
 import { config } from '../config';
 
-export type Role = 'student' | 'parent' | 'faculty' | 'admin';
+export type Role = 'student' | 'parent' | 'faculty' | 'admin' | 'superadmin';
 
 export interface JwtPayload {
   userId: number;

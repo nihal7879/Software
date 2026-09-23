@@ -7,7 +7,7 @@ const IDLE_LIMIT_MS = 20 * 60 * 1000;
 // Persisted so idle time is honoured even across full browser close/reopen.
 const LAST_ACTIVITY_KEY = 'lastActivity';
 
-export type Role = 'student' | 'parent' | 'faculty' | 'admin';
+export type Role = 'student' | 'parent' | 'faculty' | 'admin' | 'superadmin';
 export interface AuthUser {
   id: number;
   role: Role;

@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { query } from '../db';
-import { requireAuth, requireRole } from '../middleware/auth';
+import { requireAuth, requireRole, requireSuperAdmin } from '../middleware/auth';
 import { wrap } from '../middleware/error';
 import { formNoOrder } from '../utils/formNo';
 
@@ -8,10 +8,12 @@ const router = Router();
 // Institute-wide analytics are Management-only. Faculty use /teachers/me instead.
 router.use(requireAuth, requireRole('admin'));
 
-// Management dashboard KPIs
+// Management dashboard KPIs. The money in here — revenue and pending fees — is
+// the super admin's; an admin's dashboard does not show it, and the figures are
+// dropped here rather than merely hidden in the browser, so they never travel.
 router.get(
   '/overview',
-  wrap(async (_req, res) => {
+  wrap(async (req, res) => {
     // Run independent aggregates concurrently — against a remote DB the round
     // trips dominate, so parallel is ~5x faster than awaiting one at a time.
     // student_hours_summary (a view) is scanned once and reused for both the
@@ -43,12 +45,19 @@ router.get(
     ]);
 
     const s = summaryRows[0];
+    const money = req.user!.role === 'superadmin';
     res.json({
       students: studentsRows[0],
       teachers: teachersRows[0],
-      revenue: revenueRows[0],
       hours: { purchased: s.purchased, consumed: s.consumed, remaining: s.remaining },
-      pending: { outstanding: s.outstanding, payment_required_count: s.payment_required_count },
+      // Money only for the super admin. Left out entirely for an admin rather
+      // than sent and hidden, so it never reaches their browser.
+      ...(money
+        ? {
+            revenue: revenueRows[0],
+            pending: { outstanding: s.outstanding, payment_required_count: s.payment_required_count },
+          }
+        : {}),
     });
   })
 );
@@ -167,6 +176,7 @@ async function pivot(req: any, res: any, opts: {
 // Finance pivot — revenue per student per month (paginated by student)
 router.get(
   '/finance-pivot',
+  requireSuperAdmin,
   wrap((req, res) => pivot(req, res, {
     // Qualify is_deleted — the joined students table also has an is_deleted
     // column, so an unqualified reference is ambiguous and errors.
@@ -178,6 +188,7 @@ router.get(
 // Hours pivot — hours consumed per student per month (paginated by student)
 router.get(
   '/hours-pivot',
+  requireSuperAdmin,
   wrap((req, res) => pivot(req, res, {
     valueExpr: 'SUM(a.hours_consumed)', valueAlias: 'hours',
     src: 'lecture_attendees a JOIN lecture_sessions l ON l.id = a.lecture_id',
@@ -188,6 +199,7 @@ router.get(
 // Collection trend (monthly revenue line)
 router.get(
   '/revenue-trend',
+  requireSuperAdmin,
   wrap(async (_req, res) => {
     const rows = await query(
       `SELECT month AS label, SUM(amount) AS value

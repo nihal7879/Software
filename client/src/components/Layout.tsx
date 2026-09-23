@@ -16,7 +16,17 @@ import { Toaster } from './Toast';
 type Item = { to: string; label: string; icon: any };
 
 const NAV: Record<string, Item[]> = {
+  // The admin runs students, hours, fees and teachers. Pivots report on money,
+  // so they belong to the super admin below.
   admin: [
+    { to: '/admin', label: 'Dashboard', icon: LayoutDashboard },
+    { to: '/admin/students', label: 'Students', icon: Users },
+    { to: '/admin/hours', label: 'Student Hours', icon: Clock },
+    { to: '/admin/finance', label: 'Finance', icon: Wallet },
+    { to: '/admin/teachers', label: 'Teachers', icon: GraduationCap },
+    { to: '/admin/settings', label: 'Settings', icon: Settings },
+  ],
+  superadmin: [
     { to: '/admin', label: 'Dashboard', icon: LayoutDashboard },
     { to: '/admin/students', label: 'Students', icon: Users },
     { to: '/admin/hours', label: 'Student Hours', icon: Clock },
@@ -59,9 +69,11 @@ export function Layout({ children }: { children: ReactNode }) {
     queryFn: () =>
       api.get('/registrations/count', { params: { since: getLastSeenRegistration(user?.id) } })
         .then((r) => Number(r.data.unseen) || 0),
-    enabled: user?.role === 'admin',
+    enabled: user?.role === 'admin' || user?.role === 'superadmin',
     refetchInterval: 60_000,
   });
+  // Registrations has no menu entry of its own — they are reached from the
+  // dashboard — so the waiting count rides on Students, as it did before.
   const badgeFor = (to: string) => (to === '/admin/students' ? pendingRegs.data || 0 : 0);
   // Students see a lock on Dashboard while an admin has student dashboards locked.
   const studentAccess = useStudentAccess(user?.role === 'student');

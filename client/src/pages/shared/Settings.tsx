@@ -132,7 +132,8 @@ export default function Settings() {
         <p className="muted text-sm">Your personal information and account security.</p>
       </div>
 
-      {user?.role === 'admin' && <StudentAccessCard />}
+      {/* Locking every student dashboard is the super admin's switch. */}
+      {user?.role === 'superadmin' && <StudentAccessCard />}
 
       <div className="grid grid-cols-1 lg:grid-cols-[300px_1fr] gap-5 items-start">
         {/* Left — profile summary card */}
