@@ -214,27 +214,23 @@ export default function Finance() {
           {draftsOpen && (
             <>
               <p className="muted text-sm mb-3">These rows from your upload couldn't be auto-matched. Search the parent or guardian who paid (or pick the student directly), fix any field if needed, then assign — or discard.</p>
-              <div className="overflow-x-auto">
-                <table className="w-full border-collapse">
-                  <thead>
-                    <tr>
-                      {['Flag', 'Date', 'Transaction', 'Reference', 'Credit', 'Source', 'Parent / Guardian', 'Assign to student', 'Pkg Hrs', 'Disc Hrs', 'Note', ''].map((h) => <th key={h} className="table-th">{h}</th>)}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {draftList.map((d: any) => (
-                      <DraftRow
-                        key={d.id}
-                        draft={d}
-                        students={students.data || []}
-                        onStudentSearch={setStudentSearch}
-                        busy={assign.isPending || discard.isPending}
-                        onAssign={(payload) => assign.mutate({ id: d.id, payload })}
-                        onDiscard={() => setConfirm({ title: 'Discard draft', message: 'Discard this draft row? This cannot be undone.', confirmLabel: 'Discard', onConfirm: () => discard.mutate(d.id) })}
-                      />
-                    ))}
-                  </tbody>
-                </table>
+              {/* One card per payment instead of a twelve-column table. The
+                  table only fitted by scrolling sideways, which is painful when
+                  every row has to be filled in — you lost sight of the amount
+                  while choosing the student. Each card reads top to bottom: what
+                  the bank said, then what to fill in. */}
+              <div className="space-y-3">
+                {draftList.map((d: any) => (
+                  <DraftRow
+                    key={d.id}
+                    draft={d}
+                    students={students.data || []}
+                    onStudentSearch={setStudentSearch}
+                    busy={assign.isPending || discard.isPending}
+                    onAssign={(payload) => assign.mutate({ id: d.id, payload })}
+                    onDiscard={() => setConfirm({ title: 'Discard draft', message: 'Discard this draft row? This cannot be undone.', confirmLabel: 'Discard', onConfirm: () => discard.mutate(d.id) })}
+                  />
+                ))}
               </div>
             </>
           )}
@@ -537,45 +533,58 @@ function DraftRow({
   const transaction = draft.transaction_narration || draft.notes || draft.guessed_student_name || '—';
   const canAssign = studentId && Number(amount) > 0 && date;
 
+  const field = (label: string, node: React.ReactNode) => (
+    <div className="min-w-0">
+      <label className="text-[11px] font-medium muted block mb-1">{label}</label>
+      {node}
+    </div>
+  );
+
   return (
-    <tr>
-      <td className="table-td"><DraftFlag draft={draft} /></td>
-      <td className="table-td whitespace-nowrap text-sm">{date || '—'}</td>
-      <td className="table-td max-w-[260px]">
-        <div className="text-xs whitespace-pre-wrap break-words" title={transaction}>{transaction}</div>
-      </td>
-      <td className="table-td font-mono text-xs">{reference || '—'}</td>
-      <td className="table-td text-sm">{amount || '—'}</td>
-      <td className="table-td min-w-[170px]">
-        <Select value={source} onChange={setSource} options={sourceOptions} allowCustom compact placeholder="Source…" />
-      </td>
-      <td className="table-td min-w-[220px]">
-        <ParentPicker compact value={parentName} onPick={pickParent} />
-        <ChildChooser children={childChoices} selectedId={studentId} onChoose={(c) => setStudentId(String(c.id))} />
-      </td>
-      <td className="table-td min-w-[220px]">
-        <Select
-          compact
-          value={studentId}
-          onChange={(v) => {
-            setStudentId(v);
-            setChildChoices([]);
-            // Picked the student directly: the parent on their record fills in
-            // — still editable, because the sender is not always the parent.
-            const s = studentList.find((x: any) => String(x.id) === String(v));
-            const parent = s ? parentOf(s) : '';
-            if (parent) setParentName(parent);
-          }}
-          options={studentList.map((s: any) => studentOption(s))}
-          onSearch={onStudentSearch}
-          placeholder="Search student…"
-        />
-      </td>
-      <td className="table-td"><input className="input !py-1 w-24" type="number" step="0.01" value={pkgHours} onChange={(e) => setPkgHours(e.target.value)} placeholder="0" /></td>
-      <td className="table-td"><input className="input !py-1 w-24" type="number" step="0.01" value={discHours} onChange={(e) => setDiscHours(e.target.value)} placeholder="0" /></td>
-      <td className="table-td"><input className="input !py-1 w-40" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Add note…" /></td>
-      <td className="table-td">
-        <div className="flex gap-1.5 whitespace-nowrap">
+    <div className="card p-3 space-y-3">
+      {/* What the bank told us — fixed, and the reason this row needs a decision. */}
+      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+        <DraftFlag draft={draft} />
+        <span className="font-semibold text-emerald-600 tabular-nums">{amount ? `AED ${amount}` : '—'}</span>
+        <span className="text-sm">{date || '—'}</span>
+        {reference && <span className="font-mono text-xs muted">{reference}</span>}
+      </div>
+      <p className="text-xs muted whitespace-pre-wrap break-words" title={transaction}>{transaction}</p>
+
+      {/* What the admin fills in. Wraps down the page instead of running off it. */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-2">
+        {field('Parent / Guardian', (
+          <>
+            <ParentPicker compact value={parentName} onPick={pickParent} />
+            <ChildChooser children={childChoices} selectedId={studentId} onChoose={(c) => setStudentId(String(c.id))} />
+          </>
+        ))}
+        {field('Assign to student', (
+          <Select
+            compact
+            value={studentId}
+            onChange={(v) => {
+              setStudentId(v);
+              setChildChoices([]);
+              // Picked the student directly: the parent on their record fills in
+              // — still editable, because the sender is not always the parent.
+              const st = studentList.find((x: any) => String(x.id) === String(v));
+              const parent = st ? parentOf(st) : '';
+              if (parent) setParentName(parent);
+            }}
+            options={studentList.map((st: any) => studentOption(st))}
+            onSearch={onStudentSearch}
+            placeholder="Search student…"
+          />
+        ))}
+        {field('Source', <Select value={source} onChange={setSource} options={sourceOptions} allowCustom compact placeholder="Source…" />)}
+        {field('Note', <input className="input !py-1 w-full" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Add note…" />)}
+      </div>
+
+      <div className="flex flex-wrap items-end gap-2">
+        <div className="w-24">{field('Pkg Hrs', <input className="input !py-1 w-full" type="number" step="0.01" value={pkgHours} onChange={(e) => setPkgHours(e.target.value)} placeholder="0" />)}</div>
+        <div className="w-24">{field('Disc Hrs', <input className="input !py-1 w-full" type="number" step="0.01" value={discHours} onChange={(e) => setDiscHours(e.target.value)} placeholder="0" />)}</div>
+        <div className="flex gap-1.5 ml-auto">
           <button
             className="btn-primary !py-1 !px-2.5 text-xs"
             disabled={!canAssign || busy}
@@ -604,7 +613,7 @@ function DraftRow({
             Discard
           </button>
         </div>
-      </td>
-    </tr>
+      </div>
+    </div>
   );
 }
