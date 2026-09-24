@@ -1,6 +1,13 @@
 import dotenv from 'dotenv';
 dotenv.config();
 
+// The app's own clock, for the few dates it works out itself (a joining date,
+// "this month"). Vercel runs on UTC, which is 4 hours behind the institute, so
+// a record created late in the Dubai evening landed on the previous day. Set
+// before anything reads a date. On Vercel, set TZ=Asia/Dubai in the project's
+// environment variables as well — this line covers local runs and scripts.
+process.env.TZ = process.env.TZ || 'Asia/Dubai';
+
 export const config = {
   port: Number(process.env.PORT || 4000),
   clientOrigin: process.env.CLIENT_ORIGIN || 'http://localhost:5173',

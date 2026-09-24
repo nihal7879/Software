@@ -21,7 +21,12 @@ import FacultyDashboard from './pages/faculty/FacultyDashboard';
 import FacultyStudents from './pages/faculty/FacultyStudents';
 import FacultyStudentDetail from './pages/faculty/FacultyStudentDetail';
 import LectureEntry from './pages/faculty/LectureEntry';
+import AdminAttendance from './pages/admin/Attendance';
+import FacultyAttendance from './pages/faculty/Attendance';
 import StudentDashboard from './pages/student/StudentDashboard';
+import CheckIn from './pages/student/CheckIn';
+import Scan from './pages/Scan';
+import { PENDING_SCAN } from './lib/qr';
 import { StudentGate } from './components/StudentLock';
 import LectureHistory from './pages/student/LectureHistory';
 import StudentFees from './pages/student/StudentFees';
@@ -38,6 +43,15 @@ const HOME: Record<Role, string> = {
   student: '/student',
   parent: '/parent',
 };
+
+/**
+ * Where signing in lands. Normally the role's own home, but a student who got
+ * here by scanning a desk QR goes straight to check-in, with the code waiting.
+ */
+function homeFor(role: Role) {
+  if (role === 'student' && localStorage.getItem(PENDING_SCAN)) return '/student/checkin';
+  return HOME[role];
+}
 
 function Protected({ roles, children }: { roles: Role[]; children: JSX.Element }) {
   const { user, loading } = useAuth();
@@ -56,7 +70,10 @@ export default function App() {
 
   return (
     <Routes>
-      <Route path="/login" element={user ? <Navigate to={HOME[user.role]} replace /> : <Login />} />
+      <Route path="/login" element={user ? <Navigate to={homeFor(user.role)} replace /> : <Login />} />
+      {/* Where the printed desk QR points. Public: it only parks the code and
+          sends the student on to the login they already have. */}
+      <Route path="/scan" element={<Scan />} />
       {/* One registration link per role — nobody gets a form asking them to pick
           a role. A student's registration waits for an admin; parents and
           teachers are signed in straight away for now. */}
@@ -76,6 +93,8 @@ export default function App() {
       <Route path="/admin/lecture/:teacherId" element={<Protected roles={['admin']}><AdminLectureEntry /></Protected>} />
       {/* Reports with money in them: the super admin's, not the admin's. */}
       <Route path="/admin/pivots" element={<Protected roles={['superadmin']}><Pivots /></Protected>} />
+      {/* Scanned check-ins for any teacher, and the printed desk codes. */}
+      <Route path="/admin/attendance" element={<Protected roles={['admin']}><AdminAttendance /></Protected>} />
       <Route path="/admin/settings" element={<Protected roles={['admin']}><Settings /></Protected>} />
 
       {/* Faculty */}
@@ -83,6 +102,7 @@ export default function App() {
       <Route path="/faculty/students" element={<Protected roles={['faculty', 'admin']}><FacultyStudents /></Protected>} />
       <Route path="/faculty/student/:id" element={<Protected roles={['faculty', 'admin']}><FacultyStudentDetail /></Protected>} />
       <Route path="/faculty/lecture" element={<Protected roles={['faculty', 'admin']}><LectureEntry /></Protected>} />
+      <Route path="/faculty/attendance" element={<Protected roles={['faculty', 'admin']}><FacultyAttendance /></Protected>} />
       <Route path="/faculty/settings" element={<Protected roles={['faculty', 'admin']}><Settings /></Protected>} />
 
       {/* Student */}
@@ -94,6 +114,9 @@ export default function App() {
       <Route path="/student/lectures" element={<Protected roles={['student']}><StudentGate><LectureHistory /></StudentGate></Protected>} />
       <Route path="/student/hours" element={<Protected roles={['student']}><StudentGate><HoursStatement /></StudentGate></Protected>} />
       <Route path="/student/fees" element={<Protected roles={['student']}><StudentGate><StudentFees /></StudentGate></Protected>} />
+      {/* Check-in stays outside the lock, like Profile: a student who owes fees
+          still has to be able to record that they attended. */}
+      <Route path="/student/checkin" element={<Protected roles={['student']}><CheckIn /></Protected>} />
       <Route path="/student/profile" element={<Protected roles={['student']}><StudentProfile /></Protected>} />
       <Route path="/student/settings" element={<Protected roles={['student']}><Settings /></Protected>} />
 

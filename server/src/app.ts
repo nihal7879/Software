@@ -17,6 +17,7 @@ import settingsRoutes from './routes/settings';
 import emailRoutes from './routes/email';
 import followUpRoutes from './routes/followUps';
 import speechRoutes from './routes/speech';
+import checkinRoutes from './routes/checkin';
 
 const app = express();
 
@@ -54,6 +55,7 @@ app.use('/api/settings', settingsRoutes);
 app.use('/api/email', emailRoutes);
 app.use('/api/follow-ups', followUpRoutes);
 app.use('/api/speech', speechRoutes);
+app.use('/api/checkin', checkinRoutes);
 
 app.use(notFound);
 app.use(errorHandler);

@@ -2,7 +2,7 @@ import { ReactNode, useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, Users, Clock, Wallet, GraduationCap, BarChart3,
-  BookOpen, CalendarDays, User, LogOut, Moon, Sun, ChevronLeft, Menu, Settings, Lock,
+  BookOpen, CalendarDays, User, LogOut, Moon, Sun, ChevronLeft, Menu, Settings, Lock, QrCode,
 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '../auth/AuthContext';
@@ -24,6 +24,7 @@ const NAV: Record<string, Item[]> = {
     { to: '/admin/hours', label: 'Student Hours', icon: Clock },
     { to: '/admin/finance', label: 'Finance', icon: Wallet },
     { to: '/admin/teachers', label: 'Teachers', icon: GraduationCap },
+    { to: '/admin/attendance', label: 'Attendance', icon: QrCode },
     { to: '/admin/settings', label: 'Settings', icon: Settings },
   ],
   superadmin: [
@@ -33,16 +34,20 @@ const NAV: Record<string, Item[]> = {
     { to: '/admin/finance', label: 'Finance', icon: Wallet },
     { to: '/admin/teachers', label: 'Teachers', icon: GraduationCap },
     { to: '/admin/pivots', label: 'Pivots', icon: BarChart3 },
+    { to: '/admin/attendance', label: 'Attendance', icon: QrCode },
     { to: '/admin/settings', label: 'Settings', icon: Settings },
   ],
   faculty: [
     { to: '/faculty', label: 'Dashboard', icon: LayoutDashboard },
     { to: '/faculty/students', label: 'My Students', icon: Users },
     { to: '/faculty/lecture', label: 'Lecture Entry', icon: BookOpen },
+    // Scans from the desk QR, waiting to be confirmed into lectures.
+    { to: '/faculty/attendance', label: 'Attendance', icon: QrCode },
     { to: '/faculty/settings', label: 'Settings', icon: Settings },
   ],
   student: [
     { to: '/student', label: 'Dashboard', icon: LayoutDashboard },
+    { to: '/student/checkin', label: 'Check in', icon: QrCode },
     // Lecture calendar + hours summary now live on the dashboard.
     // Change-password + personal info now live under Profile (Settings removed).
     { to: '/student/profile', label: 'Profile', icon: User },

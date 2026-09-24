@@ -92,7 +92,7 @@ router.get(
 
 // One lecture and its attendees, written on an open transaction. Shared by the
 // single create below and the batch save the entry grid uses.
-async function insertLecture(conn: any, b: any, teacherId: number | null, userId: number) {
+export async function insertLecture(conn: any, b: any, teacherId: number | null, userId: number) {
   let totalHours = b.total_hours;
   if (totalHours == null && b.time_in && b.time_out) {
     totalHours = timeToDecimalHours(b.time_in, b.time_out);

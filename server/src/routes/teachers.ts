@@ -8,6 +8,7 @@ import { audit } from '../utils/audit';
 import { usernameProblem, passwordProblem } from '../utils/credentials';
 import { clientIp, deviceInfo, getReqCtx } from '../utils/reqContext';
 import { CREDITED_EXPR, CONSUMED_EXPR, PENDING_EXPR, LAST_LECTURE_EXPR, deriveHours } from '../utils/hoursSummary';
+import { qrCodeFor } from '../utils/qrCode';
 
 const router = Router();
 router.use(requireAuth);
@@ -77,6 +78,44 @@ router.patch(
 // My assigned students (only mine). ?for=lecture narrows it to the students a
 // lecture can be logged for — Active ones; the teacher's dashboard and student
 // list still show everyone assigned, including students who have left.
+// The code for the teacher's own desk. Made the first time it is asked for, and
+// the same one from then on — it is printed and stuck up, so it cannot change.
+router.get(
+  '/me/qr',
+  requireRole('faculty'),
+  wrap(async (req, res) => {
+    const teacherId = await myTeacherId(req);
+    if (!teacherId) return res.status(403).json({ error: 'No teacher record linked to this account' });
+    const me = await queryOne<any>('SELECT id, name FROM teachers WHERE id = ?', [teacherId]);
+    res.json({ teacher_id: teacherId, name: me?.name || '', code: await qrCodeFor(teacherId) });
+  })
+);
+
+// Every teacher's code at once, for printing the sheet (admin / super admin).
+router.get(
+  '/qr-codes',
+  requireRole('admin'),
+  wrap(async (_req, res) => {
+    const teachers = await query<any>(
+      "SELECT id, name FROM teachers WHERE is_deleted = FALSE AND is_active = TRUE ORDER BY name"
+    );
+    const data = [];
+    for (const t of teachers) data.push({ teacher_id: t.id, name: t.name, code: await qrCodeFor(t.id) });
+    res.json({ data });
+  })
+);
+
+// One teacher's code (admin / super admin), for reprinting a single desk card.
+router.get(
+  '/:teacherId/qr',
+  requireRole('admin'),
+  wrap(async (req, res) => {
+    const t = await queryOne<any>('SELECT id, name FROM teachers WHERE id = ? AND is_deleted = FALSE', [req.params.teacherId]);
+    if (!t) return res.status(404).json({ error: 'Teacher not found' });
+    res.json({ teacher_id: t.id, name: t.name, code: await qrCodeFor(t.id) });
+  })
+);
+
 router.get(
   '/me/students',
   requireRole('faculty', 'admin'),
