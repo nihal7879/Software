@@ -57,7 +57,7 @@ export function TimePicker({ value, onChange, placeholder = 'Select time' }: { v
     <div className="relative">
       <button ref={btnRef} type="button" className="input flex items-center gap-2 w-full text-left" onClick={() => setOpen((o) => !o)}>
         <Clock size={15} className="muted shrink-0" />
-        <span className={has ? '' : 'muted'}>{label}</span>
+        <span className={`whitespace-nowrap ${has ? '' : 'muted'}`}>{label}</span>
       </button>
 
       {open && (

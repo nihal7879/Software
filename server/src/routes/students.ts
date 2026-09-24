@@ -8,6 +8,7 @@ import { audit } from '../utils/audit';
 import { usernameProblem, passwordProblem } from '../utils/credentials';
 import { clientIp, deviceInfo, getReqCtx } from '../utils/reqContext';
 import { claimFormNo, formNoOrder } from '../utils/formNo';
+import { today } from '../utils/dates';
 
 const router = Router();
 router.use(requireAuth);
@@ -167,7 +168,7 @@ router.post(
       [
         b.date_of_joining || null, b.status, b.student_type,
         // A trial's clock starts on the joining date, or today if none given.
-        b.student_type === 'Trial' ? (b.date_of_joining || new Date().toISOString().slice(0, 10)) : null,
+        b.student_type === 'Trial' ? (b.date_of_joining || today()) : null,
         b.first_name || null,
         b.middle_name || null, b.last_name || null, fullName(b), b.year_grade || null,
         b.school_name || null, b.exam_board || null, b.father_name || null,

@@ -156,7 +156,10 @@ const INBOX_COLUMNS = `
   c.subject_id, c.topic, c.subtopic, c.remark, c.venue, c.meeting_link,
   c.student_id, s.full_name AS student_name, s.form_no,
   c.teacher_id, t.name AS teacher_name, sub.name AS subject_name,
-  c.lecture_id, c.confirmed_at, c.scanned_ip, c.scanned_gps`;
+  c.lecture_id, c.confirmed_at, c.scanned_ip, c.scanned_gps,
+  -- No trace of a scan means the teacher put this student in by hand, because
+  -- they came without a phone. Worth showing: it is attendance nobody scanned.
+  (c.scanned_ip IS NULL AND c.scanned_device IS NULL) AS added_by_hand`;
 
 router.get(
   '/inbox',
@@ -187,6 +190,67 @@ router.get(
       params
     );
     res.json({ data: rows });
+  })
+);
+
+/**
+ * A student who was in the class but never scanned — no phone, a flat battery,
+ * a camera that would not open. The teacher puts them in by hand and the row
+ * joins the others in the inbox, to be filled in and confirmed the same way.
+ * Nothing is stamped as scanned, so the record stays honest about where it
+ * came from.
+ */
+const manualSchema = z.object({
+  student_ids: z.array(z.number().int()).min(1).max(60),
+  session_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  in_time: z.string().regex(/^\d{2}:\d{2}$/),
+  out_time: z.string().regex(/^\d{2}:\d{2}$/),
+  teacher_id: z.number().int().optional(),
+});
+
+router.post(
+  '/manual',
+  requireRole('faculty', 'admin'),
+  wrap(async (req, res) => {
+    const b = manualSchema.parse(req.body);
+    const teacherId = req.user!.role === 'faculty' ? await inboxTeacherId(req) : b.teacher_id ?? null;
+    if (!teacherId) return res.status(400).json({ error: 'Which teacher was this class with?' });
+
+    const inAt = `${b.session_date} ${b.in_time}:00`;
+    const outAt = `${b.session_date} ${b.out_time}:00`;
+    const mins = (t: string) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5));
+    const hours = Math.round(((mins(b.out_time) - mins(b.in_time)) / 60) * 100) / 100;
+    if (!(hours > 0)) return res.status(400).json({ error: 'The end time must be after the start time.' });
+
+    const added: number[] = [];
+    const skipped: { student_id: number; reason: string }[] = [];
+    for (const studentId of b.student_ids) {
+      const student = await queryOne<any>(
+        "SELECT id, full_name FROM students WHERE id = ? AND is_deleted = FALSE AND status = 'Active'",
+        [studentId]
+      );
+      if (!student) { skipped.push({ student_id: studentId, reason: 'Not an active student' }); continue; }
+
+      // They may have scanned after all, or been added twice — one row per
+      // student per class, so nobody is charged the same hour twice.
+      const already = await queryOne<any>(
+        `SELECT id FROM lecture_checkins
+          WHERE student_id = ? AND teacher_id = ? AND session_date = ?
+            AND status = 'Pending' AND is_deleted = FALSE LIMIT 1`,
+        [studentId, teacherId, b.session_date]
+      );
+      if (already) { skipped.push({ student_id: studentId, reason: `${student.full_name} is already on this day` }); continue; }
+
+      const r: any = await query(
+        `INSERT INTO lecture_checkins (teacher_id, student_id, session_date, in_at, out_at, hours)
+         VALUES (?,?,?,?,?,?)`,
+        [teacherId, studentId, b.session_date, inAt, outAt, hours]
+      );
+      await audit(req.user!.userId, 'ADD_CHECKIN', 'student', String(studentId), null,
+        { teacher_id: teacherId, session_date: b.session_date, hours, by_hand: true });
+      added.push(r.insertId);
+    }
+    res.status(added.length ? 201 : 400).json({ added: added.length, skipped, hours });
   })
 );
 

@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Check, Printer, Trash2 } from 'lucide-react';
-import { api } from '../api/client';
-import { Section, Spinner } from './ui';
+import { Check, Printer, X } from 'lucide-react';
+import { api, fmtDate, hrs, todayIso } from '../api/client';
+import { useMasters } from '../api/masters';
+import { Section, Spinner, Table } from './ui';
 import { Select } from './Select';
 import { TimePicker } from './TimePicker';
 import { CalendarPicker } from './CalendarPicker';
@@ -14,12 +15,19 @@ import { printQrCards, scanUrl } from '../lib/qr';
 /**
  * Scanned check-ins waiting to be turned into lectures.
  *
- * One row per student, the way an imported payment waits in Finance. Nothing
- * here has touched anybody's hours yet: the teacher fills in the subject and
- * topic, on one row or on several of the same day at once, and confirms. Each
- * confirmed row becomes its own lecture charging that student their own time in
- * to time out, so a student who sat from 4:15 to 5:20 is charged 1.08 hours
- * whatever the rest of the room did.
+ * Laid out like the lecture sheet, because it is the same work: one line across
+ * per student, under the same headings, in the same order. What the scan already
+ * knows — who, and the times — sits on the first line; what the teacher adds sits
+ * on the second, exactly where Topic, Subtopic, Remark and Venue sit when a
+ * lecture is typed in by hand.
+ *
+ * One row per student, never a batch. Nothing here has touched anybody's hours:
+ * confirming is what writes the lecture, and each row charges that student their
+ * own time in to time out — 4:15 to 5:20 is 1.08 hours for them, whatever the
+ * rest of the room did.
+ *
+ * A student who came without a phone never scanned, so the teacher puts them in
+ * by hand on the top line and their row joins the others.
  */
 
 type Row = {
@@ -41,116 +49,160 @@ type Row = {
   teacher_id: number;
   teacher_name: string;
   subject_name: string | null;
+  added_by_hand: number;
 };
+
+type Student = { id: number; full_name: string; form_no?: string | number };
 
 type Edit = {
   subject_id: string;
   topic: string;
   subtopic: string;
-  venue: string;
   remark: string;
-  in_time: string;  // HH:MM:SS, only sent when the teacher changes it
+  venue: string;
+  meeting_link: string;
+  in_time: string;
   out_time: string;
 };
 
-/** A server timestamp to the HH:MM:SS a TimePicker wants. */
-function timeOf(v: any) {
-  if (!v) return '';
-  const s = String(v);
-  return s.includes('T') ? s.slice(11, 19) : s.slice(11, 19);
-}
+const pad = (n: number) => String(n).padStart(2, '0');
 
-function clock(v: any) {
-  const t = timeOf(v);
-  if (!t) return '--';
-  const [h, m] = t.split(':').map(Number);
-  if (Number.isNaN(h)) return '--';
-  const ampm = h >= 12 ? 'PM' : 'AM';
-  return `${h % 12 === 0 ? 12 : h % 12}:${String(m).padStart(2, '0')} ${ampm}`;
-}
+/** A server timestamp ('2026-09-24 16:15:00') to the HH:MM:SS a TimePicker wants. */
+const timeOf = (v: any) => (v ? String(v).slice(11, 19) : '');
 
-function dayName(d: string) {
-  const date = new Date(`${String(d).slice(0, 10)}T00:00:00`);
-  if (Number.isNaN(date.getTime())) return String(d).slice(0, 10);
-  return date.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
-}
+/** '16:15:00' to '4:15 PM'. */
+const clock = (t?: string | null) => {
+  const [h, m] = String(t || '').split(':').map(Number);
+  if (!Number.isFinite(h)) return '—';
+  return `${h % 12 || 12}:${pad(m || 0)} ${h >= 12 ? 'PM' : 'AM'}`;
+};
 
-/** Hours between two HH:MM:SS times, 0 when they do not make sense. */
-function hoursBetween(from: string, to: string) {
-  if (!from || !to) return 0;
-  const [h1, m1] = from.split(':').map(Number);
-  const [h2, m2] = to.split(':').map(Number);
-  if ([h1, m1, h2, m2].some(Number.isNaN)) return 0;
-  const mins = h2 * 60 + m2 - (h1 * 60 + m1);
-  return mins > 0 ? Math.round((mins / 60) * 100) / 100 : 0;
-}
-
-function seed(r: Row): Edit {
-  return {
-    subject_id: r.subject_id ? String(r.subject_id) : '',
-    topic: r.topic || '',
-    subtopic: r.subtopic || '',
-    venue: r.venue || '',
-    remark: r.remark || '',
-    in_time: timeOf(r.in_at),
-    out_time: timeOf(r.out_at),
+const hoursBetween = (from: string, to: string) => {
+  const mins = (t: string) => {
+    const [h, m] = String(t).split(':').map(Number);
+    return Number.isFinite(h) ? h * 60 + (m || 0) : NaN;
   };
-}
+  const a = mins(from), b = mins(to);
+  if (!Number.isFinite(a) || !Number.isFinite(b) || b <= a) return 0;
+  return Math.round(((b - a) / 60) * 100) / 100;
+};
+
+const endOf = (start: string, hours: number) => {
+  const [h, m] = String(start).split(':').map(Number);
+  if (!Number.isFinite(h)) return '';
+  const mins = h * 60 + (m || 0) + hours * 60;
+  return `${pad(Math.floor(mins / 60) % 24)}:${pad(mins % 60)}:00`;
+};
+
+const seed = (r: Row): Edit => ({
+  subject_id: r.subject_id ? String(r.subject_id) : '',
+  topic: r.topic || '',
+  subtopic: r.subtopic || '',
+  remark: r.remark || '',
+  // JLT unless the row says otherwise — nearly every class is there, the same
+  // default the lecture sheet starts with.
+  venue: r.venue || 'JLT',
+  meeting_link: r.meeting_link || '',
+  in_time: timeOf(r.in_at),
+  out_time: timeOf(r.out_at),
+});
+
+// The same two lines as the lecture sheet: the class on top, what was taught
+// underneath. The two lines want different widths, but they belong to the same
+// student and have to stay in one table to sit together — so the table is laid
+// out on a grid of twenty narrow columns and each field takes the span it needs.
+// Both lines add up to twenty, so every student lines up down the page.
+const GRID = Array.from({ length: 20 }, () => '5%');
+const ROW_ONE = [4, 4, 3, 3, 6];   // Student · Subject · In · Out · hours and buttons
+const ROW_TWO = [4, 4, 4, 3, 5];   // Topic · Subtopic · Remark · Venue · Meet link
+const ADD_ROW = [4, 6, 3, 3, 4];   // Date · Students · In · Out · Add
+
+/** The second line carries on from the first, so no rule between them. */
+const JOINED = { borderTop: 'none' } as const;
 
 export function AttendanceInbox({
   admin = false,
   teacherId,
   teacherName,
+  specialization,
 }: {
   admin?: boolean;
   teacherId?: number;
   teacherName?: string;
+  specialization?: string | null;
 }) {
   const qc = useQueryClient();
   const forAdmin = admin;
-  // An admin looking at every teacher at once has no single code to print.
-  const showQrCard = !forAdmin || teacherId != null;
+  // An admin looking at every teacher at once has no single code to print, and
+  // nobody to add a missing student to.
+  const oneTeacher = !forAdmin || teacherId != null;
 
+  const masters = useMasters();
   const [status, setStatus] = useState<'Pending' | 'Confirmed'>('Pending');
-  const [date, setDate] = useState('');
+  const [dateFilter, setDateFilter] = useState('');
   const [edits, setEdits] = useState<Record<number, Edit>>({});
   const [picked, setPicked] = useState<Set<number>>(new Set());
-  const [bulk, setBulk] = useState({ subject_id: '', topic: '', subtopic: '', venue: '' });
+  const [bulk, setBulk] = useState({ subject_id: '', topic: '', subtopic: '', venue: 'JLT', meeting_link: '' });
   const [discarding, setDiscarding] = useState<Row | null>(null);
   const [showQr, setShowQr] = useState(false);
 
+  // ---- the "did not scan" line --------------------------------------------
+  const [addDate, setAddDate] = useState(todayIso());
+  const [addIn, setAddIn] = useState('');
+  const [addOut, setAddOut] = useState('');
+  const [addStudents, setAddStudents] = useState<number[]>([]);
+  const [search, setSearch] = useState('');
+  const [listOpen, setListOpen] = useState(false);
+  const [addError, setAddError] = useState('');
+
+  const me = useQuery({
+    queryKey: ['teacher-me'],
+    queryFn: () => api.get('/teachers/me').then((r) => r.data),
+    enabled: !forAdmin,
+  });
+  const roster = useQuery({
+    queryKey: forAdmin ? ['teacher-students', teacherId] : ['me-students', 'lecture'],
+    enabled: oneTeacher,
+    queryFn: () =>
+      (forAdmin
+        ? api.get(`/teachers/${teacherId}/students`)
+        : api.get('/teachers/me/students', { params: { for: 'lecture' } })
+      ).then((r) => r.data.data as Student[]),
+  });
   const subjects = useQuery({
     queryKey: ['subjects'],
-    queryFn: () => api.get('/teachers/subjects').then((r) => r.data.data as any[]),
+    queryFn: () => api.get('/teachers/subjects').then((r) => r.data.data),
   });
-
-  // The teacher's own printed code, so it can be reprinted without hunting for it.
   const myQr = useQuery({
     queryKey: ['qr-code', teacherId ?? 'me'],
-    enabled: showQrCard,
-    queryFn: () =>
-      api.get(forAdmin ? `/teachers/${teacherId}/qr` : '/teachers/me/qr').then((r) => r.data),
+    enabled: oneTeacher,
+    queryFn: () => api.get(forAdmin ? `/teachers/${teacherId}/qr` : '/teachers/me/qr').then((r) => r.data),
   });
-
   const inbox = useQuery({
-    queryKey: ['checkin-inbox', teacherId ?? 'me', status, date],
+    queryKey: ['checkin-inbox', teacherId ?? 'me', status, dateFilter],
     queryFn: () =>
       api
-        .get('/checkin/inbox', { params: { status, teacherId, date: date || undefined } })
+        .get('/checkin/inbox', { params: { status, teacherId, date: dateFilter || undefined } })
         .then((r) => r.data.data as Row[]),
   });
 
-  const rows = inbox.data || [];
+  // Only what this teacher teaches, the same filter the lecture sheet applies.
+  const spec = String((forAdmin ? specialization : me.data?.specialization) || '')
+    .split(',').map((x) => x.trim().toLowerCase()).filter(Boolean);
+  const subjectList = (subjects.data || []).filter(
+    (s: any) => spec.length === 0 || spec.includes(String(s.name).toLowerCase())
+  );
   const subjectOptions = useMemo(
-    () => (subjects.data || []).map((s: any) => ({ value: String(s.id), label: s.name })),
-    [subjects.data]
+    () => subjectList.map((s: any) => ({ value: String(s.id), label: s.name })),
+    [subjects.data, me.data?.specialization, specialization]
   );
 
+  const rows = inbox.data || [];
   const editOf = (r: Row) => edits[r.id] || seed(r);
   const setEdit = (r: Row, patch: Partial<Edit>) =>
     setEdits((prev) => ({ ...prev, [r.id]: { ...(prev[r.id] || seed(r)), ...patch } }));
 
-  /** What a row sends to the server, leaving out anything untouched. */
+  /** What a row sends, leaving out any time the teacher did not touch. */
   function payloadOf(r: Row) {
     const e = editOf(r);
     const base = seed(r);
@@ -158,8 +210,9 @@ export function AttendanceInbox({
       subject_id: e.subject_id ? Number(e.subject_id) : null,
       topic: e.topic || null,
       subtopic: e.subtopic || null,
-      venue: e.venue || null,
       remark: e.remark || null,
+      venue: e.venue || null,
+      meeting_link: e.meeting_link || null,
     };
     if (e.in_time && e.in_time !== base.in_time) body.in_time = e.in_time.slice(0, 5);
     if (e.out_time && e.out_time !== base.out_time) body.out_time = e.out_time.slice(0, 5);
@@ -170,15 +223,33 @@ export function AttendanceInbox({
     qc.invalidateQueries({ queryKey: ['checkin-inbox'] });
     setPicked(new Set());
   };
-  const refreshLectures = () => {
+  const refreshLectures = () =>
     ['ledger', 'ledger-all', 'lectures', 'workload', 'teacher-lectures', 'hours'].forEach((k) =>
       qc.invalidateQueries({ queryKey: [k] })
     );
-  };
+
+  const addManual = useMutation({
+    mutationFn: () =>
+      api.post('/checkin/manual', {
+        student_ids: addStudents,
+        session_date: addDate,
+        in_time: addIn.slice(0, 5),
+        out_time: addOut.slice(0, 5),
+        ...(forAdmin ? { teacher_id: teacherId } : {}),
+      }),
+    onSuccess: (r: any) => {
+      const { added, skipped } = r.data;
+      toast(skipped?.length ? `${added} added. ${skipped[0].reason}.` : `${added} student(s) added.`,
+        skipped?.length ? 'info' : 'success');
+      setAddStudents([]); setSearch(''); setAddError('');
+      qc.invalidateQueries({ queryKey: ['checkin-inbox'] });
+    },
+    onError: (e: any) => setAddError(e?.response?.data?.error || 'Could not add them.'),
+  });
 
   const save = useMutation({
     mutationFn: (r: Row) => api.patch(`/checkin/${r.id}`, payloadOf(r)),
-    onSuccess: () => { toast('Saved.'); refresh(); },
+    onSuccess: () => { toast('Saved.'); qc.invalidateQueries({ queryKey: ['checkin-inbox'] }); },
     onError: (e: any) => toast(e?.response?.data?.error || 'Could not save that row.', 'error'),
   });
 
@@ -199,6 +270,7 @@ export function AttendanceInbox({
         ...(bulk.topic ? { topic: bulk.topic } : {}),
         ...(bulk.subtopic ? { subtopic: bulk.subtopic } : {}),
         ...(bulk.venue ? { venue: bulk.venue } : {}),
+        ...(bulk.meeting_link ? { meeting_link: bulk.meeting_link } : {}),
       }),
     onSuccess: (r: any) => {
       toast(`Applied to ${r.data.applied} row(s).`);
@@ -218,8 +290,7 @@ export function AttendanceInbox({
           : `${confirmed} lecture(s) created.`,
         skipped?.length ? 'info' : 'success'
       );
-      refresh();
-      refreshLectures();
+      refresh(); refreshLectures();
     },
     onError: (e: any) => toast(e?.response?.data?.error || 'Could not confirm those.', 'error'),
   });
@@ -230,7 +301,7 @@ export function AttendanceInbox({
     onError: (e: any) => toast(e?.response?.data?.error || 'Could not discard that.', 'error'),
   });
 
-  // Rows by day, newest day first, so a day can be handled together.
+  // Rows by day, newest first — a day is worked through together.
   const days = useMemo(() => {
     const by = new Map<string, Row[]>();
     for (const r of rows) {
@@ -251,71 +322,151 @@ export function AttendanceInbox({
   const pickedIds = [...picked];
   const busy = save.isPending || confirmRow.isPending || applyBulk.isPending || confirmMany.isPending;
 
-  const label = (text: string, node: any) => (
-    <div>
-      <div className="text-[11px] font-semibold uppercase tracking-wide muted mb-1">{text}</div>
-      {node}
-    </div>
-  );
+  const term = search.trim().toLowerCase();
+  const matches = (roster.data || [])
+    .filter((s) => !addStudents.includes(s.id))
+    .filter((s) => !term || s.full_name?.toLowerCase().includes(term) || String(s.form_no).includes(term));
+  const byId = useMemo(() => new Map((roster.data || []).map((s) => [s.id, s])), [roster.data]);
+  const addHours = hoursBetween(addIn, addOut);
+  const addProblem = !addDate ? 'Pick a date'
+    : addStudents.length === 0 ? 'Add at least one student'
+    : !addIn || !addOut ? 'Enter the start and end time'
+    : addHours <= 0 ? 'End time must be after the start'
+    : '';
+
+  // ---- the cells of the "did not scan" line, shared by both layouts --------
+  const addCell = {
+    date: <CalendarPicker className="w-full" value={addDate} onChange={setAddDate} placeholder="Date" />,
+    students: (
+      <div className="relative">
+        <div className="flex flex-wrap items-center gap-1 rounded-lg border px-2 py-1" style={{ borderColor: 'var(--color-border)' }}>
+          {addStudents.map((id) => (
+            <span key={id} className="inline-flex items-center gap-1 text-xs rounded px-1.5 py-0.5" style={{ background: 'var(--color-card-alt)' }}>
+              {byId.get(id)?.full_name || 'Student'}
+              <button type="button" className="muted hover:text-red-500" aria-label="Remove"
+                onClick={() => setAddStudents(addStudents.filter((x) => x !== id))}>
+                <X size={11} />
+              </button>
+            </span>
+          ))}
+          <input
+            className="bg-transparent outline-none text-sm flex-1 min-w-[6rem] py-0.5"
+            placeholder={addStudents.length ? 'Add…' : 'Type a name…'}
+            value={search}
+            onChange={(e) => { setSearch(e.target.value); setListOpen(true); }}
+            onFocus={() => setListOpen(true)}
+            onBlur={() => setTimeout(() => setListOpen(false), 150)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && matches.length) { e.preventDefault(); setAddStudents([...addStudents, matches[0].id]); setSearch(''); setAddError(''); }
+              if (e.key === 'Backspace' && !search && addStudents.length) setAddStudents(addStudents.slice(0, -1));
+            }}
+          />
+        </div>
+        {listOpen && matches.length > 0 && (
+          <div className="absolute z-30 mt-1 w-72 card p-0 shadow-lg overflow-hidden">
+            <div className="text-[11px] muted px-3 py-1.5 border-b" style={{ borderColor: 'var(--color-border)' }}>
+              {matches.length} student{matches.length === 1 ? '' : 's'}{term ? ' match' : ''}
+            </div>
+            <div className="max-h-64 overflow-y-auto thin-scroll p-1" style={{ scrollSnapType: 'y proximity' }}>
+              {matches.map((s) => (
+                <button
+                  key={s.id}
+                  type="button"
+                  className="w-full text-left text-sm px-2 py-1.5 rounded hover:bg-black/5 dark:hover:bg-white/5"
+                  style={{ scrollSnapAlign: 'start' }}
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => { setAddStudents([...addStudents, s.id]); setSearch(''); setAddError(''); }}
+                >
+                  {s.full_name} <span className="muted text-xs">{s.form_no}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    ),
+    timeIn: <TimePicker value={addIn} onChange={(v) => { setAddIn(v); if (!addOut) setAddOut(endOf(v, 1)); }} placeholder="In" />,
+    timeOut: <TimePicker value={addOut} onChange={setAddOut} placeholder="Out" />,
+    action: (
+      <div className="flex items-center gap-2">
+        <span className="text-sm tabular-nums muted whitespace-nowrap">{addHours ? hrs(addHours) : ''}</span>
+        <button
+          className="btn-primary !py-1.5 !px-5 text-sm ml-auto whitespace-nowrap"
+          disabled={addManual.isPending}
+          onClick={() => (addProblem ? setAddError(addProblem) : addManual.mutate())}
+        >
+          {addManual.isPending ? 'Adding…' : 'Add'}
+        </button>
+      </div>
+    ),
+  };
 
   return (
     <div className="space-y-4">
-      {/* The printed code. Folded away by default: it is set up once and then
-          only reprinted when a card goes missing. */}
-      {showQrCard && (
-      <Section
-        title={forAdmin ? `QR code for ${teacherName || 'this teacher'}` : 'My QR code'}
-        action={
-          <>
-            <button className="btn-outline !py-1 !px-2.5 text-xs" onClick={() => setShowQr((v) => !v)}>
-              {showQr ? 'Hide' : 'Show'}
-            </button>
-            <button
-              className="btn-outline !py-1 !px-2.5 text-xs"
-              disabled={!myQr.data?.code}
-              onClick={() => { printQrCards([{ name: myQr.data.name, code: myQr.data.code }]); }}
-            >
-              <Printer className="w-3.5 h-3.5" /> Print
-            </button>
-          </>
-        }
-      >
-        {showQr ? (
-          myQr.data?.code ? (
-            <div className="flex flex-wrap items-center gap-5">
-              <QrCode text={scanUrl(myQr.data.code)} size={200} />
-              <div className="text-sm">
-                <div className="font-display font-bold text-lg">{myQr.data.name}</div>
-                <div className="font-mono tracking-widest text-base mt-1">{myQr.data.code}</div>
-                <p className="muted mt-2 max-w-sm">
-                  Print this and keep it on the desk. Students scan it when the class
-                  starts and again when it ends. The code never changes.
-                </p>
-              </div>
-            </div>
+      {/* Someone who came without a phone never scanned. Same line, same
+          headings as a lecture — only the subject and topic wait until the row
+          is in the list with the rest. */}
+      {oneTeacher && status === 'Pending' && (
+        <Section title="Student who did not scan">
+          {roster.isLoading ? <Spinner /> : (roster.data || []).length === 0 ? (
+            <p className="muted text-sm">
+              {forAdmin
+                ? `No active students assigned to ${teacherName || 'this teacher'} yet.`
+                : 'No active students assigned to you yet. Your admin assigns students to you.'}
+            </p>
           ) : (
-            <Spinner />
-          )
-        ) : (
-          <p className="muted text-sm">
-            The fixed code for the desk. Students scan it at the start and end of the class.
-          </p>
-        )}
-      </Section>
+            <>
+              <div className="hidden lg:block">
+                <table className="w-full table-fixed border-collapse">
+                  <colgroup>{GRID.map((w, i) => <col key={i} style={{ width: w }} />)}</colgroup>
+                  <thead>
+                    <tr>
+                      {['Date', 'Students', 'Time In', 'Time Out', ''].map((h, i) => (
+                        <th key={i} className="table-th" colSpan={ADD_ROW[i]}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      {[addCell.date, addCell.students, addCell.timeIn, addCell.timeOut, addCell.action].map((node, i) => (
+                        <td key={i} className="table-td align-top" colSpan={ADD_ROW[i]}>{node}</td>
+                      ))}
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="lg:hidden grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {([['Date', addCell.date], ['Students', addCell.students],
+                   ['Time In', addCell.timeIn], ['Time Out', addCell.timeOut]] as const).map(([l, node]) => (
+                  <div key={l}>
+                    <label className="text-xs font-medium muted block mb-1">{l}</label>
+                    {node}
+                  </div>
+                ))}
+                <div className="sm:col-span-2">{addCell.action}</div>
+              </div>
+
+              <p className="muted text-xs mt-2">
+                Their row joins the list below, where the subject and topic are filled in
+                the same as a scanned one.
+              </p>
+              {addError && <div className="text-sm mt-2 text-red-500">{addError}</div>}
+            </>
+          )}
+        </Section>
       )}
 
       <Section
         title={status === 'Pending' ? 'Scanned check-ins' : 'Confirmed check-ins'}
         action={
           <>
-            <CalendarPicker value={date} onChange={setDate} placeholder="Any date" align="right" />
-            {date && (
-              <button className="btn-outline !py-1 !px-2.5 text-xs" onClick={() => setDate('')}>
-                Clear
-              </button>
+            <CalendarPicker value={dateFilter} onChange={setDateFilter} placeholder="Any date" align="right" />
+            {dateFilter && (
+              <button className="btn-ghost !py-1 !px-2.5 text-xs" onClick={() => setDateFilter('')}>Clear</button>
             )}
             <button
-              className="btn-outline !py-1 !px-2.5 text-xs"
+              className="btn-ghost !py-1 !px-2.5 text-xs"
               onClick={() => { setStatus(status === 'Pending' ? 'Confirmed' : 'Pending'); setPicked(new Set()); }}
             >
               {status === 'Pending' ? 'Show confirmed' : 'Show pending'}
@@ -323,54 +474,44 @@ export function AttendanceInbox({
           </>
         }
       >
-        <p className="muted text-sm mb-3">
-          {status === 'Pending'
-            ? 'Each scan is one student. Fill in the subject and topic, then confirm — that is when it becomes a lecture and counts against their hours.'
-            : 'Already turned into lectures.'}
-        </p>
+        {status === 'Pending' && (
+          <p className="muted text-sm mb-3">
+            Each line is one student. Fill in the subject and topic and press Confirm —
+            that is when it becomes a lecture and counts against their hours.
+          </p>
+        )}
 
-        {/* Several rows at once: the same lesson taught to several students on
-            the same day only needs typing once. */}
+        {/* Several at once: the same lesson to several students on the same day
+            only needs typing once. */}
         {status === 'Pending' && pickedIds.length > 0 && (
-          <div className="rounded-xl border p-3 mb-4 space-y-3" style={{ borderColor: 'var(--color-border)' }}>
-            <div className="text-sm font-semibold">{pickedIds.length} row(s) selected</div>
+          <div className="rounded-xl border p-3 mb-4" style={{ borderColor: 'var(--color-border)' }}>
+            <div className="text-sm font-semibold mb-2">{pickedIds.length} line(s) selected</div>
             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-2">
-              {label('Subject', (
-                <Select
-                  compact
-                  value={bulk.subject_id}
-                  onChange={(v) => setBulk({ ...bulk, subject_id: v })}
-                  options={subjectOptions}
-                  placeholder="Subject"
-                />
-              ))}
-              {label('Topic', (
-                <input className="input" value={bulk.topic} onChange={(e) => setBulk({ ...bulk, topic: e.target.value })} />
-              ))}
-              {label('Subtopic', (
-                <input className="input" value={bulk.subtopic} onChange={(e) => setBulk({ ...bulk, subtopic: e.target.value })} />
-              ))}
-              {label('Venue', (
-                <input className="input" value={bulk.venue} onChange={(e) => setBulk({ ...bulk, venue: e.target.value })} />
-              ))}
+              <Select compact value={bulk.subject_id} onChange={(v) => setBulk({ ...bulk, subject_id: v })}
+                options={subjectOptions} placeholder="Subject…" />
+              <input className="input !py-1.5" placeholder="Topic" value={bulk.topic}
+                onChange={(e) => setBulk({ ...bulk, topic: e.target.value })} />
+              <input className="input !py-1.5" placeholder="Subtopic" value={bulk.subtopic}
+                onChange={(e) => setBulk({ ...bulk, subtopic: e.target.value })} />
+              <Select compact allowCustom value={bulk.venue} onChange={(v) => setBulk({ ...bulk, venue: v })}
+                options={masters.venues.map((v) => ({ value: v, label: v }))} placeholder="Venue…" />
+              <input className="input !py-1.5" placeholder="Meet link" value={bulk.meeting_link}
+                onChange={(e) => setBulk({ ...bulk, meeting_link: e.target.value })} />
             </div>
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap items-center gap-2 mt-3">
+              <button className="btn-ghost !py-1 !px-2.5 text-xs" onClick={() => setPicked(new Set())}>
+                Clear selection
+              </button>
               <button
-                className="btn-outline !py-1 !px-2.5 text-xs"
-                disabled={busy || (!bulk.subject_id && !bulk.topic && !bulk.subtopic && !bulk.venue)}
+                className="btn-outline !py-1 !px-2.5 text-xs ml-auto"
+                disabled={busy || (!bulk.subject_id && !bulk.topic && !bulk.subtopic && !bulk.venue && !bulk.meeting_link)}
                 onClick={() => applyBulk.mutate(pickedIds)}
               >
                 Apply to {pickedIds.length}
               </button>
-              <button
-                className="btn-primary !py-1 !px-2.5 text-xs"
-                disabled={busy}
-                onClick={() => confirmMany.mutate(pickedIds)}
-              >
+              <button className="btn-primary !py-1 !px-2.5 text-xs" disabled={busy}
+                onClick={() => confirmMany.mutate(pickedIds)}>
                 <Check className="w-3.5 h-3.5" /> Confirm {pickedIds.length}
-              </button>
-              <button className="btn-outline !py-1 !px-2.5 text-xs ml-auto" onClick={() => setPicked(new Set())}>
-                Clear selection
               </button>
             </div>
           </div>
@@ -380,141 +521,196 @@ export function AttendanceInbox({
           <Spinner />
         ) : rows.length === 0 ? (
           <p className="muted text-sm">
-            {status === 'Pending' ? 'Nothing waiting. Scans show up here as students arrive.' : 'Nothing confirmed yet.'}
+            {status === 'Pending'
+              ? 'Nothing waiting — scans show up here as students arrive.'
+              : 'Nothing confirmed yet.'}
           </p>
+        ) : status === 'Confirmed' ? (
+          // Already lectures: the same columns as the logged-lecture list.
+          <Table head={['Date', 'Student', 'Time', { label: 'Hours', align: 'right' }, 'Subject / Topic']}>
+            {rows.map((r) => (
+              <tr key={r.id}>
+                <td className="table-td whitespace-nowrap">{fmtDate(String(r.session_date).slice(0, 10))}</td>
+                <td className="table-td">
+                  {r.student_name} {r.form_no != null && <span className="font-mono muted text-xs">{r.form_no}</span>}
+                </td>
+                <td className="table-td whitespace-nowrap">{clock(timeOf(r.in_at))} – {clock(timeOf(r.out_at))}</td>
+                <td className="table-td text-right tabular-nums whitespace-nowrap">{hrs(r.hours || 0)}</td>
+                <td className="table-td">
+                  <span className="font-semibold">{r.subject_name || '—'}</span>
+                  {(r.topic || r.remark) && (
+                    <span className="block text-xs muted break-words">
+                      {[r.topic, r.remark].filter(Boolean).join(' — ')}
+                    </span>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </Table>
         ) : (
           <div className="space-y-5">
             {days.map(([day, dayRows]) => {
               const ids = dayRows.map((r) => r.id);
               const allPicked = ids.every((id) => picked.has(id));
               return (
-                <div key={day} className="space-y-2">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <h4 className="font-semibold text-sm">{dayName(day)}</h4>
-                    <span className="muted text-xs">{dayRows.length} student(s)</span>
-                    {status === 'Pending' && (
-                      <button
-                        className="btn-outline !py-0.5 !px-2 text-[11px] ml-auto"
-                        onClick={() =>
-                          setPicked((prev) => {
-                            const next = new Set(prev);
-                            ids.forEach((id) => (allPicked ? next.delete(id) : next.add(id)));
-                            return next;
-                          })
-                        }
-                      >
-                        {allPicked ? 'Unselect day' : 'Select this day'}
-                      </button>
-                    )}
+                <div key={day}>
+                  <div className="flex flex-wrap items-center gap-2 mb-1">
+                    <h4 className="font-semibold text-sm">{fmtDate(day)}</h4>
+                    <span className="muted text-xs">{dayRows.length} student{dayRows.length === 1 ? '' : 's'}</span>
+                    <button
+                      className="btn-ghost !py-0.5 !px-2 text-[11px] ml-auto"
+                      onClick={() =>
+                        setPicked((prev) => {
+                          const next = new Set(prev);
+                          ids.forEach((id) => (allPicked ? next.delete(id) : next.add(id)));
+                          return next;
+                        })
+                      }
+                    >
+                      {allPicked ? 'Unselect this day' : 'Select this day'}
+                    </button>
                   </div>
 
-                  {dayRows.map((r) => {
-                    const e = editOf(r);
-                    const live = hoursBetween(e.in_time, e.out_time);
-                    const missingOut = !r.out_at;
-                    return (
-                      <div key={r.id} className="card p-3 space-y-3">
-                        {/* What the scan itself recorded: not editable except the
-                            times, which a missed scan leaves for the teacher. */}
-                        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-                          {status === 'Pending' && (
-                            <input
-                              type="checkbox"
-                              className="mt-1"
-                              checked={picked.has(r.id)}
-                              onChange={() => toggle(r.id)}
-                            />
-                          )}
-                          <span className="font-semibold">{r.student_name}</span>
-                          {r.form_no && <span className="muted text-xs">#{r.form_no}</span>}
-                          {forAdmin && teacherId == null && (
-                            <span className="text-xs muted">with {r.teacher_name}</span>
-                          )}
-                          <span className="text-xs muted">
-                            In {clock(r.in_at)} &middot; Out {r.out_at ? clock(r.out_at) : '--'}
-                          </span>
-                          <span className="tnum text-sm font-semibold ml-auto">
-                            {(live || Number(r.hours || 0)).toFixed(2)} h
-                          </span>
-                          {missingOut && (
-                            <span className="text-[11px] px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-600">
-                              no scan out
-                            </span>
-                          )}
-                        </div>
+                  {/* Wide: two lines per student, under the lecture headings. */}
+                  <div className="hidden lg:block">
+                    <table className="w-full table-fixed border-collapse">
+                      <colgroup>{GRID.map((w, i) => <col key={i} style={{ width: w }} />)}</colgroup>
+                      <thead>
+                        <tr>
+                          {['Student', 'Subject', 'Time In', 'Time Out', ''].map((h, i) => (
+                            <th key={i} className="table-th" colSpan={ROW_ONE[i]}>{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {dayRows.map((r) => {
+                          const e = editOf(r);
+                          const live = hoursBetween(e.in_time, e.out_time);
+                          return [
+                            <tr key={`${r.id}-a`}>
+                              <td className="table-td align-top" colSpan={ROW_ONE[0]}>
+                                <label className="flex items-start gap-2 cursor-pointer">
+                                  <input type="checkbox" className="mt-1" checked={picked.has(r.id)} onChange={() => toggle(r.id)} />
+                                  <span>
+                                    <span className="font-semibold">{r.student_name}</span>
+                                    {r.form_no != null && <span className="font-mono muted text-xs ml-1">{r.form_no}</span>}
+                                    {forAdmin && teacherId == null && (
+                                      <span className="block text-xs muted">with {r.teacher_name}</span>
+                                    )}
+                                    {!r.out_at && <span className="block text-xs text-amber-600">no scan out</span>}
+                                    {!!r.added_by_hand && <span className="block text-xs muted">added by hand</span>}
+                                  </span>
+                                </label>
+                              </td>
+                              <td className="table-td align-top" colSpan={ROW_ONE[1]}>
+                                <Select compact value={e.subject_id} onChange={(v) => setEdit(r, { subject_id: v })}
+                                  options={subjectOptions} placeholder="Subject…" />
+                              </td>
+                              <td className="table-td align-top" colSpan={ROW_ONE[2]}>
+                                <TimePicker value={e.in_time} onChange={(v) => setEdit(r, { in_time: v })} placeholder="In" />
+                              </td>
+                              <td className="table-td align-top" colSpan={ROW_ONE[3]}>
+                                <TimePicker value={e.out_time} onChange={(v) => setEdit(r, { out_time: v })} placeholder="Out" />
+                              </td>
+                              <td className="table-td align-top" colSpan={ROW_ONE[4]}>
+                                <div className="flex items-center gap-1.5 justify-end">
+                                  <span className="text-sm tabular-nums whitespace-nowrap mr-1">{hrs(live || Number(r.hours || 0))}</span>
+                                  <button className="btn-ghost !py-1 !px-2.5 text-xs" disabled={busy} onClick={() => save.mutate(r)}>
+                                    Save
+                                  </button>
+                                  <button className="btn-primary !py-1 !px-2.5 text-xs" disabled={busy || !live}
+                                    onClick={() => confirmRow.mutate(r)}>
+                                    Confirm
+                                  </button>
+                                  <button
+                                    className="!py-1 !px-2.5 text-xs rounded-lg border border-red-500/30 text-red-600 hover:bg-red-500/10 transition-colors"
+                                    disabled={busy}
+                                    onClick={() => setDiscarding(r)}
+                                  >
+                                    Discard
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>,
+                            <tr key={`${r.id}-b`}>
+                              <td className="table-td align-top pt-0" colSpan={ROW_TWO[0]} style={JOINED}>
+                                <input className="input !py-1.5 w-full" placeholder="Topic" value={e.topic}
+                                  onChange={(ev) => setEdit(r, { topic: ev.target.value })} />
+                              </td>
+                              <td className="table-td align-top pt-0" colSpan={ROW_TWO[1]} style={JOINED}>
+                                <input className="input !py-1.5 w-full" placeholder="Subtopic" value={e.subtopic}
+                                  onChange={(ev) => setEdit(r, { subtopic: ev.target.value })} />
+                              </td>
+                              <td className="table-td align-top pt-0" colSpan={ROW_TWO[2]} style={JOINED}>
+                                <input className="input !py-1.5 w-full" placeholder="Remark" value={e.remark}
+                                  onChange={(ev) => setEdit(r, { remark: ev.target.value })} />
+                              </td>
+                              <td className="table-td align-top pt-0" colSpan={ROW_TWO[3]} style={JOINED}>
+                                <Select compact allowCustom value={e.venue} onChange={(v) => setEdit(r, { venue: v })}
+                                  options={masters.venues.map((v) => ({ value: v, label: v }))} placeholder="Venue…" />
+                              </td>
+                              <td className="table-td align-top pt-0" colSpan={ROW_TWO[4]} style={JOINED}>
+                                <input className="input !py-1.5 w-full" placeholder="Meet link" value={e.meeting_link}
+                                  onChange={(ev) => setEdit(r, { meeting_link: ev.target.value })} />
+                              </td>
+                            </tr>,
+                          ];
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
 
-                        {status === 'Pending' ? (
-                          <>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-2">
-                              {label('Subject', (
-                                <Select
-                                  compact
-                                  value={e.subject_id}
-                                  onChange={(v) => setEdit(r, { subject_id: v })}
-                                  options={subjectOptions}
-                                  placeholder="Subject"
-                                />
-                              ))}
-                              {label('Topic', (
-                                <input className="input" value={e.topic} onChange={(ev) => setEdit(r, { topic: ev.target.value })} />
-                              ))}
-                              {label('Subtopic', (
-                                <input className="input" value={e.subtopic} onChange={(ev) => setEdit(r, { subtopic: ev.target.value })} />
-                              ))}
-                              {label('Venue', (
-                                <input className="input" value={e.venue} onChange={(ev) => setEdit(r, { venue: ev.target.value })} />
-                              ))}
-                            </div>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-2">
-                              {label('Time in', (
-                                <TimePicker value={e.in_time} onChange={(v) => setEdit(r, { in_time: v })} />
-                              ))}
-                              {label(missingOut ? 'Time out (they did not scan)' : 'Time out', (
-                                <TimePicker value={e.out_time} onChange={(v) => setEdit(r, { out_time: v })} />
-                              ))}
-                              <div className="sm:col-span-2">
-                                {label('Remark', (
-                                  <input className="input" value={e.remark} onChange={(ev) => setEdit(r, { remark: ev.target.value })} />
-                                ))}
-                              </div>
-                            </div>
-                            <div className="flex flex-wrap items-center gap-2">
-                              <span className="text-xs muted">
-                                Charges {r.student_name.split(' ')[0]} {(live || Number(r.hours || 0)).toFixed(2)} hours.
+                  {/* Narrower: the same fields stacked, nothing runs off the side. */}
+                  <div className="lg:hidden space-y-3">
+                    {dayRows.map((r) => {
+                      const e = editOf(r);
+                      const live = hoursBetween(e.in_time, e.out_time);
+                      return (
+                        <div key={r.id} className="card p-3">
+                          <label className="flex items-start gap-2 mb-2 cursor-pointer">
+                            <input type="checkbox" className="mt-1" checked={picked.has(r.id)} onChange={() => toggle(r.id)} />
+                            <span className="flex-1">
+                              <span className="font-semibold">{r.student_name}</span>
+                              {r.form_no != null && <span className="font-mono muted text-xs ml-1">{r.form_no}</span>}
+                              <span className="block text-xs muted">
+                                {clock(timeOf(r.in_at))} – {r.out_at ? clock(timeOf(r.out_at)) : 'no scan out'}
+                                {!!r.added_by_hand && ' · added by hand'}
                               </span>
-                              <button
-                                className="btn-outline !py-1 !px-2.5 text-xs ml-auto"
-                                disabled={busy}
-                                onClick={() => save.mutate(r)}
-                              >
-                                Save for later
-                              </button>
-                              <button
-                                className="btn-primary !py-1 !px-2.5 text-xs"
-                                disabled={busy || !live}
-                                onClick={() => confirmRow.mutate(r)}
-                              >
-                                <Check className="w-3.5 h-3.5" /> Confirm
-                              </button>
-                              <button
-                                className="!py-1 !px-2.5 text-xs rounded-lg border border-red-500/30 text-red-600 hover:bg-red-500/10"
-                                disabled={busy}
-                                onClick={() => setDiscarding(r)}
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
-                            </div>
-                          </>
-                        ) : (
-                          <div className="text-sm muted">
-                            {r.subject_name || 'No subject'}
-                            {r.topic ? ` - ${r.topic}` : ''}
-                            {r.subtopic ? ` / ${r.subtopic}` : ''}
+                            </span>
+                            <span className="text-sm tabular-nums">{hrs(live || Number(r.hours || 0))}</span>
+                          </label>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            {([
+                              ['Subject', <Select compact value={e.subject_id} onChange={(v) => setEdit(r, { subject_id: v })} options={subjectOptions} placeholder="Subject…" />],
+                              ['Time In', <TimePicker value={e.in_time} onChange={(v) => setEdit(r, { in_time: v })} placeholder="In" />],
+                              ['Time Out', <TimePicker value={e.out_time} onChange={(v) => setEdit(r, { out_time: v })} placeholder="Out" />],
+                              ['Topic', <input className="input !py-1.5 w-full" value={e.topic} onChange={(ev) => setEdit(r, { topic: ev.target.value })} />],
+                              ['Subtopic', <input className="input !py-1.5 w-full" value={e.subtopic} onChange={(ev) => setEdit(r, { subtopic: ev.target.value })} />],
+                              ['Remark', <input className="input !py-1.5 w-full" value={e.remark} onChange={(ev) => setEdit(r, { remark: ev.target.value })} />],
+                              ['Venue', <Select compact allowCustom value={e.venue} onChange={(v) => setEdit(r, { venue: v })} options={masters.venues.map((v) => ({ value: v, label: v }))} placeholder="Venue…" />],
+                              ['Meet link', <input className="input !py-1.5 w-full" value={e.meeting_link} onChange={(ev) => setEdit(r, { meeting_link: ev.target.value })} />],
+                            ] as const).map(([l, node], i) => (
+                              <div key={i}>
+                                <label className="text-xs font-medium muted block mb-1">{l}</label>
+                                {node}
+                              </div>
+                            ))}
                           </div>
-                        )}
-                      </div>
-                    );
-                  })}
+                          <div className="flex flex-wrap items-center gap-1.5 justify-end mt-3">
+                            <button className="btn-ghost !py-1 !px-2.5 text-xs" disabled={busy} onClick={() => save.mutate(r)}>Save</button>
+                            <button className="btn-primary !py-1 !px-2.5 text-xs" disabled={busy || !live} onClick={() => confirmRow.mutate(r)}>Confirm</button>
+                            <button
+                              className="!py-1 !px-2.5 text-xs rounded-lg border border-red-500/30 text-red-600 hover:bg-red-500/10 transition-colors"
+                              disabled={busy}
+                              onClick={() => setDiscarding(r)}
+                            >
+                              Discard
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
               );
             })}
@@ -522,11 +718,55 @@ export function AttendanceInbox({
         )}
       </Section>
 
+      {/* The printed code, folded away: set up once, reprinted only when a card
+          goes missing. */}
+      {oneTeacher && (
+        <Section
+          title={forAdmin ? `QR code for ${teacherName || 'this teacher'}` : 'My QR code'}
+          action={
+            <>
+              <button className="btn-ghost !py-1 !px-2.5 text-xs" onClick={() => setShowQr((v) => !v)}>
+                {showQr ? 'Hide' : 'Show'}
+              </button>
+              <button
+                className="btn-outline !py-1 !px-2.5 text-xs"
+                disabled={!myQr.data?.code}
+                onClick={() => { printQrCards([{ name: myQr.data.name, code: myQr.data.code }]); }}
+              >
+                <Printer className="w-3.5 h-3.5" /> Print
+              </button>
+            </>
+          }
+        >
+          {showQr ? (
+            myQr.data?.code ? (
+              <div className="flex flex-wrap items-center gap-5">
+                <QrCode text={scanUrl(myQr.data.code)} size={200} />
+                <div className="text-sm">
+                  <div className="font-display font-bold text-lg">{myQr.data.name}</div>
+                  <div className="font-mono tracking-widest text-base mt-1">{myQr.data.code}</div>
+                  <p className="muted mt-2 max-w-sm">
+                    Print this and keep it on the desk. Students scan it when the class
+                    starts and again when it ends. The code never changes.
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <Spinner />
+            )
+          ) : (
+            <p className="muted text-sm">
+              The fixed code for the desk. Students scan it at the start and end of the class.
+            </p>
+          )}
+        </Section>
+      )}
+
       {discarding && (
         <ConfirmModal
           danger
-          title="Discard this check-in?"
-          message={`${discarding.student_name} on ${dayName(discarding.session_date)} will be marked discarded. It stays on record but never becomes a lecture.`}
+          title="Discard this check-in"
+          message={`${discarding.student_name} on ${fmtDate(String(discarding.session_date).slice(0, 10))} will be marked discarded. It stays on record but never becomes a lecture.`}
           confirmLabel="Discard"
           busy={discard.isPending}
           onConfirm={() => discard.mutate(discarding)}

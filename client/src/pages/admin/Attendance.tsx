@@ -71,6 +71,7 @@ export default function AdminAttendance() {
         admin
         teacherId={teacherId ? Number(teacherId) : undefined}
         teacherName={chosen?.name}
+        specialization={chosen?.specialization}
       />
     </div>
   );

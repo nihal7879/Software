@@ -5,6 +5,7 @@ import { requireAuth, requireRole } from '../middleware/auth';
 import { wrap } from '../middleware/error';
 import { audit } from '../utils/audit';
 import { claimFormNo } from '../utils/formNo';
+import { today } from '../utils/dates';
 import { sendMail, registrationApprovedEmail } from '../utils/mailer';
 
 // Student self-registrations waiting for an administrator. A registration is
@@ -102,8 +103,8 @@ router.post(
          VALUES (UUID(), 'Active', ?, ?, ?, ?, ?, ?, ?, ?, ?, FALSE)`,
         [
           b.student_type,
-          isTrial ? null : new Date().toISOString().slice(0, 10),
-          isTrial ? new Date().toISOString().slice(0, 10) : null,
+          isTrial ? null : today(),
+          isTrial ? today() : null,
           reg.first_name, reg.last_name, fullName, reg.email, reg.mobile, u.insertId,
         ]
       );
