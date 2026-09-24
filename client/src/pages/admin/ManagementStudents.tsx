@@ -285,7 +285,22 @@ export default function ManagementStudents() {
                   <td className="table-td text-sm tabular-nums whitespace-nowrap">{r.student_mobile || <span className="muted">—</span>}</td>
                 )}
 
-                <td className="table-td whitespace-nowrap"><StatusBadge status={r.status} /></td>
+                <td className="table-td whitespace-nowrap">
+                  <StatusBadge status={r.status} />
+                  {/* Normally the login follows the student's status, but the two
+                      can be set apart — and then this row says Active while
+                      sign-in refuses with "Invalid credentials", which reads as a
+                      password problem. Say so here instead. */}
+                  {r.has_login === 1 && r.login_active === 0 && (
+                    <span
+                      className="ml-1.5 text-[11px] px-1.5 py-0.5 rounded-full muted"
+                      style={{ background: 'var(--color-card-alt)' }}
+                      title="This student cannot sign in. Deactivate and Activate them to switch the login back on."
+                    >
+                      login off
+                    </span>
+                  )}
+                </td>
                 {show('teachers') && (
                   <td className="table-td max-w-[220px] text-sm">
                     <TeacherChips teachers={r.teachers} />

@@ -39,6 +39,11 @@ router.get(
       `SELECT
          s.id, s.form_no, s.full_name, s.status, s.year_grade, s.exam_board, s.school_name,
          s.student_type, s.trial_started_on, s.converted_on,
+         -- Whether their login can actually sign in. Normally it follows the
+         -- student's status, but the two can be set apart (a script, a hand
+         -- edit), and then the row says Active while sign-in refuses.
+         s.user_id IS NOT NULL AS has_login,
+         (SELECT u.is_active FROM users u WHERE u.id = s.user_id) AS login_active,
          s.relationship, s.profile_completed, s.profile_submitted_at,
          -- "Who pays": the attached parent based on relationship.
          NULLIF(CASE s.relationship

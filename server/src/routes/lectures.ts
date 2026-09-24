@@ -221,11 +221,23 @@ const lectureEditSchema = lectureSchema.omit({ attendees: true }).partial();
 
 router.put(
   '/:id',
-  requireRole('admin'),
+  requireRole('admin', 'faculty'),
   wrap(async (req, res) => {
     const b = lectureEditSchema.parse(req.body);
     const before = await queryOne<any>('SELECT * FROM lecture_sessions WHERE id = ? AND is_deleted = FALSE', [req.params.id]);
     if (!before) return res.status(404).json({ error: 'Lecture not found' });
+
+    // A teacher may correct their own class — a wrong time or topic is theirs to
+    // fix — but only their own, and they cannot hand it to another teacher.
+    if (req.user!.role === 'faculty') {
+      const mine = await myTeacherId(req);
+      if (!mine || Number(before.teacher_id) !== mine) {
+        return res.status(403).json({ error: 'You can only edit your own lectures.' });
+      }
+      if (b.teacher_id != null && Number(b.teacher_id) !== mine) {
+        return res.status(403).json({ error: 'A lecture cannot be moved to another teacher.' });
+      }
+    }
 
     const merged = { ...before, ...b };
     const timeIn = merged.time_in || null;
@@ -334,16 +346,65 @@ router.get(
   })
 );
 
-// Take a student off a lecture they were wrongly recorded on (admin). Their
+/**
+ * Changing who was in the room. An admin may do it on any lecture; a teacher
+ * only on their own, the same rule as correcting the time or the topic.
+ */
+async function mayChangeAttendees(req: Request, lecture: any): Promise<string | null> {
+  if (req.user!.role === 'admin' || req.user!.role === 'superadmin') return null;
+  const mine = await myTeacherId(req);
+  if (!mine || Number(lecture.teacher_id) !== mine) return 'You can only change your own lectures.';
+  return null;
+}
+
+// Add a student who was in the class but never got recorded — they missed the
+// list when it was logged, or joined late. They take the lecture's own hours,
+// the same as everyone else on it.
+router.post(
+  '/:id/attendees',
+  requireRole('admin', 'faculty'),
+  wrap(async (req, res) => {
+    const studentId = Number(z.object({ student_id: z.number().int() }).parse(req.body).student_id);
+    const lecture = await queryOne<any>('SELECT * FROM lecture_sessions WHERE id = ? AND is_deleted = FALSE', [req.params.id]);
+    if (!lecture) return res.status(404).json({ error: 'Lecture not found' });
+    const denied = await mayChangeAttendees(req, lecture);
+    if (denied) return res.status(403).json({ error: denied });
+
+    const student = await queryOne<any>('SELECT id, full_name FROM students WHERE id = ? AND is_deleted = FALSE', [studentId]);
+    if (!student) return res.status(404).json({ error: 'Student not found' });
+
+    const already = await queryOne<any>(
+      'SELECT id FROM lecture_attendees WHERE lecture_id = ? AND student_id = ? AND is_deleted = FALSE',
+      [lecture.id, studentId]
+    );
+    if (already) return res.status(409).json({ error: `${student.full_name} is already on this lecture.` });
+
+    const hours = Number(lecture.total_hours) || 0;
+    // Someone taken off this lecture before still has their row; putting them
+    // back updates it rather than failing on the (lecture, student) key.
+    await query(
+      `INSERT INTO lecture_attendees (lecture_id, student_id, hours_consumed, attendance_status)
+       VALUES (?,?,?,'Present')
+       ON DUPLICATE KEY UPDATE hours_consumed = VALUES(hours_consumed), attendance_status = 'Present', is_deleted = FALSE`,
+      [lecture.id, studentId, hours]
+    );
+    await audit(req.user!.userId, 'ADD_ATTENDEE', 'lecture', lecture.id, null, { student_id: studentId, hours_consumed: hours });
+    res.status(201).json({ ok: true, student_id: studentId, hours_consumed: hours });
+  })
+);
+
+// Take a student off a lecture they were wrongly recorded on. Their
 // hours for it come back at once — consumed hours are the sum of attendee rows.
 // The last student cannot be removed: a lecture with nobody on it is not a
 // lecture, so that is a job for deleting the lecture itself.
 router.delete(
   '/:id/attendees/:studentId',
-  requireRole('admin'),
+  requireRole('admin', 'faculty'),
   wrap(async (req, res) => {
     const lecture = await queryOne<any>('SELECT id, session_date, teacher_id FROM lecture_sessions WHERE id = ? AND is_deleted = FALSE', [req.params.id]);
     if (!lecture) return res.status(404).json({ error: 'Lecture not found' });
+    const denied = await mayChangeAttendees(req, lecture);
+    if (denied) return res.status(403).json({ error: denied });
     const row = await queryOne<any>('SELECT * FROM lecture_attendees WHERE lecture_id = ? AND student_id = ? AND is_deleted = FALSE', [lecture.id, req.params.studentId]);
     if (!row) return res.status(404).json({ error: 'That student is not on this lecture.' });
     const others = await queryOne<any>('SELECT COUNT(*) AS n FROM lecture_attendees WHERE lecture_id = ? AND student_id <> ? AND is_deleted = FALSE', [lecture.id, req.params.studentId]);

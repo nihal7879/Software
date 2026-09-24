@@ -196,15 +196,36 @@ export default function StudentReport() {
         </form>
         {assign.isError && <div className="text-sm text-red-500 mb-3">Could not assign — please try again.</div>}
         {assigned.isLoading ? <Spinner /> : (
-          <Table head={['Teacher', 'Subject']}>
-            {(assigned.data || []).length === 0 ? (
-              <tr><td className="table-td muted" colSpan={2}>No teachers assigned yet.</td></tr>
-            ) : (assigned.data || []).map((t: any) => (
-              <tr key={t.id}>
-                <td className="table-td font-medium">{t.teacher_name}</td>
-                <td className="table-td">{t.subject_name}</td>
-              </tr>
-            ))}
+          <Table head={['Teacher', 'Subjects']}>
+            {(() => {
+              // One line per teacher, with their subjects together. A teacher
+              // taking four subjects filled four rows with the same name, which
+              // made a short list look long and hid how many teachers there are.
+              const byTeacher = new Map<string, { name: string; subjects: string[] }>();
+              for (const t of assigned.data || []) {
+                const key = String(t.teacher_id ?? t.teacher_name);
+                const at = byTeacher.get(key) || { name: t.teacher_name as string, subjects: [] as string[] };
+                if (t.subject_name && !at.subjects.includes(t.subject_name)) at.subjects.push(t.subject_name);
+                byTeacher.set(key, at);
+              }
+              const rows = [...byTeacher.values()];
+              return rows.length === 0 ? (
+                <tr><td className="table-td muted" colSpan={2}>No teachers assigned yet.</td></tr>
+              ) : rows.map((t) => (
+                <tr key={t.name}>
+                  <td className="table-td font-medium whitespace-nowrap">{t.name}</td>
+                  <td className="table-td">
+                    <div className="flex flex-wrap gap-1">
+                      {t.subjects.length === 0 ? <span className="muted">—</span> : t.subjects.map((sub) => (
+                        <span key={sub} className="text-xs px-2 py-0.5 rounded-full whitespace-nowrap" style={{ background: 'var(--color-card-alt)' }}>
+                          {sub}
+                        </span>
+                      ))}
+                    </div>
+                  </td>
+                </tr>
+              ));
+            })()}
           </Table>
         )}
       </Section>

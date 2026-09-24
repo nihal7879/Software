@@ -141,7 +141,7 @@ export function CalendarPicker({
       {open && (
         <>
           <div className="fixed inset-0 z-[60]" onClick={() => setOpen(false)} />
-          <div className="card p-3 fixed z-[61] w-[260px] overflow-y-auto thin-scroll" style={{ left: pos.left, top: pos.top, bottom: pos.bottom, maxHeight: 360 }}>
+          <div className="card p-3 fixed z-[61] w-[260px] overflow-y-auto thin-scroll" style={{ left: pos.left, top: pos.top, bottom: pos.bottom, maxHeight: pos.maxHeight ?? 360 }}>
             <CalendarHead viewY={viewY} viewM={viewM} view={view} setView={setView} prevMonth={prevMonth} nextMonth={nextMonth} />
 
             {view !== 'days' ? (
@@ -249,7 +249,7 @@ export function CalendarRangePicker({
       {open && (
         <>
           <div className="fixed inset-0 z-[60]" onClick={() => setOpen(false)} />
-          <div className="card p-3 fixed z-[61] w-[280px] overflow-y-auto thin-scroll" style={{ left: pos.left, top: pos.top, bottom: pos.bottom, maxHeight: 360 }}>
+          <div className="card p-3 fixed z-[61] w-[280px] overflow-y-auto thin-scroll" style={{ left: pos.left, top: pos.top, bottom: pos.bottom, maxHeight: pos.maxHeight ?? 360 }}>
             <CalendarHead viewY={viewY} viewM={viewM} view={view} setView={setView} prevMonth={prevMonth} nextMonth={nextMonth} />
 
             {view !== 'days' ? (

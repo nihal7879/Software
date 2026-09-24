@@ -12,7 +12,6 @@ import { UsernameField } from '../../components/RegisterLayout';
 import { passwordTip } from '../../lib/passwordTip';
 import { EMAIL_RE } from '../../components/StudentRegistrationForm';
 import { passwordProblem } from '../../lib/credentials';
-import { AdminLectureEntryModal } from '../../components/AdminLectureEntryModal';
 import { TeacherLectures } from '../../components/TeacherLectures';
 import { MultiSelect } from '../../components/MultiSelect';
 
@@ -162,7 +161,6 @@ export default function Teachers() {
   });
   const [confirm, setConfirm] = useState<{ title: string; message: string; confirmLabel: string; danger?: boolean; onConfirm: () => void } | null>(null);
   // Admin logs a lecture on behalf of a (busy) teacher.
-  const [lectureFor, setLectureFor] = useState<{ id: number; name: string; spec?: string } | null>(null);
   const [workloadSearch, setWorkloadSearch] = useState('');
   const visibleWorkload = (workload.data || []).filter((t: any) => {
     if (!workloadSearch) return true;
@@ -266,12 +264,12 @@ export default function Teachers() {
                     >
                       Edit
                     </button>
-                    <button
+                    <Link
+                      to={`/admin/lecture/${t.id}`}
                       className="!py-1 !px-2.5 text-xs rounded-lg border border-blue-500/30 text-blue-600 hover:bg-blue-500/10 transition-colors whitespace-nowrap"
-                      onClick={() => setLectureFor({ id: t.id, name: t.name, spec: t.specialization })}
                     >
                       + Lecture
-                    </button>
+                    </Link>
                     {active ? (
                       <button
                         className="!py-1 !px-2.5 text-xs rounded-lg border border-red-500/30 text-red-600 hover:bg-red-500/10 transition-colors"
@@ -486,14 +484,6 @@ export default function Teachers() {
         />
       )}
 
-      {lectureFor && (
-        <AdminLectureEntryModal
-          teacherId={lectureFor.id}
-          teacherName={lectureFor.name}
-          specialization={lectureFor.spec}
-          onClose={() => setLectureFor(null)}
-        />
-      )}
     </div>
   );
 }

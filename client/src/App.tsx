@@ -8,6 +8,7 @@ import StudentRegister from './pages/StudentRegister';
 import ParentRegister from './pages/ParentRegister';
 import TeacherRegister from './pages/TeacherRegister';
 import AdminDashboard from './pages/admin/AdminDashboard';
+import AdminLectureEntry from './pages/admin/AdminLectureEntry';
 import ManagementStudents from './pages/admin/ManagementStudents';
 import Registrations from './pages/admin/Registrations';
 import StudentReport from './pages/admin/StudentReport';
@@ -71,6 +72,8 @@ export default function App() {
       <Route path="/admin/hours" element={<Protected roles={['admin']}><HoursMonthly /></Protected>} />
       <Route path="/admin/finance" element={<Protected roles={['admin']}><Finance /></Protected>} />
       <Route path="/admin/teachers" element={<Protected roles={['admin']}><Teachers /></Protected>} />
+      {/* Logging a class for a teacher — its own page, like the teacher's own. */}
+      <Route path="/admin/lecture/:teacherId" element={<Protected roles={['admin']}><AdminLectureEntry /></Protected>} />
       {/* Reports with money in them: the super admin's, not the admin's. */}
       <Route path="/admin/pivots" element={<Protected roles={['superadmin']}><Pivots /></Protected>} />
       <Route path="/admin/settings" element={<Protected roles={['admin']}><Settings /></Protected>} />

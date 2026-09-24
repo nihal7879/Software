@@ -85,19 +85,31 @@ export function StudentRegistrationForm({
   const fullName = useMemo(() => [first, middle, last].filter(Boolean).join(' '), [first, middle, last]);
   const age = useMemo(() => ageFromDob(dob), [dob]);
 
+  // Exactly the fields this form asks for. The form is filled from the whole
+  // student record, so everything on that record — form_received, is_active,
+  // ids, timestamps — was being posted back with it. MySQL hands those flags
+  // over as 0/1, and the server wants true/false, so saving failed with
+  // "expected boolean, received number". A student should only be sending their
+  // own details anyway, never the institute's own fields.
+  const ASKED_FOR = [
+    'first_name', 'middle_name', 'last_name', 'dob', 'gender', 'nationality',
+    'year_grade', 'school_name', 'exam_board',
+    'father_name', 'father_mobile', 'mother_name', 'mother_mobile',
+    'guardian_name', 'guardian_mobile',
+    'email', 'student_mobile', 'extra_mobile',
+  ] as const;
+
   const submit = async (b: any) => {
     const fe = familyProblem(b);
     setFamilyError(fe);
     if (fe) return;
     setError(''); setBusy(true);
     try {
-      // relationship and parent_mobile are no longer asked; the server derives
-      // both from the family contacts, so the stale copies are not sent back.
-      const { relationship: _relationship, parent_mobile: _parentMobile, ...rest } = b;
-      await api.patch(`/students/${studentId}/complete-profile`, {
-        ...rest,
-        age: age ? Number(age) : null,
-      });
+      // relationship and parent_mobile are not asked either; the server works
+      // both out from the family contacts.
+      const payload: Record<string, any> = { age: age ? Number(age) : null };
+      for (const k of ASKED_FOR) payload[k] = b[k] ?? null;
+      await api.patch(`/students/${studentId}/complete-profile`, payload);
       onSaved?.();
     } catch (e: any) {
       setError(e.response?.data?.error || 'Could not save. Please check the fields.');

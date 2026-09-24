@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
+import { useAnchoredMenu } from './anchoredMenu';
 import { Clock } from 'lucide-react';
 
 const pad = (n: number) => String(n).padStart(2, '0');
@@ -18,6 +19,12 @@ function parse(v: string) {
 
 export function TimePicker({ value, onChange, placeholder = 'Select time' }: { value: string; onChange: (v: string) => void; placeholder?: string }) {
   const [open, setOpen] = useState(false);
+  // Anchored to the button and positioned from the viewport, the same way the
+  // date picker and the dropdowns are. As a plain absolute box it was placed
+  // against whatever happened to be positioned above it, which inside a table
+  // landed it over the next cell instead of under its own.
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const pos = useAnchoredMenu(open, btnRef, 210, 'left');
   const cur = parse(value) || { h12: 12, m: 0, ampm: 'AM' as 'AM' | 'PM' };
   const has = !!parse(value);
   // An existing record can hold an odd minute (an older entry, or a time typed
@@ -48,7 +55,7 @@ export function TimePicker({ value, onChange, placeholder = 'Select time' }: { v
 
   return (
     <div className="relative">
-      <button type="button" className="input flex items-center gap-2 w-full text-left" onClick={() => setOpen((o) => !o)}>
+      <button ref={btnRef} type="button" className="input flex items-center gap-2 w-full text-left" onClick={() => setOpen((o) => !o)}>
         <Clock size={15} className="muted shrink-0" />
         <span className={has ? '' : 'muted'}>{label}</span>
       </button>
@@ -56,7 +63,7 @@ export function TimePicker({ value, onChange, placeholder = 'Select time' }: { v
       {open && (
         <>
           <div className="fixed inset-0 z-[60]" onClick={() => setOpen(false)} />
-          <div className="card p-2 absolute z-[61] mt-2 flex gap-1">
+          <div className="card p-2 fixed z-[61] flex gap-1" style={{ left: pos.left, top: pos.top, bottom: pos.bottom, maxHeight: pos.maxHeight }}>
             <Col>{HOURS.map((h) => <Item key={h} active={has && cur.h12 === h} onClick={() => emit(h, cur.m, cur.ampm)} label={pad(h)} />)}</Col>
             <Col>{minutes.map((m) => <Item key={m} active={has && cur.m === m} onClick={() => emit(cur.h12, m, cur.ampm)} label={pad(m)} />)}</Col>
             <div className="flex flex-col gap-0.5 w-14">

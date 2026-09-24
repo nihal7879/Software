@@ -44,7 +44,7 @@ export function Select({
   const btnRef = useRef<HTMLButtonElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const [rowH, setRowH] = useState(0);
-  const [pos, setPos] = useState<{ left: number; width: number; top?: number; bottom?: number }>({ left: 0, width: 0 });
+  const [pos, setPos] = useState<{ left: number; width: number; top?: number; bottom?: number; maxHeight?: number }>({ left: 0, width: 0 });
 
   const selected = options.find((o) => String(o.value) === String(value));
 
@@ -61,7 +61,9 @@ export function Select({
     return options.filter((o) => o.label.toLowerCase().includes(needle) || (o.sub || '').toLowerCase().includes(needle));
   }, [q, options, onSearch]);
 
-  // Position the fixed menu relative to the trigger; flip upward if needed.
+  // Position the fixed menu relative to the trigger. It opens downward wherever
+  // it reasonably can, shrinking to the room available — flipping up covers the
+  // fields just filled in, which is worse than a shorter list that scrolls.
   const reposition = () => {
     if (!btnRef.current) return;
     const r = btnRef.current.getBoundingClientRect();
@@ -71,12 +73,14 @@ export function Select({
     const minWidth = compact ? r.width : 200;
     const width = Math.min(Math.max(r.width, minWidth), window.innerWidth - 16);
     const left = Math.max(8, Math.min(r.left, window.innerWidth - width - 8));
-    const spaceBelow = window.innerHeight - r.bottom;
+    const spaceBelow = window.innerHeight - r.bottom - 12;
+    const spaceAbove = r.top - 12;
+    const ENOUGH = 180;   // a few rows plus scrolling for the rest
     const MENU_MAX = 300;
-    if (spaceBelow < MENU_MAX && r.top > spaceBelow) {
-      setPos({ left, width, bottom: window.innerHeight - r.top + 4 });
+    if (spaceBelow < ENOUGH && spaceAbove > spaceBelow) {
+      setPos({ left, width, bottom: window.innerHeight - r.top + 4, maxHeight: Math.min(MENU_MAX, spaceAbove) });
     } else {
-      setPos({ left, width, top: r.bottom + 4 });
+      setPos({ left, width, top: r.bottom + 4, maxHeight: Math.min(MENU_MAX, spaceBelow) });
     }
   };
 
@@ -125,7 +129,8 @@ export function Select({
               width: pos.width,
               top: pos.top,
               bottom: pos.bottom,
-              maxHeight: 300,
+              // As tall as the space the anchor says is free, capped.
+              maxHeight: Math.min(300, pos.maxHeight ?? 300),
             }}
           >
             {searchable && (

@@ -33,7 +33,9 @@ const studentSchema = z.object({
   mother_mobile: z.string().optional().nullable(),
   guardian_name: z.string().optional().nullable(),
   guardian_mobile: z.string().optional().nullable(),
-  relationship: z.enum(['Father', 'Mother', 'Guardian']).optional(),
+  // Null when nobody has been named yet — a record read and written back
+  // carries that null, and it should not be an error.
+  relationship: z.enum(['Father', 'Mother', 'Guardian']).nullable().optional(),
   // Contact email OR a plain username used as the student's login id.
   email: z.string().min(1).optional().nullable().or(z.literal('')),
   dob: z.string().optional().nullable(),
@@ -44,7 +46,10 @@ const studentSchema = z.object({
   parent_mobile: z.string().optional().nullable(),
   extra_mobile: z.string().optional().nullable(),
   fees_received: z.number().optional().nullable(),
-  form_received: z.boolean().optional(),
+  // A yes/no that MySQL stores as 0/1 and hands back as a number. Anything
+  // reading a student and writing it back returns the number, so both are
+  // accepted rather than failing with "expected boolean, received number".
+  form_received: z.union([z.boolean(), z.number().int().min(0).max(1)]).transform(Boolean).optional(),
   branch_id: z.number().int().optional().nullable(),
 });
 

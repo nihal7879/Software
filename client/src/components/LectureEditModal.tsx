@@ -1,5 +1,7 @@
+import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
+import { X } from 'lucide-react';
 import { DictateButton } from './DictateButton';
 import { api } from '../api/client';
 import { useMasters } from '../api/masters';
@@ -10,25 +12,56 @@ import { CalendarPicker } from './CalendarPicker';
 import { toast } from './Toast';
 
 // Corrects an already-logged lecture: the wrong date, a mistyped time, the wrong
-// teacher or topic. Attendees are not editable here — changing who was in the
-// room is a different action from fixing what was typed about it.
+// teacher or topic — and who was in the room, when someone was missed off the
+// list or recorded by mistake.
 //
 // Changing the times re-derives the duration server-side, and every attendee's
-// consumed hours follow it, so the student's ledger stays honest.
+// consumed hours follow it, so the student's ledger stays honest. Adding or
+// removing a student takes effect immediately, since it moves their hours.
 export function LectureEditModal({
   lecture,
+  attendees,
+  roster,
   onClose,
   onSaved,
 }: {
   /** A row from the lecture log; needs lecture_id, and whatever fields it has. */
   lecture: any;
+  /** Who is on it now: [{ id, name }]. Given, the students can be changed here. */
+  attendees?: { id: number; name: string }[];
+  /** Students who may be added — the teacher's own, assigned and active. */
+  roster?: { id: number; full_name: string; form_no?: string | number }[];
   onClose: () => void;
   onSaved?: () => void;
 }) {
   const qc = useQueryClient();
+  const [addSearch, setAddSearch] = useState('');
+  const [attendeeError, setAttendeeError] = useState('');
   const masters = useMasters();
   const teachers = useQuery({ queryKey: ['teachers'], queryFn: () => api.get('/teachers').then((r) => r.data.data) });
   const subjects = useQuery({ queryKey: ['subjects'], queryFn: () => api.get('/teachers/subjects').then((r) => r.data.data) });
+
+  // Everything that reads hours has to be told, because a student joining or
+  // leaving a lecture moves hours on their ledger straight away.
+  const refresh = () => ['ledger', 'ledger-all', 'lectures', 'teacher-lectures', 'student-report', 'workload', 'pkg']
+    .forEach((k) => qc.invalidateQueries({ queryKey: [k] }));
+
+  const addStudent = useMutation({
+    mutationFn: (id: number) => api.post(`/lectures/${lecture.lecture_id}/attendees`, { student_id: id }),
+    onSuccess: () => { setAddSearch(''); setAttendeeError(''); refresh(); toast('Student added to this lecture'); onSaved?.(); },
+    onError: (e: any) => setAttendeeError(e?.response?.data?.error || 'Could not add the student.'),
+  });
+  const removeStudent = useMutation({
+    mutationFn: (id: number) => api.delete(`/lectures/${lecture.lecture_id}/attendees/${id}`),
+    onSuccess: (r: any) => { setAttendeeError(''); refresh(); toast(`Removed — ${r.data.hours_returned}h back to the student`); onSaved?.(); },
+    onError: (e: any) => setAttendeeError(e?.response?.data?.error || 'Could not remove the student.'),
+  });
+
+  const onNow = attendees || [];
+  const term = addSearch.trim().toLowerCase();
+  const canAdd = (roster || [])
+    .filter((st) => !onNow.some((a) => a.id === st.id))
+    .filter((st) => !term || st.full_name?.toLowerCase().includes(term) || String(st.form_no).includes(term));
 
   const { register, handleSubmit, watch, setValue } = useForm<any>({
     defaultValues: {
@@ -149,6 +182,66 @@ export function LectureEditModal({
             <label className="text-xs font-medium muted">Meeting / Recording Link</label>
             <input className="input mt-1" {...register('meeting_link')} placeholder="Google Meet / Zoom URL" />
           </div>
+
+          {/* Who was in the room. Kept apart from the fields above because it
+              saves on the spot: a student added or taken off moves their hours
+              immediately, without waiting for Save changes. */}
+          {attendees && (
+            <div className="border-t pt-3" style={{ borderColor: 'var(--color-border)' }}>
+              <label className="text-xs font-medium muted block mb-1.5">Students on this lecture</label>
+              <div className="flex flex-wrap items-center gap-1.5">
+                {attendees.length === 0 && <span className="muted text-sm">Nobody is on this lecture.</span>}
+                {attendees.map((a) => (
+                  <span key={a.id} className="inline-flex items-center gap-1 text-sm rounded-md px-2 py-0.5" style={{ background: 'var(--color-card-alt)' }}>
+                    {a.name}
+                    <button
+                      type="button"
+                      className="muted hover:text-red-500 disabled:opacity-40"
+                      title="Take off this lecture — the hours go back"
+                      aria-label={`Remove ${a.name}`}
+                      disabled={removeStudent.isPending || attendees.length === 1}
+                      onClick={() => removeStudent.mutate(a.id)}
+                    >
+                      <X size={12} />
+                    </button>
+                  </span>
+                ))}
+              </div>
+
+              {roster && (
+                <div className="mt-2">
+                  <input
+                    className="input !py-1.5"
+                    placeholder="Add a student who was missed…"
+                    value={addSearch}
+                    onChange={(e) => setAddSearch(e.target.value)}
+                  />
+                  {addSearch.trim() && (
+                    <div className="card p-1 mt-1 max-h-40 overflow-y-auto thin-scroll" style={{ scrollSnapType: 'y proximity' }}>
+                      {canAdd.length === 0 ? (
+                        <p className="muted text-sm px-2 py-1.5">No match among this teacher's students.</p>
+                      ) : canAdd.map((st) => (
+                        <button
+                          key={st.id}
+                          type="button"
+                          className="w-full text-left text-sm px-2 py-1.5 rounded hover:bg-black/5 dark:hover:bg-white/5 disabled:opacity-50"
+                          style={{ scrollSnapAlign: 'start' }}
+                          disabled={addStudent.isPending}
+                          onClick={() => addStudent.mutate(st.id)}
+                        >
+                          {st.full_name} <span className="muted text-xs">{st.form_no}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+              {attendees.length === 1 && (
+                <p className="muted text-xs mt-1.5">The last student cannot be removed — delete the lecture instead.</p>
+              )}
+              {attendeeError && <p className="text-sm text-red-500 mt-1.5">{attendeeError}</p>}
+            </div>
+          )}
 
           <div className="flex gap-2 pt-1">
             <button className="btn-primary flex-1" disabled={save.isPending}>{save.isPending ? 'Saving…' : 'Save changes'}</button>

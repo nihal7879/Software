@@ -206,6 +206,23 @@ router.post(
           registration_status: reg.status,
         });
       }
+      // A switched-off account is dropped before the password is even compared,
+      // so it used to fail with the same "Invalid credentials" as a wrong
+      // password — sending people to hunt for a password problem that was not
+      // there. Say what actually happened, but only once the password is right,
+      // so a stranger still learns nothing about which usernames exist.
+      const offAccounts = await query<any>(
+        'SELECT password_hash FROM users WHERE email = ? AND is_active = FALSE AND is_deleted = FALSE LIMIT 5',
+        [identifier]
+      );
+      for (const u of offAccounts) {
+        if (await bcrypt.compare(password, u.password_hash)) {
+          return res.status(403).json({
+            error: 'This account has been switched off. Please contact the office.',
+            code: 'ACCOUNT_DISABLED',
+          });
+        }
+      }
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
