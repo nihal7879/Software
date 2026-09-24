@@ -259,11 +259,7 @@ router.post(
   requireRole('admin'),
   wrap(async (req, res) => {
     const b = z
-      .object({
-        // Optionally record the first paid package in the same step.
-        package_hours: z.number().positive().optional(),
-        rate_per_hour: z.number().nonnegative().optional(),
-      })
+      .object({})
       .parse(req.body);
 
     const before = await queryOne<any>('SELECT * FROM students WHERE id = ?', [req.params.id]);
@@ -279,20 +275,10 @@ router.post(
     );
     const formNo = await claimFormNo(req.params.id, 'Enrolled');
 
-    let packageId: number | null = null;
-    if (b.package_hours) {
-      const pkg: any = await query(
-        `INSERT INTO fee_packages (student_id,package_hours,rate_per_hour,start_date)
-         VALUES (?,?,?,CURDATE())`,
-        [req.params.id, b.package_hours, b.rate_per_hour ?? 0]
-      );
-      packageId = pkg.insertId;
-    }
-
     await audit(req.user!.userId, 'CONVERT', 'student', req.params.id,
       { student_type: 'Trial', form_no: before.form_no },
-      { student_type: 'Enrolled', form_no: formNo, package_hours: b.package_hours ?? null });
-    res.json({ ok: true, package_id: packageId, form_no: formNo, previous_form_no: before.form_no });
+      { student_type: 'Enrolled', form_no: formNo });
+    res.json({ ok: true, form_no: formNo, previous_form_no: before.form_no });
   })
 );
 

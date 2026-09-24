@@ -283,6 +283,14 @@ async function rowFor(req: any, id: string) {
   return { error: null, row };
 }
 
+/** Record an edit with both sides of it, so an overwritten scan is not lost. */
+async function auditEdit(req: any, before: any, bulk = false) {
+  const after = await queryOne<any>('SELECT * FROM lecture_checkins WHERE id = ?', [before.id]);
+  const timesMoved = String(before.in_at) !== String(after?.in_at) || String(before.out_at) !== String(after?.out_at);
+  await audit(req.user.userId, timesMoved ? 'EDIT_CHECKIN_TIME' : 'EDIT_CHECKIN', 'student',
+    String(before.student_id), before, { ...after, bulk: bulk || undefined });
+}
+
 /** Write the filled-in fields onto one row, and re-derive the hours if the times moved. */
 async function applyFields(id: number, b: z.infer<typeof fillSchema>, sessionDate: string) {
   const cols: string[] = [];
@@ -310,6 +318,7 @@ router.patch(
     if (row.status !== 'Pending') return res.status(400).json({ error: 'This one has already been handled.' });
     const b = fillSchema.parse(req.body);
     await applyFields(row.id, b, String(row.session_date).slice(0, 10));
+    await auditEdit(req, row);
     res.json({ ok: true });
   })
 );
@@ -326,6 +335,7 @@ router.post(
       const { error, row } = await rowFor(req, String(id));
       if (error || row.status !== 'Pending') continue;
       await applyFields(row.id, b, String(row.session_date).slice(0, 10));
+      await auditEdit(req, row, true);
       applied++;
     }
     res.json({ ok: true, applied });

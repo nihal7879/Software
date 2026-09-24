@@ -11,7 +11,10 @@ export function useAnchoredMenu(
   open: boolean,
   btnRef: RefObject<HTMLElement>,
   menuW: number,
-  align: 'left' | 'right'
+  align: 'left' | 'right',
+  // How tall the menu would like to be when there is room. The time picker has
+  // twelve hours to show and asks for more than a short dropdown needs.
+  menuMax = 360
 ) {
   const [pos, setPos] = useState<{ left: number; top?: number; bottom?: number; maxHeight?: number }>({ left: 0 });
 
@@ -24,7 +27,7 @@ export function useAnchoredMenu(
     const spaceAbove = r.top - 12;
     // Enough to show a few rows and scroll for the rest.
     const ENOUGH = 180;
-    const MENU_MAX = 360;
+    const MENU_MAX = menuMax;
     if (spaceBelow < ENOUGH && spaceAbove > spaceBelow) {
       setPos({ left, bottom: window.innerHeight - r.top + 4, maxHeight: Math.min(MENU_MAX, spaceAbove) });
     } else {
@@ -35,7 +38,13 @@ export function useAnchoredMenu(
   useLayoutEffect(() => { if (open) reposition(); }, [open]);
   useEffect(() => {
     if (!open) return;
-    const onMove = () => reposition();
+    // Scrolling a list inside the menu itself is not the page moving, so the
+    // menu should sit still rather than re-measure on every notch of the wheel.
+    const onMove = (e?: Event) => {
+      const t = e?.target as HTMLElement | null;
+      if (t && typeof t.closest === 'function' && t.closest('[data-anchored-menu]')) return;
+      reposition();
+    };
     window.addEventListener('scroll', onMove, true);
     window.addEventListener('resize', onMove);
     return () => { window.removeEventListener('scroll', onMove, true); window.removeEventListener('resize', onMove); };

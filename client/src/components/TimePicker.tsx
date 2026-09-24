@@ -7,6 +7,34 @@ const HOURS = Array.from({ length: 12 }, (_, i) => i + 1);
 // Lectures start and end on the quarter hour, so those are the only minutes
 // offered — scrolling past 60 rows to reach :30 was the slow part of the form.
 const QUARTERS = [0, 15, 30, 45];
+const MENU_W = 210;
+// The short popup, as it has always been: about six rows and scroll for the
+// rest. It shrinks further when the field sits near the bottom of the screen.
+const COL_H = 180;
+
+/**
+ * The columns and their rows are declared here, outside the picker, and that
+ * matters: a component declared inside another is a NEW component type on every
+ * render, so React throws the old element away and mounts a fresh one. The
+ * column lost its scroll position each time it happened — and since the popup
+ * repositions itself on every scroll event, including the column's own, each
+ * notch of the wheel sent the list straight back to the top. That was "it stops
+ * at 6": the scrolling worked, it was just being undone as fast as it happened.
+ */
+const Col = ({ maxHeight, children }: { maxHeight: number; children: React.ReactNode }) => (
+  <div className="flex flex-col gap-0.5 overflow-y-auto thin-scroll px-0.5 w-14" style={{ maxHeight }}>{children}</div>
+);
+
+const Item = ({ active, onClick, label }: { active: boolean; onClick: () => void; label: string }) => (
+  <button
+    type="button"
+    onClick={onClick}
+    className={`py-1.5 rounded-lg text-sm text-center transition ${active ? 'text-white font-semibold' : 'hover:bg-[var(--color-card-alt)]'}`}
+    style={active ? { background: 'var(--color-primary)' } : {}}
+  >
+    {label}
+  </button>
+);
 
 // 12-hour time picker (hour / minute / AM-PM columns). Stores value as
 // 'HH:MM:SS' (24-hour) so the server can parse it.
@@ -24,7 +52,7 @@ export function TimePicker({ value, onChange, placeholder = 'Select time' }: { v
   // against whatever happened to be positioned above it, which inside a table
   // landed it over the next cell instead of under its own.
   const btnRef = useRef<HTMLButtonElement>(null);
-  const pos = useAnchoredMenu(open, btnRef, 210, 'left');
+  const pos = useAnchoredMenu(open, btnRef, MENU_W, 'left');
   const cur = parse(value) || { h12: 12, m: 0, ampm: 'AM' as 'AM' | 'PM' };
   const has = !!parse(value);
   // An existing record can hold an odd minute (an older entry, or a time typed
@@ -39,19 +67,9 @@ export function TimePicker({ value, onChange, placeholder = 'Select time' }: { v
 
   const label = has ? `${pad(cur.h12)}:${pad(cur.m)} ${cur.ampm}` : placeholder;
 
-  const Col = ({ children }: { children: React.ReactNode }) => (
-    <div className="flex flex-col gap-0.5 overflow-y-auto thin-scroll max-h-[180px] px-0.5 w-14">{children}</div>
-  );
-  const Item = ({ active, onClick, label }: { active: boolean; onClick: () => void; label: string }) => (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`py-1.5 rounded-lg text-sm text-center transition ${active ? 'text-white font-semibold' : 'hover:bg-[var(--color-card-alt)]'}`}
-      style={active ? { background: 'var(--color-primary)' } : {}}
-    >
-      {label}
-    </button>
-  );
+  // Short by default, and never taller than the room the popup actually got —
+  // a column taller than its own box hides its last rows below the clip.
+  const colMax = Math.max(96, Math.min(COL_H, (pos.maxHeight ?? COL_H + 16) - 16));
 
   return (
     <div className="relative">
@@ -63,9 +81,9 @@ export function TimePicker({ value, onChange, placeholder = 'Select time' }: { v
       {open && (
         <>
           <div className="fixed inset-0 z-[60]" onClick={() => setOpen(false)} />
-          <div className="card p-2 fixed z-[61] flex gap-1" style={{ left: pos.left, top: pos.top, bottom: pos.bottom, maxHeight: pos.maxHeight }}>
-            <Col>{HOURS.map((h) => <Item key={h} active={has && cur.h12 === h} onClick={() => emit(h, cur.m, cur.ampm)} label={pad(h)} />)}</Col>
-            <Col>{minutes.map((m) => <Item key={m} active={has && cur.m === m} onClick={() => emit(cur.h12, m, cur.ampm)} label={pad(m)} />)}</Col>
+          <div data-anchored-menu className="card p-2 fixed z-[61] flex gap-1" style={{ left: pos.left, top: pos.top, bottom: pos.bottom, maxHeight: pos.maxHeight }}>
+            <Col maxHeight={colMax}>{HOURS.map((h) => <Item key={h} active={has && cur.h12 === h} onClick={() => emit(h, cur.m, cur.ampm)} label={pad(h)} />)}</Col>
+            <Col maxHeight={colMax}>{minutes.map((m) => <Item key={m} active={has && cur.m === m} onClick={() => emit(cur.h12, m, cur.ampm)} label={pad(m)} />)}</Col>
             <div className="flex flex-col gap-0.5 w-14">
               {(['AM', 'PM'] as const).map((a) => <Item key={a} active={has && cur.ampm === a} onClick={() => emit(cur.h12, cur.m, a)} label={a} />)}
             </div>

@@ -1,9 +1,9 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Plus, X } from 'lucide-react';
 import { api, fmtDate, hrs, todayIso } from '../api/client';
 import { useMasters } from '../api/masters';
-import { Section, Spinner, Table } from './ui';
+import { Pagination, Section, Spinner, Table } from './ui';
 import { ConfirmModal } from './ConfirmModal';
 import { Select } from './Select';
 import { TimePicker } from './TimePicker';
@@ -94,6 +94,9 @@ export function LectureSheet({
   const [subtopic, setSubtopic] = useState('');
   const [link, setLink] = useState('');
   const [error, setError] = useState('');
+  // The log grows a line per class, so it is paged rather than run on forever.
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(15);
 
   const me = useQuery({ queryKey: ['teacher-me'], queryFn: () => api.get('/teachers/me').then((r) => r.data), enabled: !forAdmin });
   const roster = useQuery({
@@ -149,6 +152,10 @@ export function LectureSheet({
       String(b.session_date).localeCompare(String(a.session_date)) || String(b.time_in).localeCompare(String(a.time_in))
     );
   }, [lectures.data, forAdmin]);
+
+  const pageCount = Math.max(1, Math.ceil(classes.length / pageSize));
+  const shown = classes.slice((Math.min(page, pageCount) - 1) * pageSize, Math.min(page, pageCount) * pageSize);
+  useEffect(() => { if (page > pageCount) setPage(1); }, [pageCount, page]);
 
   const save = useMutation({
     mutationFn: () => api.post('/lectures', {
@@ -371,7 +378,7 @@ export function LectureSheet({
           <p className="muted text-sm">Nothing logged yet — the line above saves into here.</p>
         ) : (
           <Table head={['Date', 'Time', 'Subject / Topic', { label: 'Hours', align: 'right' }, 'Students on this lecture', '']}>
-            {classes.map((c) => (
+            {shown.map((c) => (
               <tr key={c.id}>
                 <td className="table-td whitespace-nowrap">{fmtDate(String(c.session_date).slice(0, 10))}</td>
                 <td className="table-td whitespace-nowrap">{clock(c.time_in)} – {clock(c.time_out)}</td>
@@ -410,6 +417,17 @@ export function LectureSheet({
               </tr>
             ))}
           </Table>
+        )}
+        {classes.length > 0 && (
+          <Pagination
+            page={Math.min(page, pageCount)}
+            pages={pageCount}
+            total={classes.length}
+            noun="lectures"
+            pageSize={pageSize}
+            onPage={setPage}
+            onPageSize={setPageSize}
+          />
         )}
       </Section>
 

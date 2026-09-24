@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Check, Printer, X } from 'lucide-react';
+import { Check, Printer, QrCode as QrCodeIcon, UserPlus, X } from 'lucide-react';
 import { api, fmtDate, hrs, todayIso } from '../api/client';
 import { useMasters } from '../api/masters';
 import { Section, Spinner, Table } from './ui';
@@ -112,6 +112,11 @@ const seed = (r: Row): Edit => ({
 // student and have to stay in one table to sit together — so the table is laid
 // out on a grid of twenty narrow columns and each field takes the span it needs.
 // Both lines add up to twenty, so every student lines up down the page.
+// A class that ran this long is almost always a student who forgot to scan out
+// at the end and scanned hours later. The line says so before it is confirmed,
+// because once confirmed those hours are charged.
+const LONG_HOURS = 3;
+
 const GRID = Array.from({ length: 20 }, () => '5%');
 const ROW_ONE = [4, 4, 3, 3, 6];   // Student · Subject · In · Out · hours and buttons
 const ROW_TWO = [4, 4, 4, 3, 5];   // Topic · Subtopic · Remark · Venue · Meet link
@@ -145,6 +150,8 @@ export function AttendanceInbox({
   const [bulk, setBulk] = useState({ subject_id: '', topic: '', subtopic: '', venue: 'JLT', meeting_link: '' });
   const [discarding, setDiscarding] = useState<Row | null>(null);
   const [showQr, setShowQr] = useState(false);
+  const [addOpen, setAddOpen] = useState(false);
+  const [longWarning, setLongWarning] = useState<{ row?: Row; ids?: number[]; n: number; hours: number } | null>(null);
 
   // ---- the "did not scan" line --------------------------------------------
   const [addDate, setAddDate] = useState(todayIso());
@@ -242,6 +249,7 @@ export function AttendanceInbox({
       toast(skipped?.length ? `${added} added. ${skipped[0].reason}.` : `${added} student(s) added.`,
         skipped?.length ? 'info' : 'success');
       setAddStudents([]); setSearch(''); setAddError('');
+      if (!skipped?.length) setAddOpen(false);
       qc.invalidateQueries({ queryKey: ['checkin-inbox'] });
     },
     onError: (e: any) => setAddError(e?.response?.data?.error || 'Could not add them.'),
@@ -318,6 +326,25 @@ export function AttendanceInbox({
       if (next.has(id)) next.delete(id); else next.add(id);
       return next;
     });
+
+  /** The hours on a row as it stands, counting a time the teacher has retyped. */
+  const hoursOn = (r: Row) => {
+    const e = editOf(r);
+    return hoursBetween(e.in_time, e.out_time) || Number(r.hours || 0);
+  };
+
+  // Confirming is what charges the student, so a sitting longer than a usual
+  // class stops for a yes first. Almost always it is a forgotten scan out.
+  const askConfirmRow = (r: Row) => {
+    const h = hoursOn(r);
+    if (h >= LONG_HOURS) setLongWarning({ row: r, n: 1, hours: h });
+    else confirmRow.mutate(r);
+  };
+  const askConfirmMany = (ids: number[]) => {
+    const longs = rows.filter((r) => ids.includes(r.id) && hoursOn(r) >= LONG_HOURS);
+    if (longs.length) setLongWarning({ ids, n: longs.length, hours: Math.max(...longs.map(hoursOn)) });
+    else confirmMany.mutate(ids);
+  };
 
   const pickedIds = [...picked];
   const busy = save.isPending || confirmRow.isPending || applyBulk.isPending || confirmMany.isPending;
@@ -403,11 +430,81 @@ export function AttendanceInbox({
 
   return (
     <div className="space-y-4">
-      {/* Someone who came without a phone never scanned. Same line, same
-          headings as a lecture — only the subject and topic wait until the row
-          is in the list with the rest. */}
-      {oneTeacher && status === 'Pending' && (
-        <Section title="Student who did not scan">
+
+      <Section
+        title={status === 'Pending' ? 'Scanned check-ins' : 'Confirmed check-ins'}
+        action={
+          <>
+            {oneTeacher && status === 'Pending' && (
+              <button
+                className={addOpen ? 'btn-primary !py-1 !px-2.5 text-xs' : 'btn-outline !py-1 !px-2.5 text-xs'}
+                onClick={() => { setAddOpen((v) => !v); setAddError(''); }}
+              >
+                <UserPlus className="w-3.5 h-3.5" /> {addOpen ? 'Close' : 'Did not scan'}
+              </button>
+            )}
+            {oneTeacher && (
+              <button
+                className={showQr ? 'btn-primary !py-1 !px-2.5 text-xs' : 'btn-outline !py-1 !px-2.5 text-xs'}
+                onClick={() => setShowQr((v) => !v)}
+              >
+                <QrCodeIcon className="w-3.5 h-3.5" /> QR code
+              </button>
+            )}
+            <CalendarPicker value={dateFilter} onChange={setDateFilter} placeholder="Any date" align="right" />
+            {dateFilter && (
+              <button className="btn-ghost !py-1 !px-2.5 text-xs" onClick={() => setDateFilter('')}>Clear</button>
+            )}
+            <button
+              className="btn-ghost !py-1 !px-2.5 text-xs"
+              onClick={() => { setStatus(status === 'Pending' ? 'Confirmed' : 'Pending'); setPicked(new Set()); }}
+            >
+              {status === 'Pending' ? 'Show confirmed' : 'Show pending'}
+            </button>
+          </>
+        }
+      >
+        {status === 'Pending' && (
+          <p className="muted text-sm mb-3">
+            Each line is one student. Fill in the subject and topic and press Confirm —
+            that is when it becomes a lecture and counts against their hours.
+          </p>
+        )}
+
+        {/* The desk card, only when asked for: it is set up once and then
+            reprinted only if a card goes missing. */}
+        {showQr && oneTeacher && (
+          <div className="rounded-xl border p-3 mb-4" style={{ borderColor: 'var(--color-border)' }}>
+            {myQr.data?.code ? (
+              <div className="flex flex-wrap items-center gap-5">
+                <QrCode text={scanUrl(myQr.data.code)} size={180} />
+                <div className="text-sm">
+                  <div className="font-display font-bold text-lg">{myQr.data.name}</div>
+                  <div className="font-mono tracking-widest text-base mt-1">{myQr.data.code}</div>
+                  <p className="muted mt-2 max-w-sm">
+                    Print this and keep it on the desk. Students scan it when the class
+                    starts and again when it ends. The code never changes.
+                  </p>
+                  <button
+                    className="btn-outline !py-1 !px-2.5 text-xs mt-2"
+                    disabled={!myQr.data?.code}
+                    onClick={() => { printQrCards([{ name: myQr.data.name, code: myQr.data.code }]); }}
+                  >
+                    <Printer className="w-3.5 h-3.5" /> Print this card
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <Spinner />
+            )}
+          </div>
+        )}
+
+        {/* Someone who came without a phone never scanned. Opened from the
+            button above, and it closes again once they are added. */}
+        {addOpen && oneTeacher && status === 'Pending' && (
+          <div className="rounded-xl border p-3 mb-4" style={{ borderColor: 'var(--color-border)' }}>
+            <div className="text-sm font-semibold mb-2">Student who did not scan</div>
           {roster.isLoading ? <Spinner /> : (roster.data || []).length === 0 ? (
             <p className="muted text-sm">
               {forAdmin
@@ -454,31 +551,7 @@ export function AttendanceInbox({
               {addError && <div className="text-sm mt-2 text-red-500">{addError}</div>}
             </>
           )}
-        </Section>
-      )}
-
-      <Section
-        title={status === 'Pending' ? 'Scanned check-ins' : 'Confirmed check-ins'}
-        action={
-          <>
-            <CalendarPicker value={dateFilter} onChange={setDateFilter} placeholder="Any date" align="right" />
-            {dateFilter && (
-              <button className="btn-ghost !py-1 !px-2.5 text-xs" onClick={() => setDateFilter('')}>Clear</button>
-            )}
-            <button
-              className="btn-ghost !py-1 !px-2.5 text-xs"
-              onClick={() => { setStatus(status === 'Pending' ? 'Confirmed' : 'Pending'); setPicked(new Set()); }}
-            >
-              {status === 'Pending' ? 'Show confirmed' : 'Show pending'}
-            </button>
-          </>
-        }
-      >
-        {status === 'Pending' && (
-          <p className="muted text-sm mb-3">
-            Each line is one student. Fill in the subject and topic and press Confirm —
-            that is when it becomes a lecture and counts against their hours.
-          </p>
+          </div>
         )}
 
         {/* Several at once: the same lesson to several students on the same day
@@ -510,7 +583,7 @@ export function AttendanceInbox({
                 Apply to {pickedIds.length}
               </button>
               <button className="btn-primary !py-1 !px-2.5 text-xs" disabled={busy}
-                onClick={() => confirmMany.mutate(pickedIds)}>
+                onClick={() => askConfirmMany(pickedIds)}>
                 <Check className="w-3.5 h-3.5" /> Confirm {pickedIds.length}
               </button>
             </div>
@@ -598,6 +671,13 @@ export function AttendanceInbox({
                                       <span className="block text-xs muted">with {r.teacher_name}</span>
                                     )}
                                     {!r.out_at && <span className="block text-xs text-amber-600">no scan out</span>}
+                                    {(editOf(r).in_time && editOf(r).out_time
+                                      ? hoursBetween(editOf(r).in_time, editOf(r).out_time)
+                                      : Number(r.hours || 0)) >= LONG_HOURS && (
+                                      <span className="block text-xs text-red-600">
+                                        {hrs(hoursBetween(editOf(r).in_time, editOf(r).out_time) || Number(r.hours || 0))} — check the time out
+                                      </span>
+                                    )}
                                     {!!r.added_by_hand && <span className="block text-xs muted">added by hand</span>}
                                   </span>
                                 </label>
@@ -614,12 +694,17 @@ export function AttendanceInbox({
                               </td>
                               <td className="table-td align-top" colSpan={ROW_ONE[4]}>
                                 <div className="flex items-center gap-1.5 justify-end">
-                                  <span className="text-sm tabular-nums whitespace-nowrap mr-1">{hrs(live || Number(r.hours || 0))}</span>
+                                  <span
+                                    className={`text-sm tabular-nums whitespace-nowrap mr-1 ${(live || Number(r.hours || 0)) >= LONG_HOURS ? 'text-red-600 font-semibold' : ''}`}
+                                    title={(live || Number(r.hours || 0)) >= LONG_HOURS ? 'Longer than a usual class — check the time out before confirming' : undefined}
+                                  >
+                                    {hrs(live || Number(r.hours || 0))}
+                                  </span>
                                   <button className="btn-ghost !py-1 !px-2.5 text-xs" disabled={busy} onClick={() => save.mutate(r)}>
                                     Save
                                   </button>
                                   <button className="btn-primary !py-1 !px-2.5 text-xs" disabled={busy || !live}
-                                    onClick={() => confirmRow.mutate(r)}>
+                                    onClick={() => askConfirmRow(r)}>
                                     Confirm
                                   </button>
                                   <button
@@ -675,9 +760,14 @@ export function AttendanceInbox({
                               <span className="block text-xs muted">
                                 {clock(timeOf(r.in_at))} – {r.out_at ? clock(timeOf(r.out_at)) : 'no scan out'}
                                 {!!r.added_by_hand && ' · added by hand'}
+                                {(live || Number(r.hours || 0)) >= LONG_HOURS && (
+                                  <span className="text-red-600"> · check the time out</span>
+                                )}
                               </span>
                             </span>
-                            <span className="text-sm tabular-nums">{hrs(live || Number(r.hours || 0))}</span>
+                            <span className={`text-sm tabular-nums ${(live || Number(r.hours || 0)) >= LONG_HOURS ? 'text-red-600 font-semibold' : ''}`}>
+                              {hrs(live || Number(r.hours || 0))}
+                            </span>
                           </label>
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             {([
@@ -698,7 +788,7 @@ export function AttendanceInbox({
                           </div>
                           <div className="flex flex-wrap items-center gap-1.5 justify-end mt-3">
                             <button className="btn-ghost !py-1 !px-2.5 text-xs" disabled={busy} onClick={() => save.mutate(r)}>Save</button>
-                            <button className="btn-primary !py-1 !px-2.5 text-xs" disabled={busy || !live} onClick={() => confirmRow.mutate(r)}>Confirm</button>
+                            <button className="btn-primary !py-1 !px-2.5 text-xs" disabled={busy || !live} onClick={() => askConfirmRow(r)}>Confirm</button>
                             <button
                               className="!py-1 !px-2.5 text-xs rounded-lg border border-red-500/30 text-red-600 hover:bg-red-500/10 transition-colors"
                               disabled={busy}
@@ -718,48 +808,26 @@ export function AttendanceInbox({
         )}
       </Section>
 
-      {/* The printed code, folded away: set up once, reprinted only when a card
-          goes missing. */}
-      {oneTeacher && (
-        <Section
-          title={forAdmin ? `QR code for ${teacherName || 'this teacher'}` : 'My QR code'}
-          action={
-            <>
-              <button className="btn-ghost !py-1 !px-2.5 text-xs" onClick={() => setShowQr((v) => !v)}>
-                {showQr ? 'Hide' : 'Show'}
-              </button>
-              <button
-                className="btn-outline !py-1 !px-2.5 text-xs"
-                disabled={!myQr.data?.code}
-                onClick={() => { printQrCards([{ name: myQr.data.name, code: myQr.data.code }]); }}
-              >
-                <Printer className="w-3.5 h-3.5" /> Print
-              </button>
-            </>
+
+      {longWarning && (
+        <ConfirmModal
+          danger
+          title="That is a long class"
+          message={
+            longWarning.n === 1
+              ? `This line charges ${hrs(longWarning.hours)}, longer than a usual class. It usually means the student forgot to scan out and scanned hours later. Check the time out before confirming.`
+              : `${longWarning.n} of the selected lines are longer than a usual class, the longest ${hrs(longWarning.hours)}. That usually means a forgotten scan out. Confirm them anyway?`
           }
-        >
-          {showQr ? (
-            myQr.data?.code ? (
-              <div className="flex flex-wrap items-center gap-5">
-                <QrCode text={scanUrl(myQr.data.code)} size={200} />
-                <div className="text-sm">
-                  <div className="font-display font-bold text-lg">{myQr.data.name}</div>
-                  <div className="font-mono tracking-widest text-base mt-1">{myQr.data.code}</div>
-                  <p className="muted mt-2 max-w-sm">
-                    Print this and keep it on the desk. Students scan it when the class
-                    starts and again when it ends. The code never changes.
-                  </p>
-                </div>
-              </div>
-            ) : (
-              <Spinner />
-            )
-          ) : (
-            <p className="muted text-sm">
-              The fixed code for the desk. Students scan it at the start and end of the class.
-            </p>
-          )}
-        </Section>
+          confirmLabel="Confirm anyway"
+          cancelLabel="Go back and fix"
+          busy={confirmRow.isPending || confirmMany.isPending}
+          onConfirm={() => {
+            if (longWarning.row) confirmRow.mutate(longWarning.row);
+            else if (longWarning.ids) confirmMany.mutate(longWarning.ids);
+            setLongWarning(null);
+          }}
+          onClose={() => setLongWarning(null)}
+        />
       )}
 
       {discarding && (

@@ -146,12 +146,10 @@ export default function ManagementStudents() {
   // Converting a trial keeps the same student record, so their trial lectures,
   // login and parent stay attached. One-way.
   const convert = useMutation({
-    mutationFn: (v: { id: number; package_hours?: number }) =>
-      api.post(`/students/${v.id}/convert`, v.package_hours ? { package_hours: v.package_hours } : {}),
+    mutationFn: (v: { id: number }) => api.post(`/students/${v.id}/convert`, {}),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['mgmt-master'] }),
   });
   const [converting, setConverting] = useState<{ id: number; name: string; form_no: string } | null>(null);
-  const [convertHours, setConvertHours] = useState('');
   // Enrolling changes their form number, so say which one they got rather than
   // letting the row quietly renumber itself behind the closed dialog.
   const [enrolled, setEnrolled] = useState<{ name: string; form_no: string; previous_form_no: string } | null>(null);
@@ -312,7 +310,7 @@ export default function ManagementStudents() {
                     {r.student_type === 'Trial' && (
                       <button
                         className="!py-1 !px-2.5 text-xs rounded-lg border border-violet-500/30 text-violet-600 hover:bg-violet-500/10 transition-colors"
-                        onClick={() => { setConvertHours(''); setConverting({ id: r.id, name: r.full_name, form_no: r.form_no }); }}
+                        onClick={() => setConverting({ id: r.id, name: r.full_name, form_no: r.form_no })}
                       >
                         Enroll
                       </button>
@@ -458,12 +456,14 @@ export default function ManagementStudents() {
               Form <span className="font-mono">{converting.form_no}</span> is a trial number — enrolling
               replaces it with the next real form number.
             </p>
-            <label className="text-xs font-medium muted block mt-4">First package hours (optional)</label>
-            <input
-              className="input mt-1" type="number" step="0.5" min="0.5" placeholder="e.g. 30"
-              value={convertHours} onChange={(e) => setConvertHours(e.target.value)}
-            />
-            <p className="text-xs muted mt-1.5">Leave empty to enroll now and add the package later.</p>
+            {/* No hours box here any more. Hours entered at this step were
+                credited with no payment behind them and never reached Finance,
+                and the real payment was then recorded as well — so the student
+                was credited twice for one course. Hours come from Finance. */}
+            <p className="text-xs muted mt-4">
+              Their hours are added when the payment is recorded in Finance — enrolling
+              here does not credit any.
+            </p>
             {convert.isError && (
               <div className="text-sm text-red-500 mt-2">
                 {(convert.error as any)?.response?.data?.error || 'Could not enroll this student.'}
@@ -474,7 +474,7 @@ export default function ManagementStudents() {
                 className="btn-primary flex-1" disabled={convert.isPending}
                 onClick={() => {
                   convert.mutate(
-                    { id: converting.id, package_hours: convertHours ? Number(convertHours) : undefined },
+                    { id: converting.id },
                     {
                       onSuccess: (res) => {
                         setEnrolled({
