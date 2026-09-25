@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Plus, X } from 'lucide-react';
-import { api, fmtDate, hrs, todayIso } from '../api/client';
+import { api, fmtDate, hrs, todayIso, dubaiNow} from '../api/client';
 import { useMasters } from '../api/masters';
 import { Pagination, Section, Spinner, Table } from './ui';
 import { ConfirmModal } from './ConfirmModal';
@@ -74,7 +74,7 @@ export function LectureSheet({
   // admin may do it; a teacher corrects theirs instead.
   const [deleting, setDeleting] = useState<any | null>(null);
 
-  const now = new Date();
+  const now = dubaiNow();
   const start = new Date(now);
   start.setMinutes(Math.round(now.getMinutes() / 15) * 15, 0, 0);
   const startTime = `${pad(start.getHours())}:${pad(start.getMinutes())}:00`;

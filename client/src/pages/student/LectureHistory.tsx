@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '../../auth/AuthContext';
-import { api, hrs, fmtDate } from '../../api/client';
+import { api, hrs, fmtDate, dubaiNow} from '../../api/client';
 import { CalendarDays, ChevronDown } from 'lucide-react';
 import { Section, Table, Spinner, KpiCard } from '../../components/ui';
 
@@ -30,7 +30,7 @@ export default function LectureHistory() {
 
   // initialise the calendar at the most recent lecture's month (or today)
   const latest = all[0]?.session_date as string | undefined;
-  const init = latest ? new Date(latest) : new Date();
+  const init = latest ? new Date(latest) : dubaiNow();
   const [viewY, setViewY] = useState(init.getFullYear());
   const [viewM, setViewM] = useState(init.getMonth()); // 0-11
   const [selectedDay, setSelectedDay] = useState<string | null>(null);

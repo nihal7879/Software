@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useAnchoredMenu } from './anchoredMenu';
 import { CalendarDays, ChevronDown } from 'lucide-react';
-import { fmtDate } from '../api/client';
+import { fmtDate, dubaiNow} from '../api/client';
 
 // Reusable single-date calendar popover — the same look used in the student
 // Lecture History. Pass value as 'YYYY-MM-DD' ('' = none). `highlight` is an
@@ -10,7 +10,7 @@ const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 const pad = (n: number) => String(n).padStart(2, '0');
 // Far enough back for any student's or parent's date of birth.
-const THIS_YEAR = new Date().getFullYear();
+const THIS_YEAR = dubaiNow().getFullYear();
 const YEARS = Array.from({ length: THIS_YEAR + 5 - 1940 + 1 }, (_, i) => 1940 + i);
 
 type View = 'days' | 'months' | 'years';
@@ -113,7 +113,7 @@ export function CalendarPicker({
   /** Year the calendar opens on while empty — a date of birth starts years back, not at today. */
   openYear?: number;
 }) {
-  const init = value ? new Date(value) : openYear ? new Date(openYear, 0, 1) : new Date();
+  const init = value ? new Date(value) : openYear ? new Date(openYear, 0, 1) : dubaiNow();
   const [viewY, setViewY] = useState(init.getFullYear());
   const [viewM, setViewM] = useState(init.getMonth()); // 0-11
   const [open, setOpen] = useState(false);
@@ -204,7 +204,7 @@ export function CalendarRangePicker({
   className?: string;
   align?: 'left' | 'right';
 }) {
-  const init = from ? new Date(from) : new Date();
+  const init = from ? new Date(from) : dubaiNow();
   const [viewY, setViewY] = useState(init.getFullYear());
   const [viewM, setViewM] = useState(init.getMonth());
   const [open, setOpen] = useState(false);

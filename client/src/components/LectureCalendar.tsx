@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { ChevronLeft, ChevronRight, CalendarDays, Clock, BookOpen } from 'lucide-react';
-import { hrs, fmtDate } from '../api/client';
+import { hrs, fmtDate, todayIso, dubaiNow } from '../api/client';
 
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
@@ -23,7 +23,7 @@ export default function LectureCalendar({ lectures }: { lectures: any[] }) {
 
   // start on the most recent lecture's month, else today
   const latest = all[0]?.session_date as string | undefined;
-  const init = latest ? new Date(latest) : new Date();
+  const init = latest ? new Date(latest) : dubaiNow();
   const [viewY, setViewY] = useState(init.getFullYear());
   const [viewM, setViewM] = useState(init.getMonth()); // 0-11
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
@@ -31,7 +31,7 @@ export default function LectureCalendar({ lectures }: { lectures: any[] }) {
   const monthKey = `${viewY}-${pad(viewM + 1)}`;
   const firstWeekday = new Date(viewY, viewM, 1).getDay();
   const daysInMonth = new Date(viewY, viewM + 1, 0).getDate();
-  const todayStr = `${new Date().getFullYear()}-${pad(new Date().getMonth() + 1)}-${pad(new Date().getDate())}`;
+  const todayStr = todayIso();
 
   const step = (delta: number) => { setSelectedDay(null); const d = new Date(viewY, viewM + delta, 1); setViewY(d.getFullYear()); setViewM(d.getMonth()); };
   const stepYear = (delta: number) => { setSelectedDay(null); setViewY((y) => y + delta); };
@@ -57,7 +57,7 @@ export default function LectureCalendar({ lectures }: { lectures: any[] }) {
         <div className="flex items-center gap-1.5">
           <button className="btn-ghost !px-2 !py-1.5" title="Previous year" onClick={() => stepYear(-1)}><span className="text-xs font-bold">«</span></button>
           <button className="btn-ghost !px-2 !py-1.5" title="Previous month" onClick={() => step(-1)}><ChevronLeft size={16} /></button>
-          <button className="btn-ghost !px-3 !py-1.5 text-xs font-semibold" onClick={() => { const t = new Date(); setViewY(t.getFullYear()); setViewM(t.getMonth()); setSelectedDay(null); }}>Today</button>
+          <button className="btn-ghost !px-3 !py-1.5 text-xs font-semibold" onClick={() => { const t = dubaiNow(); setViewY(t.getFullYear()); setViewM(t.getMonth()); setSelectedDay(null); }}>Today</button>
           <button className="btn-ghost !px-2 !py-1.5" title="Next month" onClick={() => step(1)}><ChevronRight size={16} /></button>
           <button className="btn-ghost !px-2 !py-1.5" title="Next year" onClick={() => stepYear(1)}><span className="text-xs font-bold">»</span></button>
         </div>

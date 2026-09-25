@@ -3,6 +3,7 @@ import { Overlay } from './Overlay';
 import { CalendarPicker } from './CalendarPicker';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api/client';
+import { toast } from './Toast';
 
 /** An adjustment already on the statement, when this modal is correcting one. */
 export type AdjustmentRow = { id: number; delta: number | string; reason?: string | null; adjusted_on?: string | null };
@@ -14,19 +15,28 @@ export function AdjustHoursModal({
   studentId,
   studentName,
   editing,
+  // Adding and deducting are separate permissions, so the side that is not
+  // allowed is shown locked rather than hidden - a missing button reads as a
+  // fault, a locked one reads as a rule.
+  mayAdd = true,
+  mayDeduct = true,
   onClose,
   onSaved,
 }: {
   studentId: number;
   studentName: string;
   editing?: AdjustmentRow | null;
+  mayAdd?: boolean;
+  mayDeduct?: boolean;
   onClose: () => void;
   onSaved?: () => void;
 }) {
   const qc = useQueryClient();
   const startDelta = Number(editing?.delta || 0);
   const [hours, setHours] = useState(editing ? String(Math.abs(startDelta)) : '');
-  const [mode, setMode] = useState<'add' | 'deduct'>(editing && startDelta < 0 ? 'deduct' : editing ? 'add' : 'deduct');
+  const [mode, setMode] = useState<'add' | 'deduct'>(
+    editing ? (startDelta < 0 ? 'deduct' : 'add') : mayDeduct ? 'deduct' : 'add'
+  );
   const [reason, setReason] = useState(editing?.reason || '');
   // The day the adjustment is FOR — often not today. Left empty it sits on the
   // day it was entered, which is how every existing entry behaves.
@@ -53,7 +63,8 @@ export function AdjustHoursModal({
     },
   });
 
-  const valid = Number(hours) > 0;
+  const allowedMode = mode === 'add' ? mayAdd : mayDeduct;
+  const valid = Number(hours) > 0 && allowedMode;
 
   return (
     <Overlay align="center" onClose={onClose}>
@@ -68,16 +79,22 @@ export function AdjustHoursModal({
           <button
             type="button"
             className={mode === 'deduct' ? 'btn-primary flex-1' : 'btn-ghost flex-1'}
-            onClick={() => setMode('deduct')}
+            title={mayDeduct ? undefined : 'Needs super admin permission'}
+            onClick={() =>
+              mayDeduct ? setMode('deduct') : toast('Permission required: only the super admin can deduct hours.', 'error')
+            }
           >
-            − Deduct
+            − Deduct{mayDeduct ? '' : ' 🔒'}
           </button>
           <button
             type="button"
             className={mode === 'add' ? 'btn-primary flex-1' : 'btn-ghost flex-1'}
-            onClick={() => setMode('add')}
+            title={mayAdd ? undefined : 'Needs super admin permission'}
+            onClick={() =>
+              mayAdd ? setMode('add') : toast('Permission required: only the super admin can add hours.', 'error')
+            }
           >
-            + Add
+            + Add{mayAdd ? '' : ' 🔒'}
           </button>
         </div>
 

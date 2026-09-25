@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { ChevronLeft, ChevronRight, Wallet, Clock } from 'lucide-react';
-import { api } from '../../api/client';
+import { api, dubaiNow} from '../../api/client';
 import { Section, Spinner, Pagination } from '../../components/ui';
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -27,7 +27,7 @@ export default function Pivots() {
   });
 
   const data = q.data;
-  const curYear = data?.year ?? year ?? new Date().getFullYear();
+  const curYear = data?.year ?? year ?? dubaiNow().getFullYear();
   const total = data?.total || 0;
   const pages = Math.ceil(total / pageSize) || 1;
   const unit = view === 'finance' ? '(AED)' : '(h)';

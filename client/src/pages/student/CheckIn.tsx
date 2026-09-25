@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Camera, CheckCircle2, LogIn, LogOut, X } from 'lucide-react';
-import { api } from '../../api/client';
+import { api, todayIso } from '../../api/client';
 import { Section, Spinner } from '../../components/ui';
 import { toast } from '../../components/Toast';
 import { codeFromScan, PENDING_SCAN } from '../../lib/qr';
@@ -28,9 +28,8 @@ function clock(v: any) {
 function dayLabel(v: any) {
   const d = String(v || '').slice(0, 10);
   if (!d) return '';
-  const now = new Date();
-  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-  return d === today ? 'Today' : d;
+  // "Today" means today at the institute, not on the student's phone.
+  return d === todayIso() ? 'Today' : d;
 }
 
 type ScanResult = {

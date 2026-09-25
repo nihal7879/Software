@@ -7,6 +7,7 @@ import { Select } from '../../components/Select';
 import { FilterMenu, FilterField } from '../../components/FilterMenu';
 import { CalendarRangePicker } from '../../components/CalendarPicker';
 import { AdjustHoursModal, type AdjustmentRow } from '../../components/AdjustHoursModal';
+import { useMay } from '../../api/permissions';
 import { ConfirmModal } from '../../components/ConfirmModal';
 import { toast } from '../../components/Toast';
 import { downloadHoursStatement } from '../../lib/hoursStatementExcel';
@@ -20,6 +21,16 @@ export default function HoursMonthly() {
   const [studentId, setStudentId] = useState('');
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
+  // Changing the statement is the super admin's, unless they have granted it.
+  // One switch per action, so the office can be allowed to add hours without
+  // being able to take them away or remove an entry from the record.
+  const mayAdd = useMay('hours_add');
+  const mayDeduct = useMay('hours_deduct');
+  const mayEdit = useMay('hours_edit');
+  const mayDelete = useMay('hours_delete');
+  const mayAdjust = mayAdd || mayDeduct;
+  const needPermission = (what: string) =>
+    toast(`Permission required: only the super admin can ${what}. Ask them to switch it on in Permissions.`, 'error');
   const [adjustOpen, setAdjustOpen] = useState(false);
   // An adjustment entered wrong can be corrected or taken off the statement.
   const [editAdjustment, setEditAdjustment] = useState<AdjustmentRow | null>(null);
@@ -358,7 +369,13 @@ export default function HoursMonthly() {
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            <button className="btn-ghost !py-1.5 !px-3 text-sm" onClick={() => setAdjustOpen(true)}>± Adjust Hours</button>
+            <button
+              className="btn-ghost !py-1.5 !px-3 text-sm"
+              title={mayAdjust ? undefined : 'Needs super admin permission'}
+              onClick={() => (mayAdjust ? setAdjustOpen(true) : needPermission('add or deduct hours'))}
+            >
+              ± Adjust Hours{mayAdjust ? '' : ' 🔒'}
+            </button>
             <button
               className="btn-ghost !py-1.5 !px-3 text-sm"
               onClick={exportExcel}
@@ -437,18 +454,18 @@ export default function HoursMonthly() {
                           <button
                             type="button"
                             className="muted hover:text-[var(--color-primary)] rounded-lg p-1 shrink-0 ml-auto"
-                            title="Edit this adjustment"
+                            title={mayEdit ? 'Edit this adjustment' : 'Needs super admin permission'}
                             aria-label="Edit this adjustment"
-                            onClick={() => setEditAdjustment(r.adjustment)}
+                            onClick={() => (mayEdit ? setEditAdjustment(r.adjustment) : needPermission('edit an hours entry'))}
                           >
                             <Pencil size={13} />
                           </button>
                           <button
                             type="button"
                             className="text-red-500 hover:bg-red-500/10 rounded-lg p-1 shrink-0"
-                            title="Delete this adjustment"
+                            title={mayDelete ? 'Delete this adjustment' : 'Needs super admin permission'}
                             aria-label="Delete this adjustment"
-                            onClick={() => setDeleteAdjustment(r.adjustment)}
+                            onClick={() => (mayDelete ? setDeleteAdjustment(r.adjustment) : needPermission('delete an hours entry'))}
                           >
                             <Trash2 size={13} />
                           </button>
@@ -513,6 +530,8 @@ export default function HoursMonthly() {
 
       {(adjustOpen || editAdjustment) && studentId && (
         <AdjustHoursModal
+          mayAdd={mayAdd}
+          mayDeduct={mayDeduct}
           studentId={Number(studentId)}
           studentName={options.find((o: any) => String(o.value) === studentId)?.label || 'Student'}
           editing={editAdjustment}

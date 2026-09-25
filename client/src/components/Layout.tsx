@@ -2,7 +2,7 @@ import { ReactNode, useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, Users, Clock, Wallet, GraduationCap, BarChart3,
-  BookOpen, CalendarDays, User, LogOut, Moon, Sun, ChevronLeft, Menu, Settings, Lock, QrCode,
+  BookOpen, CalendarDays, User, LogOut, Moon, Sun, ChevronLeft, Menu, Settings, Lock, QrCode, KeyRound,
 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '../auth/AuthContext';
@@ -35,6 +35,7 @@ const NAV: Record<string, Item[]> = {
     { to: '/admin/teachers', label: 'Teachers', icon: GraduationCap },
     { to: '/admin/pivots', label: 'Pivots', icon: BarChart3 },
     { to: '/admin/attendance', label: 'Attendance', icon: QrCode },
+    { to: '/admin/permissions', label: 'Permissions', icon: KeyRound },
     { to: '/admin/settings', label: 'Settings', icon: Settings },
   ],
   faculty: [

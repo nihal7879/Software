@@ -1,12 +1,12 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { MessageSquarePlus, Trash2 } from 'lucide-react';
-import { api, fmtDate } from '../api/client';
+import { api, fmtDate, todayIso } from '../api/client';
 import { Overlay } from './Overlay';
 import { CalendarPicker } from './CalendarPicker';
 import { toast } from './Toast';
 
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () => todayIso();
 const day = (v?: string | null) => (v ? fmtDate(String(v).slice(0, 10)) : '');
 
 // '2026-09-16 10:56:38' → '16-09-26, 10:56 AM' — a note says when it was written,

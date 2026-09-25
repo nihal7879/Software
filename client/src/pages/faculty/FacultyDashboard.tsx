@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
-import { api, hrs, fmtDate } from '../../api/client';
+import { api, hrs, fmtDate, dubaiNow } from '../../api/client';
 import { Section, StatusBadge, Table, HoursValue, Spinner } from '../../components/ui';
 
 // Time-of-day greeting: morning < 12:00, afternoon < 17:00, else evening.
@@ -17,9 +17,9 @@ export default function FacultyDashboard() {
   const lectures = useQuery({ queryKey: ['me-lectures'], queryFn: () => api.get('/teachers/me/lectures').then((r) => r.data.data) });
 
   // Live clock — ticks once a minute.
-  const [now, setNow] = useState(() => new Date());
+  const [now, setNow] = useState(() => dubaiNow());
   useEffect(() => {
-    const id = setInterval(() => setNow(new Date()), 30_000);
+    const id = setInterval(() => setNow(dubaiNow()), 30_000);
     return () => clearInterval(id);
   }, []);
   const dateLabel = now.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });

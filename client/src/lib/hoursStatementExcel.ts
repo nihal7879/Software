@@ -1,3 +1,4 @@
+import { dubaiNow } from '../api/client';
 import ExcelJS from 'exceljs';
 
 // Excel export of the Student Hours Statement, laid out exactly like the sheet
@@ -125,7 +126,7 @@ export async function buildHoursStatement(input: StatementInput): Promise<{ buff
   const totalHours = [...hoursByMonth.values()].reduce((a, b) => a + b, 0);
   const totalFees = [...feesByMonth.values()].reduce((a, b) => a + b, 0);
 
-  const now = new Date();
+  const now = dubaiNow();
   const stamp =
     `${now.getDate()}-${MONTHS[now.getMonth()]}-${now.getFullYear()} ` +
     `${((now.getHours() % 12) || 12)}:${String(now.getMinutes()).padStart(2, '0')} ` +

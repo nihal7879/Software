@@ -101,8 +101,31 @@ export const studentOption = (s: any) => {
   return { value: s.id, label: `${s.form_no} — ${s.full_name}`, sub: sub || undefined };
 };
 
-/** Today as YYYY-MM-DD in the viewer's own timezone (toISOString would give UTC). */
+/**
+ * The institute's clock — Dubai, whatever the device is set to.
+ *
+ * The server and the database both work in Dubai time, so the app has to as
+ * well: a teacher whose laptop is on India time would otherwise log a late
+ * evening class on tomorrow's date, and a phone left on another country's time
+ * would show the wrong day on a statement. Every "now" and "today" in the app
+ * comes from here rather than from `new Date()`.
+ *
+ * The returned Date carries Dubai's wall-clock reading in its local fields, so
+ * getFullYear(), getHours() and friends all give the institute's clock.
+ */
+export function dubaiNow(): Date {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Dubai',
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
+  }).formatToParts(new Date());
+  const at = (type: string) => Number(parts.find((p) => p.type === type)?.value);
+  // Midnight comes back as hour 24 in some browsers.
+  return new Date(at('year'), at('month') - 1, at('day'), at('hour') % 24, at('minute'), at('second'));
+}
+
+/** Today in Dubai as YYYY-MM-DD (toISOString would give the UTC day). */
 export function todayIso() {
-  const d = new Date();
+  const d = dubaiNow();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }

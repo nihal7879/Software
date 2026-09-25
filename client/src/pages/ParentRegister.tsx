@@ -1,3 +1,4 @@
+import { dubaiNow } from '../api/client';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
@@ -43,7 +44,7 @@ export default function ParentRegister() {
               <label className="text-sm font-semibold">Child's DOB</label>
               <input type="hidden" {...register('child_dob')} />
               <div className="mt-1.5">
-                <CalendarPicker value={watch('child_dob') || ''} onChange={(v) => setValue('child_dob', v)} placeholder="Select date of birth" openYear={new Date().getFullYear() - 14} />
+                <CalendarPicker value={watch('child_dob') || ''} onChange={(v) => setValue('child_dob', v)} placeholder="Select date of birth" openYear={dubaiNow().getFullYear() - 14} />
               </div>
             </div>
           </div>

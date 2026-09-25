@@ -7,7 +7,7 @@ import { deriveMonth } from '../utils/hours';
 import { HOURS_COLUMNS, deriveHours, CREDITED_EXPR, CONSUMED_EXPR, LAST_LECTURE_EXPR } from '../utils/hoursSummary';
 import { audit } from '../utils/audit';
 // Student dashboard data is refused while an admin has student dashboards locked.
-import { blockLockedStudents } from '../utils/settings';
+import { blockLockedStudents, requirePermission, adminMay, PERMISSIONS } from '../utils/settings';
 import { formNoOrder } from '../utils/formNo';
 
 const router = Router();
@@ -713,6 +713,7 @@ router.post(
 router.put(
   '/ledger/:id/adjust',
   requireRole('admin'),
+  requirePermission('ledger_adjust'),
   wrap(async (req, res) => {
     const b = z
       .object({
@@ -758,6 +759,16 @@ router.put(
 // was typed in: "adjusted till 16 May" entered in September belongs on the
 // statement in May, or the running balance reads wrong from May onwards. Left
 // out, the entry falls back to when it was made.
+async function deniedFor(req: any, key: 'hours_add' | 'hours_deduct') {
+  if (req.user?.role === 'superadmin') return null;
+  if (await adminMay(key)) return null;
+  return {
+    error: `Only the super admin can ${PERMISSIONS[key]}. Ask them to switch this on in Permissions.`,
+    code: 'PERMISSION_REQUIRED',
+    permission: key,
+  };
+}
+
 const ADJUST_DATE = /^\d{4}-\d{2}-\d{2}$/;
 const adjustSchema = z.object({
   delta: z.number(),
@@ -771,6 +782,8 @@ router.post(
   wrap(async (req, res) => {
     const b = adjustSchema.parse(req.body);
     if (!b.delta) return res.status(400).json({ error: 'Enter a non-zero number of hours' });
+    const denied = await deniedFor(req, b.delta > 0 ? 'hours_add' : 'hours_deduct');
+    if (denied) return res.status(403).json(denied);
 
     const r: any = await query(
       'INSERT INTO hours_adjustments (student_id, delta, reason, adjusted_on, created_by) VALUES (?,?,?,?,?)',
@@ -787,6 +800,7 @@ router.post(
 router.put(
   '/adjustments/entry/:adjId',
   requireRole('admin'),
+  requirePermission('hours_edit'),
   wrap(async (req, res) => {
     const b = adjustSchema.parse(req.body);
     if (!b.delta) return res.status(400).json({ error: 'Enter a non-zero number of hours' });
@@ -808,6 +822,7 @@ router.put(
 router.delete(
   '/adjustments/entry/:adjId',
   requireRole('admin'),
+  requirePermission('hours_delete'),
   wrap(async (req, res) => {
     const row = await queryOne<any>('SELECT * FROM hours_adjustments WHERE id = ? AND is_deleted = FALSE', [req.params.adjId]);
     if (!row) return res.status(404).json({ error: 'Adjustment not found' });

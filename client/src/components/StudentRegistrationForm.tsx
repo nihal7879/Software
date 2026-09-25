@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
-import { api } from '../api/client';
+import { api, dubaiNow} from '../api/client';
 import { useMasters } from '../api/masters';
 import { Select } from './Select';
 import { CalendarPicker } from './CalendarPicker';
@@ -12,7 +12,7 @@ function ageFromDob(dob?: string) {
   if (!dob) return '';
   const d = new Date(dob);
   if (isNaN(d.getTime())) return '';
-  const n = new Date();
+  const n = dubaiNow();
   let a = n.getFullYear() - d.getFullYear();
   const m = n.getMonth() - d.getMonth();
   if (m < 0 || (m === 0 && n.getDate() < d.getDate())) a--;
@@ -169,7 +169,7 @@ export function StudentRegistrationForm({
           <div>
             <label className="text-xs font-semibold muted block mb-1">DOB *</label>
             <input type="hidden" {...register('dob', { required: true })} />
-            <CalendarPicker value={watch('dob') || ''} onChange={(v) => setValue('dob', v, { shouldValidate: true })} placeholder="Select date of birth" openYear={new Date().getFullYear() - 14} />
+            <CalendarPicker value={watch('dob') || ''} onChange={(v) => setValue('dob', v, { shouldValidate: true })} placeholder="Select date of birth" openYear={dubaiNow().getFullYear() - 14} />
             {errors.dob && <span className="text-xs text-red-500">Required</span>}
           </div>
           <div>
