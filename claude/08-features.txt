@@ -1,0 +1,93 @@
+================================================================================
+THE BIGGER FEATURES - how they actually work
+================================================================================
+
+QR CHECK-IN
+-----------
+Each teacher has a fixed QR code printed and kept on their desk. A student who
+is signed in scans it when the class starts and again when it ends. The teacher
+turns those scans into lectures.
+
+The code
+  12 characters from ABCDEFGHJKMNPQRSTUVWXYZ23456789 - no 0/O and no 1/I/L, so a
+  code read off a printed card cannot be misread. Stored in teachers.qr_code,
+  UNIQUE, created lazily the first time it is asked for and never changed
+  afterwards (the card is printed and stuck to a desk).
+
+  The image holds a link, origin + /scan?c=CODE, so a phone camera can open it
+  too. /scan parks the code and sends the student through the login they already
+  have. The code is also printed in plain text under the QR, and typing it works
+  the same way.
+
+  The code identifies the teacher and nothing else. It is not a password and
+  carries no rights: scanning records attendance for whoever is already signed
+  in, so the QR gives the teacher and the login gives the student.
+
+The scan (POST /api/checkin)
+  Finds the student's open row with that teacher today (out_at IS NULL).
+    none               -> insert a row: session_date CURDATE(), in_at NOW(),
+                          plus the scan's ip, gps and device
+    under 2 minutes    -> the same tap twice; nothing changes
+    2 minutes or more  -> set out_at = NOW() and
+                          hours = ROUND(TIMESTAMPDIFF(MINUTE,in_at,NOW())/60,2)
+
+  Every time comes from MySQL, never the phone, so a device set to the wrong
+  country records the same moment as everyone else.
+
+The inbox (GET /api/checkin/inbox)
+  One row per student, never a batch, grouped by day. The teacher fills subject,
+  topic, subtopic, remark, venue and meeting link and confirms. Confirming calls
+  insertLecture and writes a lecture for that ONE student, charging their own
+  time in to time out - 4:15 to 5:20 is 1.08 hours for them whatever the rest of
+  the room did. Until confirmed, nothing has touched anybody's hours.
+
+  POST /checkin/apply      the same fields across several rows of a day
+  POST /checkin/confirm    several at once
+  POST /checkin/manual     a student who came without a phone; the row is not
+                           stamped as scanned, and the inbox shows "added by
+                           hand" so real scans stay distinguishable
+  DELETE /checkin/:id      marks it Discarded; never erased
+
+  Guards: a teacher only ever sees and touches their own rows; an admin can work
+  any of them; a row with no time out cannot be confirmed; a row cannot be
+  confirmed twice; anything over 3 hours is flagged in red and asks for a
+  confirmation, because it is almost always a forgotten scan out.
+
+Client files: pages/student/CheckIn.tsx, pages/Scan.tsx,
+components/AttendanceInbox.tsx, pages/admin/Attendance.tsx,
+pages/faculty/Attendance.tsx, components/QrCode.tsx, lib/qr.ts.
+
+
+LECTURE ENTRY
+-------------
+components/LectureSheet.tsx, shared by the teacher's page and the admin's page
+for a teacher (teacherId is what tells them apart).
+
+A sheet, not a dialog: fill the line across the top, press Save, and the class
+drops into the list below under the same headings - the institute kept this in
+Excel and the staff already know that shape. Nine fields across two lines so no
+box is too narrow, stacked below lg. Hours are never typed; they follow from the
+start and end time.
+
+Editing a logged class also adds and removes students on it, without deleting
+and re-entering the class.
+
+
+FEE IMPORT DRAFTS
+-----------------
+pages/admin/Finance.tsx. Imported bank rows that could not be matched wait as
+cards: the bank's own facts on top, the fields to fill underneath, Assign and
+Discard at the bottom right, and a flag saying new / already recorded / already
+in drafts. This is the pattern the attendance inbox copies.
+
+
+SPEECH TO TEXT
+--------------
+AssemblyAI, for dictating the lecture remark. Built and working, then HIDDEN at
+the client's request: components/DictateButton.tsx exports SPEECH_ENABLED =
+false and returns null.
+
+If it is ever switched back on, the fix for losing the first words must go back
+in: start listening (getUserMedia) immediately and buffer, rather than waiting
+for the token and the socket. That fix is NOT currently in the file - it was
+lost in a revert.

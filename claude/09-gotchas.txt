@@ -1,0 +1,105 @@
+================================================================================
+GOTCHAS - things that cost real time here. Do not rediscover them.
+================================================================================
+
+A COMPONENT DECLARED INSIDE A COMPONENT LOSES ITS STATE
+-------------------------------------------------------
+TimePicker used to declare its column and row components inside the render. Each
+render produced a NEW component type, so React threw the DOM node away and
+mounted a fresh one - and the scroll position went back to 0. The popup also
+repositions itself on every scroll event, including the column's own, so every
+notch of the wheel scrolled the list and instantly reset it. The list could
+never get past the first few hours.
+
+Declare components at module level. Inside a render they are recreated on every
+pass. This is the single most expensive bug in this project's history.
+
+
+toISOString() IS ALWAYS UTC
+---------------------------
+It ignores TZ completely. Between midnight and 4 AM Dubai it returns yesterday.
+Three places wrote wrong joining dates this way. Use utils/dates.ts today() on
+the server and todayIso() / dubaiNow() on the client.
+
+
+mysql2 AND DATES
+----------------
+The app pool sets dateStrings: true, so dates come back as strings in Dubai
+time. A throwaway script that opens its own connection WITHOUT that option gets
+JS Dates, which JSON.stringify turns into UTC ISO - and it looks like the server
+has a timezone bug when it does not. Set dateStrings: true in scripts too.
+
+
+JSON COLUMNS COME BACK PARSED
+-----------------------------
+audit_logs.before_json / after_json are JSON columns. mysql2 returns them as
+objects already. JSON.parse() on them throws
+  "[object Object]" is not valid JSON.
+
+
+MySQL UPDATE EVALUATES LEFT TO RIGHT
+------------------------------------
+  SET in_at = ?, out_at = ?, hours = ROUND(TIMESTAMPDIFF(MINUTE,in_at,out_at)/60,2)
+works, and uses the NEW in_at and out_at, because assignments are applied in
+order. Relied on in checkin.ts. Put the columns before the expression that reads
+them.
+
+
+TWO DIFFERENT "ACTIVE" FLAGS
+----------------------------
+students.status / students.is_active is the enrolment; users.is_active is the
+login. A script once set only users.is_active = FALSE, so the record read Active
+while the login was dead, and the login screen said "Invalid credentials"
+because disabled accounts are filtered before the password is compared. Hours
+were lost chasing it.
+
+Switch all three together, the way routes/students.ts does. The login screen now
+says "This account has been switched off" instead, and the student list shows a
+"login off" chip.
+
+
+JSX COMMENTS INSIDE A && EXPRESSION
+-----------------------------------
+  {cond && (
+    {/* comment */}          <-- breaks the parse, TS1005
+    <div>...</div>
+  )}
+Put the comment inside the tag, or above the whole expression. This broke the
+build twice.
+
+
+THE PERMISSION FLAGS ARE CACHED
+-------------------------------
+utils/settings.ts caches them for 10 seconds to avoid a database hit per
+request. A switch flipped in the UI takes up to 10 seconds to reach the admin's
+session. A test that flips a switch and immediately calls the endpoint must wait
+it out, or it will read the old value and look like a bug.
+
+
+VERCEL RESERVES THE NAME "TZ"
+-----------------------------
+You cannot add TZ as an environment variable there - the dashboard refuses the
+name. config.ts sets it in code instead, which is why the deployed app is on
+Dubai time with nothing configured. If it ever has to be visible in the
+dashboard, use APP_TZ and read it in config.ts.
+
+
+NO HORIZONTAL SCROLLING
+-----------------------
+The client has asked for it to be removed twice and rejected three designs over
+it. Wide forms use table-fixed with colgroup percentages on large screens and
+stack below lg. Check every new table at phone width before calling it done.
+
+
+WRITING FILES FROM A SHELL HEREDOC
+----------------------------------
+Heredocs in this environment break on apostrophes in the content. Write files
+with an editor tool, or with a Python script written to a file first - not with
+cat <<'EOF' containing prose.
+
+
+THE DATABASE MACHINE IS NAMED "DEV"
+-----------------------------------
+The host holding live data is called MT-DEV-SRV and sits on the office network,
+on an India-time OS. It is not a managed service and it is not a dev database
+despite the name. Treat anything you run against it as production.

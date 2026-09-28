@@ -17,7 +17,7 @@ import HoursStatement from './pages/shared/HoursStatement';
 import Finance from './pages/admin/Finance';
 import Teachers from './pages/admin/Teachers';
 import Pivots from './pages/admin/Pivots';
-import Permissions from './pages/admin/Permissions';
+import Approvals from './pages/admin/Approvals';
 import FacultyDashboard from './pages/faculty/FacultyDashboard';
 import FacultyStudents from './pages/faculty/FacultyStudents';
 import FacultyStudentDetail from './pages/faculty/FacultyStudentDetail';
@@ -94,8 +94,9 @@ export default function App() {
       <Route path="/admin/lecture/:teacherId" element={<Protected roles={['admin']}><AdminLectureEntry /></Protected>} />
       {/* Reports with money in them: the super admin's, not the admin's. */}
       <Route path="/admin/pivots" element={<Protected roles={['superadmin']}><Pivots /></Protected>} />
-      {/* What the Institute Admin may do beyond their role — the super admin's. */}
-      <Route path="/admin/permissions" element={<Protected roles={['superadmin']}><Permissions /></Protected>} />
+      {/* The approval queue is the super admin's alone. The office is told
+          their change was sent when they save it. */}
+      <Route path="/admin/approvals" element={<Protected roles={['superadmin']}><Approvals /></Protected>} />
       {/* Scanned check-ins for any teacher, and the printed desk codes. */}
       <Route path="/admin/attendance" element={<Protected roles={['admin']}><AdminAttendance /></Protected>} />
       <Route path="/admin/settings" element={<Protected roles={['admin']}><Settings /></Protected>} />

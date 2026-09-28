@@ -35,7 +35,7 @@ const NAV: Record<string, Item[]> = {
     { to: '/admin/teachers', label: 'Teachers', icon: GraduationCap },
     { to: '/admin/pivots', label: 'Pivots', icon: BarChart3 },
     { to: '/admin/attendance', label: 'Attendance', icon: QrCode },
-    { to: '/admin/permissions', label: 'Permissions', icon: KeyRound },
+    { to: '/admin/approvals', label: 'Approvals', icon: KeyRound },
     { to: '/admin/settings', label: 'Settings', icon: Settings },
   ],
   faculty: [
@@ -78,9 +78,22 @@ export function Layout({ children }: { children: ReactNode }) {
     enabled: user?.role === 'admin' || user?.role === 'superadmin',
     refetchInterval: 60_000,
   });
+  const pendingApprovals = useQuery({
+    queryKey: ['approvals-count'],
+    queryFn: () => api.get('/approvals/count').then((r) => Number(r.data.count) || 0),
+    enabled: user?.role === 'superadmin',
+    refetchInterval: 60_000,
+  });
   // Registrations has no menu entry of its own — they are reached from the
   // dashboard — so the waiting count rides on Students, as it did before.
-  const badgeFor = (to: string) => (to === '/admin/students' ? pendingRegs.data || 0 : 0);
+  const badgeFor = (to: string) =>
+    to === '/admin/students' ? pendingRegs.data || 0
+    : to === '/admin/approvals' ? pendingApprovals.data || 0
+    : 0;
+  const badgeTitle = (to: string, n: number) =>
+    to === '/admin/approvals'
+      ? `${n} waiting for approval`
+      : `${n} new registration${n === 1 ? '' : 's'}`;
   // Students see a lock on Dashboard while an admin has student dashboards locked.
   const studentAccess = useStudentAccess(user?.role === 'student');
   const lockedFor = (to: string) => user?.role === 'student' && to === '/student' && studentAccess.data !== false;
@@ -146,7 +159,7 @@ export function Layout({ children }: { children: ReactNode }) {
                 <span
                   className="ml-auto inline-flex items-center justify-center h-[18px] min-w-[18px] px-1 text-[11px] font-bold leading-none text-white rounded-full tabular-nums"
                   style={{ background: 'var(--color-primary)' }}
-                  title={`${badge} new registration${badge === 1 ? '' : 's'}`}
+                  title={badgeTitle(it.to, badge)}
                 >
                   {badge}
                 </span>

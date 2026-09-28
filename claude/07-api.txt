@@ -1,0 +1,78 @@
+================================================================================
+API
+================================================================================
+
+All routes are under /api. Every router does router.use(requireAuth) at the top,
+then guards individual routes with requireRole(...) and, where relevant,
+requirePermission(...). Handlers are wrapped in wrap().
+
+  /api/auth           login, account select, me, change password, register
+  /api/students       the student record, status, archive, convert, credentials
+  /api/lectures       lectures and their attendees
+  /api/fees           payments, packages, the ledger, adjustments, imports
+  /api/teachers       teachers, their students, subjects, QR codes
+  /api/analytics      dashboard figures (money parts are super admin only)
+  /api/management     the master student list with hours summary
+  /api/masters        venues, grades, boards, schools
+  /api/registrations  public sign-ups waiting for approval
+  /api/settings       student lock, permission switches
+  /api/email          statement emails and the email log
+  /api/follow-ups     notes against a student
+  /api/speech         AssemblyAI token (feature currently hidden)
+  /api/checkin        QR check-in and the teacher's attendance inbox
+
+  GET /api/health     open, returns { ok, service, time }
+
+
+WORTH KNOWING BEFORE YOU ADD TO THEM
+------------------------------------
+lectures.ts
+  insertLecture(conn, body, teacherId, userId) is exported and is the ONLY way
+  a lecture is created. The normal POST uses it, the batch endpoint uses it, and
+  confirming a QR check-in uses it. Anything new that creates a lecture must use
+  it too, or the attendee rows and the hours will not be written consistently.
+
+  Each attendee may carry its own hours_consumed. It defaults to the session
+  total but is not required to equal it.
+
+  Two places flatten it and you should know: PUT /:id overwrites every
+  attendee's hours when the session total changes, and POST /:id/attendees gives
+  a newly added student the session total. A one-student-per-lecture path (like
+  QR confirm) avoids both.
+
+  DELETE /:id/attendees/:studentId refuses to remove the last student on a
+  lecture - delete the lecture instead. Removing an attendee marks the row and
+  the hours return immediately.
+
+fees.ts
+  The four statement-changing routes are behind the permission switches:
+    PUT    /ledger/:id/adjust            ledger_adjust
+    POST   /ledger/:id/adjust-hours      hours_add or hours_deduct, by the sign
+                                         of the delta, checked inside the
+                                         handler rather than as middleware
+    PUT    /adjustments/entry/:adjId     hours_edit
+    DELETE /adjustments/entry/:adjId     hours_delete
+
+teachers.ts
+  GET /me/qr, GET /:teacherId/qr, GET /qr-codes. The code is created the first
+  time it is asked for and never changes afterwards.
+
+checkin.ts
+  See 08-features.txt.
+
+analytics.ts
+  /overview omits revenue and pending unless the caller is a super admin.
+  /revenue-trend, /finance-pivot and /hours-pivot are requireSuperAdmin.
+
+
+ERROR SHAPE
+-----------
+  { error: 'A sentence a member of staff can act on.' }
+
+with a code when the client needs to tell cases apart:
+  ACCOUNT_DISABLED       the login is switched off
+  STUDENT_PANEL_LOCKED   423, the student dashboard lock
+  PERMISSION_REQUIRED    403, plus "permission": which key is missing
+
+Status codes: 400 bad input, 401 not signed in, 403 not allowed, 404 missing,
+409 conflict (already enrolled, already on this lecture), 423 locked.

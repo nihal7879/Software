@@ -1,0 +1,92 @@
+================================================================================
+ARCHITECTURE
+================================================================================
+
+THE STACK
+---------
+Server   Node + Express 4 + TypeScript, mysql2 (promise pool), zod, bcryptjs,
+         jsonwebtoken, nodemailer. Dev runner is tsx watch.
+Client   React 18 + TypeScript + Vite, TanStack Query v5, react-router-dom v6,
+         react-hook-form, zod, Tailwind 3, lucide-react icons, recharts,
+         exceljs + xlsx for exports, qrcode + html5-qrcode for the QR feature.
+Database MySQL 8.
+
+No ORM. Plain SQL through a small helper (server/src/db.ts). No GraphQL, no
+state library beyond TanStack Query - server data lives in the query cache,
+nothing else is global except auth and theme.
+
+
+FOLDER LAYOUT
+-------------
+  server/src/
+    index.ts          starts the server
+    app.ts            middleware, route mounting, error handlers
+    config.ts         reads .env, sets the process timezone
+    db.ts             the connection pool and the query helpers
+    middleware/
+      auth.ts         requireAuth, requireRole, requireSuperAdmin, allows()
+      error.ts        wrap() and the error handler
+    routes/           one file per area, each exports an Express Router
+    utils/            audit, dates, hours, hoursSummary, jwt, mailer, qrCode,
+                      reqContext, settings (permissions live here), formNo,
+                      credentials
+  server/scripts/     one-off data scripts and their JSON backups
+
+  client/src/
+    main.tsx, App.tsx routes and role gates
+    api/              client.ts (axios + helpers), masters.ts, permissions.ts
+    auth/             AuthContext
+    components/       shared UI, listed in 05-styling.txt
+    pages/
+      admin/ faculty/ student/ parent/ shared/
+    lib/              excel export, qr helpers, small utilities
+    theme/            light/dark
+
+  database/
+    schema.sql        the base schema
+    seed.sql          starting data
+    migrations/       dated .sql files, run once each in filename order
+
+
+HOW A REQUEST FLOWS
+-------------------
+  1. Client calls api.get('/students') - axios instance with baseURL /api.
+     An interceptor attaches the JWT, and the browser's GPS and public IP as
+     headers (X-Gps-Lat, X-Gps-Lng, X-Public-Ip).
+  2. app.ts: cors, express.json, requestContext (stores ip/gps/device in
+     AsyncLocalStorage for this request).
+  3. The router: requireAuth reads the JWT into req.user
+     { userId, role, email, studentId, teacherId }.
+  4. requireRole(...) and, where the action is restricted, requirePermission().
+  5. The handler is wrapped in wrap() so a thrown error reaches the error
+     handler instead of hanging the request.
+  6. zod parses the body. Invalid input becomes a 400 with a readable message.
+  7. SQL through query() / queryOne(), or pool.getConnection() for a
+     transaction.
+  8. audit() records anything that changed.
+
+A 401 anywhere makes the client drop the token and return to /login.
+
+
+CLIENT DATA
+-----------
+Every server read is a TanStack Query with a named key. After a write, the
+affected keys are invalidated - the list refreshes itself. Keys in common use:
+['ledger'], ['ledger-all'], ['lectures'], ['workload'], ['teacher-lectures'],
+['mgmt-master'], ['adjustments'], ['student-report'], ['permissions'],
+['checkin-inbox'], ['subjects'], ['teachers'].
+
+If a change does not appear on screen after saving, the cause is almost always
+a missing invalidateQueries, not a server problem.
+
+
+AUTH
+----
+JWT in localStorage, sent as a bearer token, default 1 day.
+The token carries the role and, where relevant, studentId or teacherId - so a
+student can only ever read their own data and a teacher their own classes. The
+server never trusts an id from the request body for that purpose.
+
+A parent may be linked to several children; logging in returns a short-lived
+"account select" ticket when more than one account matches, and the chosen
+child's studentId is baked into the final token.

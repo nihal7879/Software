@@ -1,0 +1,105 @@
+================================================================================
+STYLING AND UI
+================================================================================
+
+Tailwind 3, with a small set of component classes and CSS variables defined in
+client/src/index.css. Never hard-code a colour - use the variables, or the
+Tailwind class that reads them. Dark mode works by swapping the variables under
+.dark, so anything written with raw hex breaks in one theme or the other.
+
+
+THE TOKENS (client/src/index.css)
+---------------------------------
+  --color-primary       #f97316  warm orange, the brand accent
+  --color-primary-600   #ea580c  hover / pressed
+  --color-bg            page background
+  --color-card          panel background
+  --color-card-alt      soft fill for pills, hovers, striped rows
+  --color-text          body ink
+  --color-muted         secondary text
+  --color-border        all borders and rules
+  --shadow-soft         the only shadow used
+  --radius              10px
+
+Typography: Google Sans / Roboto for headings, Roboto for body. Base font size
+is 14px, and html { font-size: 90% } so the app at 100% browser zoom looks like
+it did at 90%. All rem sizing scales off that - do not "fix" it.
+
+
+THE CLASSES
+-----------
+  .card         panel: card background, 1px border, soft shadow, rounded-xl
+  .btn-primary  filled orange action
+  .btn-ghost    bordered secondary action
+  .btn-accent   rarely used
+  .input        every text input, select trigger and picker trigger
+  .muted        secondary text
+  .table-th     column heading - 11px, uppercase, tracked, muted
+  .table-td     cell - has border-top, which is what draws the row rules
+  .pill         small rounded fill
+  .thin-scroll  6px scrollbar for inner scrolling areas
+  .accent-underline  the short orange rule under a section heading
+  .tnum         tabular figures (numbers line up in columns)
+
+Sizes are trimmed inline with ! prefixes where a button must be smaller than the
+default, e.g. className="btn-ghost !py-1 !px-2.5 text-xs". That is the
+established pattern.
+
+
+THE SHARED COMPONENTS (client/src/components/)
+----------------------------------------------
+  ui.tsx           Section, KpiCard, Table, StatusBadge, HoursValue, Spinner,
+                   Pagination, ALL_ROWS
+  Select.tsx       searchable dropdown, fixed-position menu that escapes
+                   overflow, optional allowCustom and server-side onSearch
+  MultiSelect.tsx  the same for several values
+  CalendarPicker   date picker with month and year grids (a birth year is a few
+                   clicks, not a hundred)
+  TimePicker       hour / minute / AM-PM columns, 15 minute steps
+  Overlay          portal, body scroll lock, Escape to close
+  ConfirmModal     the only way to confirm a destructive action
+  Toast            toast(message, 'error' | 'info' | 'success')
+  FilterMenu, ColumnPicker, Accordion, ParentPicker, Pagination
+  LectureSheet     the lecture entry sheet, shared by teacher and admin
+  AttendanceInbox  the QR check-in inbox, shared by teacher and admin
+  AdjustHoursModal add / deduct / correct hours
+  QrCode           renders a QR to canvas, always black on white
+
+Use them. A new dropdown, modal or date field written from scratch will not
+match, will not behave the same in dark mode, and will not escape table
+overflow correctly.
+
+
+LAYOUT RULES
+------------
+1. NO HORIZONTAL SCROLLING, anywhere. The client finds it hard to use and has
+   asked for it to be removed twice. Wide forms are solved with
+   table-fixed + <colgroup> percentage widths on large screens, and the same
+   fields stacked in a grid below lg. LectureSheet and AttendanceInbox are the
+   reference implementations.
+
+2. Where two lines of fields belong to one record, they sit in ONE table on a
+   grid of twenty 5% columns, each field taking the colSpan it needs. Both lines
+   add to twenty so the columns line up down the page. See AttendanceInbox.
+
+3. Dropdowns open DOWNWARD wherever there is room, shrinking to fit rather than
+   flipping up over the field they belong to - a menu that jumps above the box
+   covers the fields just filled in. components/anchoredMenu.ts handles this and
+   returns the height the menu may use. Any popover in a table must use it, or
+   it will be clipped by the table's overflow.
+
+4. A list longer than a page gets <Pagination>, 15 per page by default.
+
+5. Numbers are right-aligned and use tabular figures.
+
+6. Every destructive action goes through ConfirmModal with a message that says
+   what will actually happen, in plain words.
+
+
+WRITING TONE
+------------
+Labels and messages are plain English for a small office, not developer
+English. "This is the only student on the lecture. To remove it completely,
+delete the lecture instead." - not "Cannot remove last attendee".
+
+Error messages say what to do next. Empty states say what will fill them.

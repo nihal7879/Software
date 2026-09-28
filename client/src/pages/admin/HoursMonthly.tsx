@@ -2,12 +2,12 @@ import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Pencil, Trash2 } from 'lucide-react';
 import { api, hrs, num, studentOption } from '../../api/client';
+import { useAuth } from '../../auth/AuthContext';
 import { Section, Table, Spinner, KpiCard, HoursValue, StatusBadge, Pagination, type Sort } from '../../components/ui';
 import { Select } from '../../components/Select';
 import { FilterMenu, FilterField } from '../../components/FilterMenu';
 import { CalendarRangePicker } from '../../components/CalendarPicker';
 import { AdjustHoursModal, type AdjustmentRow } from '../../components/AdjustHoursModal';
-import { useMay } from '../../api/permissions';
 import { ConfirmModal } from '../../components/ConfirmModal';
 import { toast } from '../../components/Toast';
 import { downloadHoursStatement } from '../../lib/hoursStatementExcel';
@@ -22,16 +22,10 @@ export default function HoursMonthly() {
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
   // Changing the statement is the super admin's, unless they have granted it.
-  // One switch per action, so the office can be allowed to add hours without
-  // being able to take them away or remove an entry from the record.
-  const mayAdd = useMay('hours_add');
-  const mayDeduct = useMay('hours_deduct');
-  const mayEdit = useMay('hours_edit');
-  const mayDelete = useMay('hours_delete');
-  const mayAdjust = mayAdd || mayDeduct;
-  const needPermission = (what: string) =>
-    toast(`Permission required: only the super admin can ${what}. Ask them to switch it on in Permissions.`, 'error');
   const [adjustOpen, setAdjustOpen] = useState(false);
+  // The office explains itself to the super admin; the super admin does not.
+  const { user } = useAuth();
+  const mustExplain = user?.role !== 'superadmin';
   // An adjustment entered wrong can be corrected or taken off the statement.
   const [editAdjustment, setEditAdjustment] = useState<AdjustmentRow | null>(null);
   const [deleteAdjustment, setDeleteAdjustment] = useState<AdjustmentRow | null>(null);
@@ -58,12 +52,19 @@ export default function HoursMonthly() {
   const qc = useQueryClient();
   // Removing an adjustment changes the balance, so everything reading it refreshes.
   const removeAdjustment = useMutation({
-    mutationFn: (id: number) => api.delete(`/fees/adjustments/entry/${id}`),
-    onSuccess: () => {
+    mutationFn: (v: { id: number; note?: string }) =>
+      api.delete(`/fees/adjustments/entry/${v.id}`, {
+        params: v.note ? { request_note: v.note } : undefined,
+      }),
+    onSuccess: (res: any) => {
       ['ledger', 'ledger-all', 'pkg', 'adjustments', 'student-report', 'mgmt-master']
         .forEach((k) => qc.invalidateQueries({ queryKey: [k] }));
       setDeleteAdjustment(null);
-      toast('Adjustment deleted');
+      if (res?.status === 202 || res?.data?.pending) {
+        toast(res?.data?.message || 'Sent to the super admin for approval. The entry stays until it is approved.', 'info');
+      } else {
+        toast('Adjustment deleted. The hours are back on the balance.');
+      }
     },
     onError: (e: any) => toast(e?.response?.data?.error || 'Could not delete the adjustment', 'error'),
   });
@@ -369,13 +370,7 @@ export default function HoursMonthly() {
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            <button
-              className="btn-ghost !py-1.5 !px-3 text-sm"
-              title={mayAdjust ? undefined : 'Needs super admin permission'}
-              onClick={() => (mayAdjust ? setAdjustOpen(true) : needPermission('add or deduct hours'))}
-            >
-              ± Adjust Hours{mayAdjust ? '' : ' 🔒'}
-            </button>
+            <button className="btn-ghost !py-1.5 !px-3 text-sm" onClick={() => setAdjustOpen(true)}>± Adjust Hours</button>
             <button
               className="btn-ghost !py-1.5 !px-3 text-sm"
               onClick={exportExcel}
@@ -454,18 +449,18 @@ export default function HoursMonthly() {
                           <button
                             type="button"
                             className="muted hover:text-[var(--color-primary)] rounded-lg p-1 shrink-0 ml-auto"
-                            title={mayEdit ? 'Edit this adjustment' : 'Needs super admin permission'}
+                            title="Edit this adjustment"
                             aria-label="Edit this adjustment"
-                            onClick={() => (mayEdit ? setEditAdjustment(r.adjustment) : needPermission('edit an hours entry'))}
+                            onClick={() => setEditAdjustment(r.adjustment)}
                           >
                             <Pencil size={13} />
                           </button>
                           <button
                             type="button"
                             className="text-red-500 hover:bg-red-500/10 rounded-lg p-1 shrink-0"
-                            title={mayDelete ? 'Delete this adjustment' : 'Needs super admin permission'}
+                            title="Delete this adjustment"
                             aria-label="Delete this adjustment"
-                            onClick={() => (mayDelete ? setDeleteAdjustment(r.adjustment) : needPermission('delete an hours entry'))}
+                            onClick={() => setDeleteAdjustment(r.adjustment)}
                           >
                             <Trash2 size={13} />
                           </button>
@@ -530,9 +525,6 @@ export default function HoursMonthly() {
 
       {(adjustOpen || editAdjustment) && studentId && (
         <AdjustHoursModal
-          mayAdd={mayAdd}
-          mayDeduct={mayDeduct}
-          mayEdit={mayEdit}
           studentId={Number(studentId)}
           studentName={options.find((o: any) => String(o.value) === studentId)?.label || 'Student'}
           editing={editAdjustment}
@@ -542,12 +534,21 @@ export default function HoursMonthly() {
 
       {deleteAdjustment && (
         <ConfirmModal
-          title="Delete this adjustment?"
-          message={`${num(Number(deleteAdjustment.delta))} hours will come off the balance. The entry is kept on record and can be restored.`}
-          confirmLabel="Delete"
-          danger
+          title={mustExplain ? 'Ask to remove this adjustment' : 'Delete this adjustment?'}
+          message={
+            mustExplain
+              ? `${num(Number(deleteAdjustment.delta))} hours would come off the balance. It goes to the super admin first — the entry stays on the statement until they approve it.`
+              : `${num(Number(deleteAdjustment.delta))} hours will come off the balance. The entry is kept on record and can be restored.`
+          }
+          confirmLabel={mustExplain ? 'Send for approval' : 'Delete'}
+          danger={!mustExplain}
           busy={removeAdjustment.isPending}
-          onConfirm={() => removeAdjustment.mutate(deleteAdjustment.id)}
+          note={mustExplain ? {
+            label: 'Why do you want to remove it?',
+            placeholder: 'e.g. added twice by mistake, the same hours are on the 3 July entry',
+            help: 'Only the super admin will see this. The student and parent will not see it.',
+          } : undefined}
+          onConfirm={(note) => removeAdjustment.mutate({ id: deleteAdjustment.id, note })}
           onClose={() => setDeleteAdjustment(null)}
         />
       )}

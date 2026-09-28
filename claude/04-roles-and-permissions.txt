@@ -1,0 +1,91 @@
+================================================================================
+ROLES AND PERMISSIONS
+================================================================================
+
+THE FIVE ROLES
+--------------
+  superadmin  the owner. Everything an admin has, plus the money overview
+              (revenue, pending fees, hours consumed, revenue trend, teacher
+              workload), the Pivots reports, and the switches described below.
+  admin       the office. Students, hours, fees, teachers, attendance,
+              registrations. No money overview, no Pivots.
+  faculty     a teacher. Their own students, their own lectures, their own
+              attendance inbox, their own QR code.
+  student     their own hours, fees, lectures, and QR check-in.
+  parent      the same, for a child they are linked to.
+
+
+HOW THE HIERARCHY WORKS
+-----------------------
+server/src/middleware/auth.ts:
+
+  allows(roles, role) = roles.includes(role)
+                        || (role === 'superadmin' && roles.includes('admin'))
+
+So requireRole('admin') lets a super admin through as well. A page that must be
+super admin only uses requireSuperAdmin, never a role list.
+
+On the client the same rule is in App.tsx's Protected component, and the menu is
+built per role in components/Layout.tsx.
+
+IMPORTANT: hiding something in the menu is not security. Anything an admin must
+not see is ALSO refused by the server - analytics.ts omits revenue and pending
+fees from its response unless the caller is a super admin, and the pivot routes
+are behind requireSuperAdmin. Do both, always.
+
+
+THE PERMISSION SWITCHES
+-----------------------
+Some things belong to the super admin by default but the office sometimes needs
+them. Those are switches the super admin can hand over and take back, on the
+Permissions page (super admin menu).
+
+Defined in server/src/utils/settings.ts:
+
+  hours_add       add hours to a student statement
+  hours_deduct    deduct hours from a student statement
+  hours_edit      edit an hours entry already on a statement
+  hours_delete    delete an hours entry from a statement
+  ledger_adjust   change the credited, pending and discount figures
+
+They are independent. Granting "add" does not grant "deduct". This is
+deliberate: the office is often allowed to put hours on but never take them off.
+
+Stored in app_settings as perm_<key> = '0' | '1', with the grant time and the
+person in updated_at / updated_by. A permission can also be given until a
+moment: perm_<key>_until holds 'YYYY-MM-DD HH:MM:SS' in Dubai time, and past it
+the permission simply reads as off. Nothing runs on a schedule - the end time is
+checked on every read.
+
+Adding a new permission:
+  1. Add the key and its wording to PERMISSIONS in utils/settings.ts. The
+     wording is used both on the switch and in the refusal message, so they can
+     never drift apart.
+  2. Guard the route with requirePermission('your_key') AFTER requireRole.
+  3. On the client, useMay('your_key') to decide what the button does.
+The Permissions page lists whatever the server returns, so it needs no change.
+
+
+HOW THE CLIENT SHOWS A MISSING PERMISSION
+-----------------------------------------
+The button stays on screen with a padlock, and pressing it explains who to ask:
+"Permission required: only the super admin can ... Ask them to switch it on in
+Permissions."
+
+Do not hide the button. An admin who cannot find a button assumes the system is
+broken and calls the office; one who can see it locked understands it is a rule.
+
+The server refuses the request regardless of what the screen shows.
+
+
+THE STUDENT LOCK
+----------------
+app_settings.student_panel_locked, on the same Permissions page. While locked,
+students sign in to a "locked for now" screen: their dashboard, hours, fees and
+lectures are refused by the server with 423, but profile, password and QR
+check-in stay open. A student sitting in the classroom must still be able to
+record attendance even if the family owes fees.
+
+Implemented by blockLockedStudents in utils/settings.ts, applied to the student
+data routes. It affects students only - parents, teachers and admins read the
+same routes untouched.

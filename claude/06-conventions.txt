@@ -1,0 +1,119 @@
+================================================================================
+CONVENTIONS - the rules this codebase follows without exception
+================================================================================
+
+1. NOTHING IS EVER DELETED
+--------------------------
+Every delete sets is_deleted = TRUE. The application issues no DELETE statement
+against business data, ever. A mistake must be recoverable and history must stay
+intact.
+
+  - Every read filters is_deleted = FALSE. Miss it and deleted rows reappear.
+  - When a parent row is marked deleted, its children must be too (deleting a
+    lecture must also stop its attendee rows from consuming hours).
+  - Statuses like 'Discarded' on a check-in do the same job at the business
+    level: the row stays, it simply never becomes anything.
+
+The only DELETEs in the codebase are in throwaway test scripts cleaning up their
+own fixtures, and in one place clearing a superseded app_settings key.
+
+
+2. EVERYTHING RUNS ON DUBAI TIME
+--------------------------------
+The institute is in Dubai (UTC+4, no daylight saving). The database machine runs
+on India time, Vercel runs on UTC. Without care, a class at 11 PM was recorded
+as half past midnight the next day.
+
+Three layers, all needed:
+  Database  db.ts runs SET time_zone = '+04:00' on every pooled connection. So
+            NOW(), CURDATE() and every self-stamping TIMESTAMP are Dubai time.
+            '+04:00' and not 'Asia/Dubai' because this MySQL has no named-zone
+            table installed.
+  Server    config.ts sets process.env.TZ = process.env.TZ || 'Asia/Dubai'
+            before anything reads a date. Vercel reserves the name TZ and will
+            not let you set it as a variable - this line is what covers it.
+  Client    api/client.ts exports dubaiNow(). There is no bare new Date() left
+            in the client. Every "today" and "now" comes from dubaiNow() or
+            todayIso(), so a laptop on India time or a phone on US time still
+            reads the institute's clock.
+
+NEVER use toISOString() to get a date. It is always UTC regardless of TZ, so
+between midnight and 4 AM Dubai it hands back yesterday. Use utils/dates.ts
+today() on the server and todayIso() on the client.
+
+The pool sets dateStrings: true, so MySQL DATE and TIMESTAMP values arrive as
+'YYYY-MM-DD' and 'YYYY-MM-DD HH:MM:SS' strings in Dubai time, not JS Dates.
+Slicing them is safe. A separate connection made without that option returns
+Dates, which Express then serialises as UTC ISO - which looks like a timezone
+bug and is not.
+
+
+3. EVERY CHANGE IS AUDITED
+--------------------------
+  await audit(userId, ACTION, entityType, entityId, before, after)
+
+before and after are whole row objects. audit() never throws - a failed audit
+must not fail the request - and it picks up ip, gps and device from the request
+context by itself.
+
+Actions in use: CREATE, UPDATE, DELETE, LOGIN, ADD_ATTENDEE, REMOVE_ATTENDEE,
+ASSIGN_IMPORT, DISCARD, DISCARD_ALL, ADJUST, ADJUST_HOURS, EDIT_ADJUST_HOURS,
+DELETE_ADJUST_HOURS, CONVERT, CHECK_IN, CHECK_OUT, CONFIRM_CHECKIN,
+EDIT_CHECKIN, EDIT_CHECKIN_TIME, DISCARD_CHECKIN, ADD_CHECKIN,
+GRANT_PERMISSION, REVOKE_PERMISSION, LOCK_STUDENT_PANEL, UNLOCK_STUDENT_PANEL,
+MERGE, STATUS.
+
+Where a user edit overwrites something the system recorded - a teacher changing
+a scanned time, for instance - the audit entry must carry the original. That is
+the only record of what the machine said before a person changed it.
+
+Known gap: password changes are not audited anywhere. Worth fixing.
+
+
+4. VALIDATE WITH ZOD, AT THE EDGE
+---------------------------------
+Every request body is parsed by a zod schema in the route. Never read
+req.body.something directly.
+
+Be generous about what arrives and strict about what is stored: a checkbox that
+MySQL returns as TINYINT 0/1 and the form posts back as a number needs
+  z.union([z.boolean(), z.number().int().min(0).max(1)]).transform(Boolean)
+That exact case broke the student profile save.
+
+
+5. TRANSACTIONS FOR ANYTHING MULTI-STEP
+---------------------------------------
+  const conn = await pool.getConnection();
+  try { await conn.beginTransaction(); ... await conn.commit(); }
+  catch (e) { await conn.rollback(); throw e; }
+  finally { conn.release(); }
+
+Creating a lecture and its attendees, confirming a check-in into a lecture,
+converting a student - all of these are one unit or none of it.
+
+
+6. TESTING CHANGES THAT TOUCH DATA
+----------------------------------
+There is no test suite. The working method, used for every feature here:
+
+  1. Write a throwaway script under server/scripts/ (prefix it with _ so it is
+     obviously temporary).
+  2. Create fixtures named CLAUDETEST-something so they are unmistakable.
+  3. Drive the REAL API over HTTP with a JWT signed using JWT_SECRET, so the
+     middleware, permissions and validation are all exercised.
+  4. Assert against the database directly as well as the response.
+  5. Delete every fixture in a finally block, and print what is left as proof.
+  6. Delete the script afterwards.
+
+Before changing existing data: take a JSON backup first, print before and after
+figures, and refuse to run if the data is not the shape you expected.
+
+
+7. COMMENTS EXPLAIN WHY
+-----------------------
+The code says what it does. Comments say why it is that way - the constraint,
+the bug that caused it, the decision behind it. Several comments in this
+codebase are the only record of a decision the client made. Do not strip them.
+
+Match the surrounding density. Files here carry a block at the top explaining
+the purpose of the module, and short comments where something is not obvious.

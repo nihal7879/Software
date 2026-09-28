@@ -1,0 +1,99 @@
+================================================================================
+HOURS AND FEES - the money model
+Read this before changing anything that touches fees, hours or the statement.
+================================================================================
+
+THE IDEA
+--------
+A student buys a block of hours. Every lecture they attend consumes some of
+them. What is left is their balance. Money and hours are two sides of the same
+record: a payment creates a package of hours.
+
+  fee_transactions   the money that arrived
+  fee_packages       the hours it bought (transaction_id points back)
+  lecture_attendees  the hours used, one row per student per lecture
+  hours_adjustments  manual corrections, each its own dated entry
+
+
+THE FORMULA
+-----------
+Defined once, in server/src/utils/hoursSummary.ts. Never re-derive it anywhere
+else - if a figure is needed somewhere new, import these expressions.
+
+  credited = SUM(package_hours) + SUM(discount_hours) + SUM(adjusted_hours)
+             over ACTIVE packages
+           + SUM(delta) from hours_adjustments (not deleted)
+
+  consumed = SUM(hours_consumed) from lecture_attendees
+             where the attendee row AND its lecture are both not deleted
+
+  hours_left = credited - consumed          (may be negative - never clamp it)
+
+  fee_status = 'Trial'            if the student is a Trial
+               'Payment Required' if hours_left <= 0
+               'In Credit'        otherwise
+
+Two details that look like bugs but are not:
+  - hours_left is allowed to go negative. That is a student who has over-run
+    their package, and the office needs to see it.
+  - The lecture's is_deleted is checked as well as the attendee's. Deleting a
+    lecture must give its hours back, or deleting changes nothing visible.
+
+
+WHY IT IS WRITTEN AS SUBQUERIES
+-------------------------------
+There is a student_hours_summary VIEW in the schema. Do not use it on any path
+that serves a page. It re-aggregates the whole of lecture_attendees,
+fee_packages and hours_adjustments on every read. The expressions in
+hoursSummary.ts are correlated subqueries keyed on student_id, so the cost is
+proportional to the rows returned, not to the size of the tables.
+
+
+HOURS COME FROM ONE PLACE ONLY
+------------------------------
+Hours are credited by recording a payment in Finance. Nothing else may create
+them.
+
+This rule was learned the hard way. The Trial-to-Enrolled dialog used to have a
+"first package hours" box that wrote a fee_packages row with no payment behind
+it and nothing in Finance. The office then also recorded the real payment, which
+credited the same hours a second time. Three students were double-credited by 75
+hours in total before it was found. The box is gone from both the dialog and the
+server. Do not add anything like it back.
+
+A package with transaction_id = NULL is therefore suspicious. The only
+legitimate ones are trial hours, which are genuinely free.
+
+
+MANUAL ADJUSTMENTS
+------------------
+hours_adjustments is the correct way to correct a balance: one row per
+correction, with a delta, a reason, and adjusted_on.
+
+adjusted_on is the day the adjustment is FOR, which is usually not the day it
+was typed. "Adjusted till 16 May", entered in September, belongs on the
+statement in May - otherwise the running balance reads wrong from May onwards.
+Left empty it falls back to when it was entered.
+
+Editing or removing an adjustment marks it, it does not erase it, and each of
+those four actions is behind its own permission - see 04-roles-and-permissions.
+
+
+FEE IMPORT
+----------
+Bank statements are imported into fee_import_drafts. A row that matches a
+student with a valid amount and date becomes a real transaction straight away;
+anything else waits in the drafts list for the office to assign. Each draft
+carries a flag - new, already recorded, or already in drafts - computed per read
+so a double entry is visible before it is assigned.
+
+The draft UI (client/src/pages/admin/Finance.tsx) is the pattern the QR
+attendance inbox copies: a card per row, the immutable imported facts on top,
+the fields to fill underneath, the action buttons at the bottom right.
+
+
+WHEN CHANGING ANY OF THIS
+-------------------------
+Work out the before and after figures for the affected students and print both.
+Every script in server/scripts/ that touched money does this. A change to the
+formula that nobody verified against real students is not finished.

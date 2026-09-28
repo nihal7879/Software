@@ -1,13 +1,17 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { query, queryOne } from '../db';
+import { pool, query, queryOne } from '../db';
 import { requireAuth, requireRole, ensureOwnStudent } from '../middleware/auth';
 import { wrap } from '../middleware/error';
 import { deriveMonth } from '../utils/hours';
 import { HOURS_COLUMNS, deriveHours, CREDITED_EXPR, CONSUMED_EXPR, LAST_LECTURE_EXPR } from '../utils/hoursSummary';
 import { audit } from '../utils/audit';
 // Student dashboard data is refused while an admin has student dashboards locked.
-import { blockLockedStudents, requirePermission, adminMay, PERMISSIONS } from '../utils/settings';
+import { blockLockedStudents } from '../utils/settings';
+import {
+  needsApproval, requestApproval, noteProblem,
+  applyHoursAdd, applyHoursEdit, applyHoursDelete, applyFeeEntry,
+} from '../utils/approvals';
 import { formNoOrder } from '../utils/formNo';
 
 const router = Router();
@@ -186,6 +190,9 @@ const txSchema = z.object({
   course_package_hours: z.number().optional().nullable(),
   discount_hours: z.number().optional().nullable(),
   notes: z.string().optional().nullable(),
+  // Why a discount is being given. For the approval queue only — it is stripped
+  // before the transaction is written.
+  request_note: z.string().trim().max(500).optional().nullable(),
 });
 
 // Record a payment (admin)
@@ -194,30 +201,34 @@ router.post(
   requireRole('admin'),
   wrap(async (req, res) => {
     const b = txSchema.parse(req.body);
-    const r: any = await query(
-      `INSERT INTO fee_transactions
-        (student_id,parent_name,amount,payment_date,month,transaction_reference,transaction_narration,payment_source,course_package_hours,discount_hours,notes,created_by)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
-      [
-        b.student_id, b.parent_name || null, b.amount, b.payment_date,
-        deriveMonth(b.payment_date), b.transaction_reference || null, b.transaction_narration || null,
-        b.payment_source || null, b.course_package_hours ?? null, b.discount_hours ?? null,
-        b.notes || null, req.user!.userId,
-      ]
-    );
-    // If hours were entered, credit them as a package linked to this transaction
-    // so they show in the student's hours ledger / statement — and so deleting
-    // the transaction can later remove them.
-    if ((b.course_package_hours && b.course_package_hours > 0) || (b.discount_hours && b.discount_hours > 0)) {
-      const hrs = b.course_package_hours || 0;
-      const rate = b.amount && hrs ? b.amount / hrs : 0;
-      await query(
-        `INSERT INTO fee_packages (student_id,transaction_id,package_hours,discount_hours,rate_per_hour,start_date) VALUES (?,?,?,?,?,?)`,
-        [b.student_id, (r as any).insertId, hrs, b.discount_hours || 0, rate, b.payment_date]
-      );
+
+    // Hours given away for nothing are the ones worth a second pair of eyes, so
+    // an entry carrying a discount waits. A plain payment is recorded at once —
+    // money that has arrived should never be invisible.
+    const hasDiscount = !!(b.discount_hours && Number(b.discount_hours) > 0);
+    if (hasDiscount && needsApproval(req.user!.role)) {
+      const noteBad = noteProblem(b.request_note);
+      if (noteBad) return res.status(400).json({ error: noteBad, field: 'request_note' });
+      const id = await requestApproval({
+        note: String(b.request_note).trim(),
+        kind: 'fee_entry',
+        studentId: b.student_id,
+        payload: b,
+        summary: `${b.amount} AED with ${b.discount_hours} discount hours for ${await nameOf(b.student_id)}`,
+        userId: req.user!.userId,
+      });
+      return sentForApproval(res, id, `${b.discount_hours} discount hours`);
     }
-    await audit(req.user!.userId, 'CREATE', 'fee_transaction', (r as any).insertId, null, b);
-    res.status(201).json({ id: (r as any).insertId });
+
+    const conn = await pool.getConnection();
+    try {
+      const { request_note, ...entry } = b;
+      const made = await applyFeeEntry(conn, entry, req.user!.userId);
+      await audit(req.user!.userId, 'CREATE', 'fee_transaction', made.id, null, b);
+      res.status(201).json({ id: made.id });
+    } finally {
+      conn.release();
+    }
   })
 );
 
@@ -713,7 +724,6 @@ router.post(
 router.put(
   '/ledger/:id/adjust',
   requireRole('admin'),
-  requirePermission('ledger_adjust'),
   wrap(async (req, res) => {
     const b = z
       .object({
@@ -759,21 +769,30 @@ router.put(
 // was typed in: "adjusted till 16 May" entered in September belongs on the
 // statement in May, or the running balance reads wrong from May onwards. Left
 // out, the entry falls back to when it was made.
-async function deniedFor(req: any, key: 'hours_add' | 'hours_deduct') {
-  if (req.user?.role === 'superadmin') return null;
-  if (await adminMay(key)) return null;
-  return {
-    error: `Only the super admin can ${PERMISSIONS[key]}. Ask them to switch this on in Permissions.`,
-    code: 'PERMISSION_REQUIRED',
-    permission: key,
-  };
+/** The answer the office gets when a change has gone to the super admin. */
+function sentForApproval(res: any, id: number, what: string) {
+  return res.status(202).json({
+    pending: true,
+    approval_id: id,
+    message: `Sent to the super admin for approval — ${what}. It reaches the statement once approved.`,
+  });
 }
+
+/** A student's name for the line the super admin reads in the queue. */
+async function nameOf(studentId: number | string) {
+  const s = await queryOne<any>('SELECT full_name, form_no FROM students WHERE id = ?', [studentId]);
+  return s ? `${s.full_name} (form ${s.form_no})` : `student ${studentId}`;
+}
+
+const signed = (n: number) => (n > 0 ? `+${n}` : String(n));
 
 const ADJUST_DATE = /^\d{4}-\d{2}-\d{2}$/;
 const adjustSchema = z.object({
   delta: z.number(),
   reason: z.string().trim().max(200).optional().nullable(),
   adjusted_on: z.string().regex(ADJUST_DATE).optional().nullable().or(z.literal('')),
+  // Why the office is asking. Goes to the approval queue, never onto the entry.
+  request_note: z.string().trim().max(500).optional().nullable(),
 });
 
 router.post(
@@ -782,16 +801,32 @@ router.post(
   wrap(async (req, res) => {
     const b = adjustSchema.parse(req.body);
     if (!b.delta) return res.status(400).json({ error: 'Enter a non-zero number of hours' });
-    const denied = await deniedFor(req, b.delta > 0 ? 'hours_add' : 'hours_deduct');
-    if (denied) return res.status(403).json(denied);
 
-    const r: any = await query(
-      'INSERT INTO hours_adjustments (student_id, delta, reason, adjusted_on, created_by) VALUES (?,?,?,?,?)',
-      [req.params.id, b.delta, b.reason || null, b.adjusted_on || null, req.user!.userId]
-    );
-    await audit(req.user!.userId, 'ADJUST_HOURS', 'student', req.params.id, null,
-      { delta: b.delta, reason: b.reason ?? null, adjusted_on: b.adjusted_on || null });
-    res.status(201).json({ id: r.insertId });
+    // The office proposes, the super admin decides. Nothing reaches the
+    // statement until it is approved.
+    if (needsApproval(req.user!.role)) {
+      const noteBad = noteProblem(b.request_note);
+      if (noteBad) return res.status(400).json({ error: noteBad, field: 'request_note' });
+      const id = await requestApproval({
+        note: String(b.request_note).trim(),
+        kind: b.delta > 0 ? 'hours_add' : 'hours_deduct',
+        studentId: Number(req.params.id),
+        payload: { delta: b.delta, reason: b.reason || null, adjusted_on: b.adjusted_on || null },
+        summary: `${signed(b.delta)} hours for ${await nameOf(req.params.id)}${b.reason ? ` — ${b.reason}` : ''}`,
+        userId: req.user!.userId,
+      });
+      return sentForApproval(res, id, `${signed(b.delta)} hours`);
+    }
+
+    const conn = await pool.getConnection();
+    try {
+      const made = await applyHoursAdd(conn, Number(req.params.id), b, req.user!.userId);
+      await audit(req.user!.userId, 'ADJUST_HOURS', 'student', req.params.id, null,
+        { delta: b.delta, reason: b.reason ?? null, adjusted_on: b.adjusted_on || null });
+      res.status(201).json({ id: made.id });
+    } finally {
+      conn.release();
+    }
   })
 );
 
@@ -800,20 +835,45 @@ router.post(
 router.put(
   '/adjustments/entry/:adjId',
   requireRole('admin'),
-  requirePermission('hours_edit'),
   wrap(async (req, res) => {
     const b = adjustSchema.parse(req.body);
     if (!b.delta) return res.status(400).json({ error: 'Enter a non-zero number of hours' });
     const row = await queryOne<any>('SELECT * FROM hours_adjustments WHERE id = ? AND is_deleted = FALSE', [req.params.adjId]);
     if (!row) return res.status(404).json({ error: 'Adjustment not found' });
 
-    await query(
-      'UPDATE hours_adjustments SET delta = ?, reason = ?, adjusted_on = ? WHERE id = ?',
-      [b.delta, b.reason || null, b.adjusted_on || null, row.id]
-    );
-    await audit(req.user!.userId, 'EDIT_ADJUST_HOURS', 'student', String(row.student_id), row,
-      { delta: b.delta, reason: b.reason ?? null, adjusted_on: b.adjusted_on || null });
-    res.json({ ok: true });
+    // The entry on the statement stays exactly as it is until this is approved.
+    if (needsApproval(req.user!.role)) {
+      const noteBad = noteProblem(b.request_note);
+      if (noteBad) return res.status(400).json({ error: noteBad, field: 'request_note' });
+      const id = await requestApproval({
+        note: String(b.request_note).trim(),
+        kind: 'hours_edit',
+        studentId: row.student_id,
+        payload: {
+          delta: b.delta, reason: b.reason || null, adjusted_on: b.adjusted_on || null,
+          before: {
+            delta: Number(row.delta),
+            reason: row.reason ?? null,
+            adjusted_on: row.adjusted_on ? String(row.adjusted_on).slice(0, 10) : null,
+          },
+        },
+        targetType: 'hours_adjustment',
+        targetId: row.id,
+        summary: `Change ${signed(Number(row.delta))} to ${signed(b.delta)} hours for ${await nameOf(row.student_id)}`,
+        userId: req.user!.userId,
+      });
+      return sentForApproval(res, id, 'the change to that entry');
+    }
+
+    const conn = await pool.getConnection();
+    try {
+      await applyHoursEdit(conn, row.id, b);
+      await audit(req.user!.userId, 'EDIT_ADJUST_HOURS', 'student', String(row.student_id), row,
+        { delta: b.delta, reason: b.reason ?? null, adjusted_on: b.adjusted_on || null });
+      res.json({ ok: true });
+    } finally {
+      conn.release();
+    }
   })
 );
 
@@ -822,13 +882,40 @@ router.put(
 router.delete(
   '/adjustments/entry/:adjId',
   requireRole('admin'),
-  requirePermission('hours_delete'),
   wrap(async (req, res) => {
     const row = await queryOne<any>('SELECT * FROM hours_adjustments WHERE id = ? AND is_deleted = FALSE', [req.params.adjId]);
     if (!row) return res.status(404).json({ error: 'Adjustment not found' });
-    await query('UPDATE hours_adjustments SET is_deleted = TRUE WHERE id = ?', [row.id]);
-    await audit(req.user!.userId, 'DELETE_ADJUST_HOURS', 'student', String(row.student_id), row, null);
-    res.json({ ok: true, delta: row.delta });
+
+    if (needsApproval(req.user!.role)) {
+      // A removal is asked for with the reason in the query string, since a
+      // DELETE carries no body from the browser's fetch in this app.
+      const noteBad = noteProblem(req.query.request_note);
+      if (noteBad) return res.status(400).json({ error: noteBad, field: 'request_note' });
+      const id = await requestApproval({
+        note: String(req.query.request_note).trim(),
+        kind: 'hours_delete',
+        studentId: row.student_id,
+        payload: {
+          delta: Number(row.delta),
+          reason: row.reason ?? null,
+          adjusted_on: row.adjusted_on ? String(row.adjusted_on).slice(0, 10) : null,
+        },
+        targetType: 'hours_adjustment',
+        targetId: row.id,
+        summary: `Remove the ${signed(Number(row.delta))} hours entry for ${await nameOf(row.student_id)}`,
+        userId: req.user!.userId,
+      });
+      return sentForApproval(res, id, 'removing that entry');
+    }
+
+    const conn = await pool.getConnection();
+    try {
+      await applyHoursDelete(conn, row.id);
+      await audit(req.user!.userId, 'DELETE_ADJUST_HOURS', 'student', String(row.student_id), row, null);
+      res.json({ ok: true, delta: row.delta });
+    } finally {
+      conn.release();
+    }
   })
 );
 

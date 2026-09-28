@@ -91,16 +91,16 @@ h3 { font-size: 1.05rem; line-height: 1.35; font-weight: 500; }
   }
   .btn-primary {
     background: var(--color-primary);
-    @apply text-white rounded-lg px-4 py-2 text-sm font-medium shadow-sm hover:bg-[var(--color-primary-600)] active:scale-[0.99] transition-colors duration-150 disabled:opacity-50;
+    @apply inline-flex items-center justify-center gap-1.5 text-white rounded-lg px-4 py-2 text-sm font-medium shadow-sm hover:bg-[var(--color-primary-600)] active:scale-[0.99] transition-colors duration-150 disabled:opacity-50;
   }
   .btn-accent {
     background: var(--color-accent);
-    @apply text-white rounded-lg px-4 py-2 text-sm font-medium shadow-sm hover:opacity-90 transition-opacity duration-150 disabled:opacity-50;
+    @apply inline-flex items-center justify-center gap-1.5 text-white rounded-lg px-4 py-2 text-sm font-medium shadow-sm hover:opacity-90 transition-opacity duration-150 disabled:opacity-50;
   }
   .btn-ghost {
     border: 1px solid var(--color-border);
     background: var(--color-card);
-    @apply rounded-lg px-4 py-2 text-sm font-medium hover:bg-[var(--color-card-alt)] hover:border-[var(--color-muted)] transition-colors disabled:opacity-50;
+    @apply inline-flex items-center justify-center gap-1.5 rounded-lg px-4 py-2 text-sm font-medium hover:bg-[var(--color-card-alt)] hover:border-[var(--color-muted)] transition-colors disabled:opacity-50;
   }
   .input {
     background: var(--color-card);
