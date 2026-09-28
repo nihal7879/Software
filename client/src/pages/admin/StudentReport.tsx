@@ -9,6 +9,7 @@ import { DateRangePicker } from '../../components/DateRangePicker';
 import { StudentRegistrationForm } from '../../components/StudentRegistrationForm';
 import { Select } from '../../components/Select';
 import { AdjustHoursModal } from '../../components/AdjustHoursModal';
+import { useMay } from '../../api/permissions';
 import { LectureEditModal } from '../../components/LectureEditModal';
 import { ConfirmModal } from '../../components/ConfirmModal';
 import { CalendarRangePicker } from '../../components/CalendarPicker';
@@ -25,6 +26,10 @@ export default function StudentReport() {
   const [to, setTo] = useState(todayIso);
   const [editProfile, setEditProfile] = useState(false);
   const [adjustHours, setAdjustHours] = useState(false);
+  // The same switches as the hours statement: this page changes the same
+  // figures, so it has to ask the same question.
+  const mayAdd = useMay('hours_add');
+  const mayDeduct = useMay('hours_deduct');
   const [lecTeacher, setLecTeacher] = useState('');
   // A date window inside the log itself, on top of the report's own range — the
   // report range is usually a whole year, and "what happened that week" is the
@@ -151,7 +156,17 @@ export default function StudentReport() {
       </div>
 
       <div>
-        <button className="btn-ghost !py-1.5 !px-3 text-sm" onClick={() => setAdjustHours(true)}>± Adjust Hours</button>
+        <button
+          className="btn-ghost !py-1.5 !px-3 text-sm"
+          title={mayAdd || mayDeduct ? undefined : 'Needs super admin permission'}
+          onClick={() =>
+            mayAdd || mayDeduct
+              ? setAdjustHours(true)
+              : toast('Permission required: only the super admin can add or deduct hours. Ask them to switch it on in Permissions.', 'error')
+          }
+        >
+          ± Adjust Hours{mayAdd || mayDeduct ? '' : ' 🔒'}
+        </button>
       </div>
 
       {/* Assigned teachers + assign form */}
@@ -328,6 +343,8 @@ export default function StudentReport() {
         <AdjustHoursModal
           studentId={Number(id)}
           studentName={s.full_name}
+          mayAdd={mayAdd}
+          mayDeduct={mayDeduct}
           onClose={() => setAdjustHours(false)}
           onSaved={() => qc.invalidateQueries({ queryKey: ['student-report', id] })}
         />

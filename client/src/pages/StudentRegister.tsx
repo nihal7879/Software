@@ -84,3 +84,12 @@ export default function StudentRegister() {
     </RegisterLayout>
   );
 }
+
+
+
+
+
+
+
+
+

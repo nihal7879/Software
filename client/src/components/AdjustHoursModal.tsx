@@ -20,6 +20,7 @@ export function AdjustHoursModal({
   // fault, a locked one reads as a rule.
   mayAdd = true,
   mayDeduct = true,
+  mayEdit = true,
   onClose,
   onSaved,
 }: {
@@ -28,6 +29,7 @@ export function AdjustHoursModal({
   editing?: AdjustmentRow | null;
   mayAdd?: boolean;
   mayDeduct?: boolean;
+  mayEdit?: boolean;
   onClose: () => void;
   onSaved?: () => void;
 }) {
@@ -63,8 +65,8 @@ export function AdjustHoursModal({
     },
   });
 
-  const allowedMode = mode === 'add' ? mayAdd : mayDeduct;
-  const valid = Number(hours) > 0 && allowedMode;
+  const canUse = (side: 'add' | 'deduct') => (editing ? mayEdit : side === 'add' ? mayAdd : mayDeduct);
+  const valid = Number(hours) > 0 && canUse(mode);
 
   return (
     <Overlay align="center" onClose={onClose}>
@@ -79,22 +81,22 @@ export function AdjustHoursModal({
           <button
             type="button"
             className={mode === 'deduct' ? 'btn-primary flex-1' : 'btn-ghost flex-1'}
-            title={mayDeduct ? undefined : 'Needs super admin permission'}
+            title={canUse('deduct') ? undefined : 'Needs super admin permission'}
             onClick={() =>
-              mayDeduct ? setMode('deduct') : toast('Permission required: only the super admin can deduct hours.', 'error')
+              canUse('deduct') ? setMode('deduct') : toast('Permission required: only the super admin can deduct hours.', 'error')
             }
           >
-            − Deduct{mayDeduct ? '' : ' 🔒'}
+            − Deduct{canUse('deduct') ? '' : ' 🔒'}
           </button>
           <button
             type="button"
             className={mode === 'add' ? 'btn-primary flex-1' : 'btn-ghost flex-1'}
-            title={mayAdd ? undefined : 'Needs super admin permission'}
+            title={canUse('add') ? undefined : 'Needs super admin permission'}
             onClick={() =>
-              mayAdd ? setMode('add') : toast('Permission required: only the super admin can add hours.', 'error')
+              canUse('add') ? setMode('add') : toast('Permission required: only the super admin can add hours.', 'error')
             }
           >
-            + Add{mayAdd ? '' : ' 🔒'}
+            + Add{canUse('add') ? '' : ' 🔒'}
           </button>
         </div>
 

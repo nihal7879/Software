@@ -532,6 +532,7 @@ export default function HoursMonthly() {
         <AdjustHoursModal
           mayAdd={mayAdd}
           mayDeduct={mayDeduct}
+          mayEdit={mayEdit}
           studentId={Number(studentId)}
           studentName={options.find((o: any) => String(o.value) === studentId)?.label || 'Student'}
           editing={editAdjustment}
