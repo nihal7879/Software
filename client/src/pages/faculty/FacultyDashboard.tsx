@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { api, hrs, fmtDate, dubaiNow } from '../../api/client';
-import { Section, StatusBadge, Table, HoursValue, Spinner } from '../../components/ui';
+import { Section, Table, Spinner } from '../../components/ui';
 
 // Time-of-day greeting: morning < 12:00, afternoon < 17:00, else evening.
 function greeting(h: number) {
@@ -13,7 +13,6 @@ function greeting(h: number) {
 
 export default function FacultyDashboard() {
   const me = useQuery({ queryKey: ['teacher-me'], queryFn: () => api.get('/teachers/me').then((r) => r.data) });
-  const students = useQuery({ queryKey: ['me-students'], queryFn: () => api.get('/teachers/me/students').then((r) => r.data.data) });
   const lectures = useQuery({ queryKey: ['me-lectures'], queryFn: () => api.get('/teachers/me/lectures').then((r) => r.data.data) });
 
   // Live clock — ticks once a minute.
@@ -39,29 +38,7 @@ export default function FacultyDashboard() {
         <Link to="/faculty/lecture" className="btn-primary">+ Lecture Entry</Link>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Section title="My Students" action={<Link to="/faculty/students" className="btn-ghost !py-1.5 !px-3 text-sm">View All</Link>}>
-          {students.isLoading ? <Spinner /> : (
-            <div className="max-h-[420px] overflow-y-auto">
-              <Table head={['Form', 'Student', 'Grade', 'School', 'Subjects', { label: 'Hours Left', align: 'right' }, 'Status']}>
-                {(students.data || []).length === 0 ? (
-                  <tr><td className="table-td muted" colSpan={7}>No students assigned to you yet.</td></tr>
-                ) : students.data.map((s: any) => (
-                  <tr key={s.id}>
-                    <td className="table-td font-mono">{s.form_no}</td>
-                    <td className="table-td font-medium">{s.full_name}</td>
-                    <td className="table-td">{s.year_grade || '—'}</td>
-                    <td className="table-td">{s.school_name || '—'}</td>
-                    <td className="table-td">{s.subjects || '—'}</td>
-                    <td className="table-td text-right tabular-nums">{s.hours_left != null ? <HoursValue value={s.hours_left} /> : '—'}</td>
-                    <td className="table-td"><StatusBadge status={s.status} /></td>
-                  </tr>
-                ))}
-              </Table>
-            </div>
-          )}
-        </Section>
-
+      <div className="grid grid-cols-1 gap-6">
         <Section title="My Recent Classes">
           {lectures.isLoading ? <Spinner /> : (
             <Table head={['Date', 'Subject', 'Students', 'Topic', { label: 'Hours', align: 'right' }]}>

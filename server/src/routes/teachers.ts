@@ -125,6 +125,7 @@ router.get(
     const forLecture = req.query.for === 'lecture';
     const rows = await query<any>(
       `SELECT s.id, s.form_no, s.full_name, s.year_grade, s.school_name, s.status, s.parent_mobile,
+              s.student_type,
               GROUP_CONCAT(DISTINCT sub.name SEPARATOR ', ') AS subjects,
               ${CREDITED_EXPR} AS total_hours_credited,
               ${CONSUMED_EXPR} AS total_hours_consumed,
@@ -133,7 +134,7 @@ router.get(
        JOIN students s ON s.id = m.student_id
        LEFT JOIN subjects sub ON sub.id = m.subject_id
        WHERE m.teacher_id = ? AND s.is_deleted = FALSE${forLecture ? " AND s.status = 'Active'" : ''}
-       GROUP BY s.id, s.form_no, s.full_name, s.year_grade, s.school_name, s.status, s.parent_mobile
+       GROUP BY s.id, s.form_no, s.full_name, s.year_grade, s.school_name, s.status, s.parent_mobile, s.student_type
        ORDER BY s.full_name`,
       [tid]
     );
