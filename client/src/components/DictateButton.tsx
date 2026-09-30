@@ -12,7 +12,7 @@ import { toast } from './Toast';
 //   universal-streaming-multilingual universal-3-6        universal-3-7-preview
 //   whisper-rt   u3-rt-pro   u3-rt-pro-beta-1   u3-rt-agent
 const WS_URL = 'wss://streaming.assemblyai.com/v3/ws';
-const SPEECH_MODEL = 'universal-3-5-pro';
+const SPEECH_MODEL = 'universal-streaming-english';
 // Audio is sent in small slices; their guidance is 50-1000 ms per message.
 const CHUNK_MS = 100;
 const WANT_SAMPLE_RATE = 16000;
