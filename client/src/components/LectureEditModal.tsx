@@ -172,11 +172,13 @@ export function LectureEditModal({
           <div>
             {/* The remark can be spoken instead of typed — handy right after a
                 class, on a phone. What is said is added to what is there. */}
-            <div className="flex items-center justify-between gap-2">
-              <label className="text-xs font-medium muted">Remark</label>
-              <DictateButton value={watch('remark')} onChange={(v) => setValue('remark', v)} />
+            <label className="text-xs font-medium muted">Remark</label>
+            <div className="relative mt-1">
+              <input className="input pr-8" {...register('remark')} placeholder="e.g. Completed, revision needed" />
+              <span className="absolute right-1.5 top-1/2 -translate-y-1/2">
+                <DictateButton icon value={watch('remark')} onChange={(v) => setValue('remark', v)} />
+              </span>
             </div>
-            <input className="input mt-1" {...register('remark')} placeholder="e.g. Completed, revision needed" />
           </div>
           <div>
             <label className="text-xs font-medium muted">Meeting / Recording Link</label>

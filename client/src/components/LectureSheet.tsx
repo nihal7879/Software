@@ -9,6 +9,7 @@ import { Select } from './Select';
 import { TimePicker } from './TimePicker';
 import { CalendarPicker } from './CalendarPicker';
 import { LectureEditModal } from './LectureEditModal';
+import { DictateButton } from './DictateButton';
 import { toast } from './Toast';
 
 /**
@@ -268,7 +269,14 @@ export function LectureSheet({
     timeOut: <TimePicker value={timeOut} onChange={setTimeOut} placeholder="Out" />,
     topic: <input className="input !py-1.5 w-full" value={topic} onChange={(e) => setTopic(e.target.value)} placeholder="Topic" />,
     subtopic: <input className="input !py-1.5 w-full" value={subtopic} onChange={(e) => setSubtopic(e.target.value)} placeholder="Subtopic" />,
-    remark: <input className="input !py-1.5 w-full" value={remark} onChange={(e) => setRemark(e.target.value)} placeholder="Remark" />,
+    remark: (
+      <div className="relative">
+        <input className="input !py-1.5 w-full pr-8" value={remark} onChange={(e) => setRemark(e.target.value)} placeholder="Remark" />
+        <span className="absolute right-1.5 top-1/2 -translate-y-1/2">
+          <DictateButton icon value={remark} onChange={setRemark} />
+        </span>
+      </div>
+    ),
     link: <input className="input !py-1.5 w-full" value={link} onChange={(e) => setLink(e.target.value)} placeholder="Meet link" />,
     venue: (
       <Select

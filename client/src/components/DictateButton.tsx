@@ -3,18 +3,24 @@ import { Mic, Square, Loader2 } from 'lucide-react';
 import { api } from '../api/client';
 import { toast } from './Toast';
 
-// AssemblyAI Universal-Streaming (English): the microphone goes straight to
-// them over a WebSocket and words come back while you are still speaking.
+// AssemblyAI streaming: the microphone goes straight to them over a WebSocket
+// and words come back while you are still speaking.
+//
+// The identifiers the account accepts, straight from the API's own validation
+// error — the dashboard's names are not the strings it wants:
+//   universal-streaming-english      universal-3-5-pro    universal-3-6-pro
+//   universal-streaming-multilingual universal-3-6        universal-3-7-preview
+//   whisper-rt   u3-rt-pro   u3-rt-pro-beta-1   u3-rt-agent
 const WS_URL = 'wss://streaming.assemblyai.com/v3/ws';
-const SPEECH_MODEL = 'universal-streaming-english';
+const SPEECH_MODEL = 'universal-3-5-pro';
 // Audio is sent in small slices; their guidance is 50-1000 ms per message.
 const CHUNK_MS = 100;
 const WANT_SAMPLE_RATE = 16000;
 // A remark is a sentence or two — stop on our own if someone forgets to.
 const MAX_SECONDS = 180;
 
-// Hidden for now, everywhere the button is used. Set to true to bring Speak back.
-export const SPEECH_ENABLED = false;
+// One switch for every place the button is used.
+export const SPEECH_ENABLED = true;
 
 const mmss = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 
@@ -78,11 +84,15 @@ export function DictateButton({
   onChange,
   disabled,
   label = 'Speak',
+  // `icon` sits inside the field itself, the way a search box carries its
+  // magnifier: no word, no timer, just the microphone where the typing is.
+  icon = false,
 }: {
   value: string | undefined | null;
   onChange: (next: string) => void;
   disabled?: boolean;
   label?: string;
+  icon?: boolean;
 }) {
   const [recording, setRecording] = useState(false);
   const [connecting, setConnecting] = useState(false);
@@ -173,12 +183,43 @@ export function DictateButton({
       ctx.current = audio;
       const rate = audio.sampleRate;
 
+      // Listen FIRST. Everything heard before the socket is ready is held and
+      // sent on open, so the sentence a teacher starts the moment they press
+      // the button is not cut off at the front.
+      const moduleUrl = URL.createObjectURL(new Blob([WORKLET], { type: 'text/javascript' }));
+      await audio.audioWorklet.addModule(moduleUrl);
+      URL.revokeObjectURL(moduleUrl);
+      const tap = new AudioWorkletNode(audio, 'mic-tap');
+      const perChunk = Math.round((rate * CHUNK_MS) / 1000);
+      let buf: number[] = [];
+      tap.port.onmessage = (ev: MessageEvent) => {
+        buf = buf.concat(Array.from(ev.data as Float32Array));
+        while (buf.length >= perChunk) {
+          const slice = toPcm16(Float32Array.from(buf.splice(0, perChunk)));
+          // Read the socket off the ref: it does not exist yet on the first
+          // slices, and that is the whole point.
+          if (ws.current?.readyState === WebSocket.OPEN) ws.current.send(slice);
+          else pending.current.push(slice);
+        }
+      };
+      audio.createMediaStreamSource(stream.current).connect(tap);
+      // Zero gain so the graph keeps running without playing the mic back.
+      const mute = audio.createGain();
+      mute.gain.value = 0;
+      tap.connect(mute).connect(audio.destination);
+
       const { data } = await api.get('/speech/token');
       const qs = new URLSearchParams({
         sample_rate: String(Math.round(rate)),
         encoding: 'pcm_s16le',
         speech_model: SPEECH_MODEL,
         format_turns: 'true',
+        // A remark must come out in English whatever was said over it. This
+        // asks the model to stay in English; the API ignores parameters it does
+        // not know rather than refusing them, so it is a hint, not a guarantee.
+        // The certain way is SPEECH_MODEL = 'universal-streaming-english',
+        // which has no other alphabet to fall back to.
+        language_code: 'en',
         token: data.token,
       });
       const sock = new WebSocket(`${WS_URL}?${qs}`);
@@ -211,26 +252,6 @@ export function DictateButton({
         teardown();
       };
 
-      // Send the mic in ~100 ms slices, holding anything captured before open.
-      const moduleUrl = URL.createObjectURL(new Blob([WORKLET], { type: 'text/javascript' }));
-      await audio.audioWorklet.addModule(moduleUrl);
-      URL.revokeObjectURL(moduleUrl);
-      const tap = new AudioWorkletNode(audio, 'mic-tap');
-      const perChunk = Math.round((rate * CHUNK_MS) / 1000);
-      let buf: number[] = [];
-      tap.port.onmessage = (ev: MessageEvent) => {
-        buf = buf.concat(Array.from(ev.data as Float32Array));
-        while (buf.length >= perChunk) {
-          const slice = toPcm16(Float32Array.from(buf.splice(0, perChunk)));
-          if (sock.readyState === WebSocket.OPEN) sock.send(slice);
-          else if (sock.readyState === WebSocket.CONNECTING) pending.current.push(slice);
-        }
-      };
-      audio.createMediaStreamSource(stream.current).connect(tap);
-      // Zero gain so the graph keeps running without playing the mic back.
-      const mute = audio.createGain();
-      mute.gain.value = 0;
-      tap.connect(mute).connect(audio.destination);
     } catch (e: any) {
       setConnecting(false);
       teardown();
@@ -239,6 +260,28 @@ export function DictateButton({
   }
 
   if (!SPEECH_ENABLED) return null;
+
+  // ---- the in-field microphone ---------------------------------------------
+  if (icon) {
+    return (
+      <button
+        type="button"
+        disabled={disabled || connecting}
+        onClick={recording ? stop : start}
+        title={recording ? `Stop (${mmss(seconds)})` : 'Speak instead of typing'}
+        aria-label={recording ? 'Stop dictation' : 'Speak instead of typing'}
+        className={`grid place-items-center w-6 h-6 rounded transition-colors ${
+          recording
+            ? 'text-red-500 bg-red-500/10'
+            : 'muted hover:text-[var(--color-primary)] hover:bg-[var(--color-primary)]/10'
+        }`}
+      >
+        {connecting ? <Loader2 size={13} className="animate-spin" />
+          : recording ? <Square size={11} className="fill-current" />
+          : <Mic size={13} />}
+      </button>
+    );
+  }
 
   if (connecting) {
     return (

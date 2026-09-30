@@ -1,4 +1,64 @@
+# ---------------------------------------------------------------------------
+# Secrets. Never commit any of these.
+#
+# server/.env holds the database password, the JWT secret and the AssemblyAI
+# key. client/ and server/ each have their own .gitignore covering .env, but
+# these rules catch a .env put anywhere — the root, a new folder, a copy saved
+# as .env.backup while someone was debugging.
+#
+# server/.env.example is the one that DOES belong in the repo: the variable
+# names with no values, so the next developer knows what to fill in.
+# ---------------------------------------------------------------------------
+.env
+.env.*
+**/.env
+**/.env.*
+!.env.example
+!**/.env.example
 
-# local migration artifacts (contain PII / hashes)
-server/scripts/*-backup.json
+# Keys and certificates, whatever they are called.
+*.pem
+*.key
+*.p12
+*.pfx
+
+# ---------------------------------------------------------------------------
+# Real data. Anything here holds student names, contacts or payment rows.
+# ---------------------------------------------------------------------------
+# Backups written by the one-off scripts in server/scripts.
+# The old rule only caught '*-backup.json' and missed 'backup_*.json'.
+server/scripts/*backup*.json
 server/scripts/username-preview.json
+
+# Database dumps, wherever they land.
+*.sql.gz
+*.dump
+db-backups/
+
+# Reports exported for the office.
+*.xlsx
+*.csv
+
+# ---------------------------------------------------------------------------
+# Build output and local noise
+# ---------------------------------------------------------------------------
+node_modules/
+dist/
+build/
+*.tsbuildinfo
+
+# Throwaway scripts — the ones prefixed with _ are never meant to be kept.
+server/scripts/_*.js
+server/scripts/_*.py
+
+# Logs
+*.log
+npm-debug.log*
+
+# Editor and OS
+.DS_Store
+Thumbs.db
+desktop.ini
+.idea/
+.vscode/*
+!.vscode/extensions.json
