@@ -13,7 +13,14 @@ import { query } from '../db';
 // Sending never throws into the caller. A registration must not fail because
 // the mail server is down; the failure is recorded instead.
 
-export type MailKind = 'registration_admin' | 'registration_approved' | 'hours_statement';
+export type MailKind =
+  | 'registration_admin'
+  | 'registration_approved'
+  | 'hours_statement'
+  // Forgot password: the code, and afterwards the "this happened" notice that
+  // lets someone notice a reset they did not ask for.
+  | 'password_otp'
+  | 'password_changed';
 export type MailStatus = 'sent' | 'failed' | 'not_configured';
 
 const PLACEHOLDER = /dummy|example\.com|your[-_.]?(email|password)|changeme/i;
@@ -156,5 +163,44 @@ export function hoursStatementEmail(p: { studentName: string; formNo: string }) 
       It shows the hours used each month, the fees received and every lecture recorded to date.</p>
       <p>If anything looks wrong, simply reply to this email.</p>`),
     text: `Dear Parent,\n\nPlease find attached the latest hours statement for ${p.studentName} (Form ${p.formNo}). It shows the hours used each month, the fees received and every lecture recorded to date.\n\nIf anything looks wrong, simply reply to this email.`,
+  };
+}
+
+/**
+ * 4 — the code for a forgotten password.
+ *
+ * The code and nothing else. No password, no sign-in link carrying a token: an
+ * old mailbox someone else can open must not be a key to the account. The name
+ * is left out too — this email goes to an address that may be shared by a whole
+ * family, and it does not need to announce which of them asked.
+ */
+export function passwordOtpEmail(p: { otp: string; minutes: number }) {
+  return {
+    subject: `Your STEM Vision code: ${p.otp}`,
+    html: layout('Your code', `
+      <p>Use this code to set a new password:</p>
+      <p style="margin:18px 0;font-size:34px;font-weight:700;letter-spacing:8px;color:#f97316">${esc(p.otp)}</p>
+      <p>It works for <b>${p.minutes} minutes</b>, once.</p>
+      <p style="color:#64748b">If you did not ask for this, you can ignore this email — nothing has changed on your account.</p>`),
+    text: `Use this code to set a new password: ${p.otp}\n\nIt works for ${p.minutes} minutes, once.\n\nIf you did not ask for this, you can ignore this email — nothing has changed on your account.`,
+  };
+}
+
+/**
+ * 5 — sent after a password actually changes.
+ *
+ * This is the one that lets a family notice a reset they did not ask for, so it
+ * goes whether the change came from the reset screen or from Settings.
+ */
+export function passwordChangedEmail(p: { username: string; when: string }) {
+  const link = `${config.mail.appUrl}/login`;
+  return {
+    subject: 'Your STEM Vision password was changed',
+    html: layout('Your password was changed', `
+      <p>The password for <b>${esc(p.username)}</b> was changed on ${esc(p.when)}.</p>
+      <p>If that was you, there is nothing to do.</p>
+      <p><b>If it was not you, please contact the institute straight away</b> — someone else may have used your account.</p>
+      ${button(link, 'Sign in')}`),
+    text: `The password for ${p.username} was changed on ${p.when}.\n\nIf that was you, there is nothing to do.\n\nIf it was not you, please contact the institute straight away — someone else may have used your account.\n\n${link}`,
   };
 }

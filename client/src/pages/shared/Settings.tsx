@@ -8,15 +8,18 @@ import { passwordProblem } from '../../lib/credentials';
 import { MultiSelect } from '../../components/MultiSelect';
 import { useStudentAccess } from '../../components/StudentLock';
 import { toast } from '../../components/Toast';
+import { NotificationsCard } from '../../components/NotificationsCard';
 
 // A single read-only field (icon + label + value / "Not set").
 function Field({ icon, label, value }: { icon: React.ReactNode; label: string; value?: string | null }) {
   return (
-    <div className="flex items-start gap-3 py-3">
-      <span className="mt-0.5 text-[var(--color-primary)] opacity-80">{icon}</span>
+    // Below lg each detail is a soft tile with its icon in a badge, and long
+    // values (an email, three subjects) wrap instead of being cut off.
+    <div className="flex items-start gap-3 py-3 max-lg:items-center max-lg:rounded-2xl max-lg:px-3.5 max-lg:bg-[var(--color-card-alt)]">
+      <span className="mt-0.5 text-[var(--color-primary)] opacity-80 max-lg:mt-0 max-lg:opacity-100 max-lg:grid max-lg:place-items-center max-lg:w-10 max-lg:h-10 max-lg:rounded-xl max-lg:shrink-0 max-lg:bg-[var(--color-card)]">{icon}</span>
       <div className="min-w-0">
         <div className="text-xs muted">{label}</div>
-        {value ? <div className="font-semibold truncate">{value}</div> : <div className="italic muted">Not set</div>}
+        {value ? <div className="font-semibold truncate max-lg:whitespace-normal max-lg:[overflow-wrap:anywhere]">{value}</div> : <div className="italic muted">Not set</div>}
       </div>
     </div>
   );
@@ -149,9 +152,26 @@ export default function Settings() {
       {/* Locking every student dashboard is the super admin's switch. */}
       {user?.role === 'superadmin' && <StudentAccessCard />}
 
+      {/* Per device, not per person — see components/NotificationsCard.tsx. */}
+      <NotificationsCard />
+
       <div className="grid grid-cols-1 lg:grid-cols-[300px_1fr] gap-5 items-start">
+        {/* Phones and tablets: who is signed in, in one row. The contact lines
+            are in Personal Information just below, so they are not repeated. */}
+        <div className="lg:hidden card p-4 flex items-center gap-3.5">
+          <div className="w-14 h-14 rounded-full grid place-items-center text-lg font-bold shrink-0 ring-2 ring-emerald-400/60"
+            style={{ background: 'var(--color-accent-soft)', color: 'var(--color-primary)' }}>
+            {initials || <User size={22} />}
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="font-bold text-lg leading-tight truncate">{name}</div>
+            <div className="muted text-sm truncate">{email || username}</div>
+          </div>
+          <span className="shrink-0 text-xs px-2.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-600">● Active</span>
+        </div>
+
         {/* Left — profile summary card */}
-        <div className="card p-6 flex flex-col items-center text-center">
+        <div className="card p-6 hidden lg:flex flex-col items-center text-center">
           <div className="w-24 h-24 rounded-full grid place-items-center text-2xl font-bold mb-3 ring-4 ring-emerald-400/60"
             style={{ background: 'var(--color-card-alt)' }}>
             {initials || <User size={28} />}
@@ -167,23 +187,23 @@ export default function Settings() {
 
         {/* Right — tabs + content */}
         <div className="space-y-4">
-          <div className="flex items-center gap-6 border-b" style={{ borderColor: 'var(--color-border)' }}>
+          <div className="flex gap-1 p-1 rounded-2xl bg-[var(--color-card-alt)] lg:items-center lg:gap-6 lg:p-0 lg:rounded-none lg:bg-transparent lg:border-b" style={{ borderColor: 'var(--color-border)' }}>
             <button
-              className={`flex items-center gap-1.5 pb-2 text-sm font-semibold border-b-2 -mb-px transition ${tab === 'info' ? 'border-[var(--color-primary)] text-[var(--color-primary)]' : 'border-transparent muted'}`}
+              className={`flex-1 flex items-center justify-center gap-1.5 px-2 py-2 rounded-xl text-sm font-semibold transition whitespace-nowrap lg:flex-none lg:justify-start lg:px-0 lg:pt-0 lg:pb-2 lg:rounded-none lg:whitespace-normal lg:border-b-2 lg:-mb-px ${tab === 'info' ? 'bg-[var(--color-card)] shadow-sm text-[var(--color-primary)] lg:bg-transparent lg:shadow-none lg:border-[var(--color-primary)]' : 'muted lg:border-transparent'}`}
               onClick={() => setTab('info')}
             >
-              <User size={15} /> Personal Info
+              <User size={15} className="hidden sm:block" /> Personal Info
             </button>
             <button
-              className={`flex items-center gap-1.5 pb-2 text-sm font-semibold border-b-2 -mb-px transition ${tab === 'password' ? 'border-[var(--color-primary)] text-[var(--color-primary)]' : 'border-transparent muted'}`}
+              className={`flex-1 flex items-center justify-center gap-1.5 px-2 py-2 rounded-xl text-sm font-semibold transition whitespace-nowrap lg:flex-none lg:justify-start lg:px-0 lg:pt-0 lg:pb-2 lg:rounded-none lg:whitespace-normal lg:border-b-2 lg:-mb-px ${tab === 'password' ? 'bg-[var(--color-card)] shadow-sm text-[var(--color-primary)] lg:bg-transparent lg:shadow-none lg:border-[var(--color-primary)]' : 'muted lg:border-transparent'}`}
               onClick={() => setTab('password')}
             >
-              <Lock size={15} /> Change Password
+              <Lock size={15} className="hidden sm:block" /> <span className="lg:hidden">Password</span><span className="hidden lg:inline">Change Password</span>
             </button>
           </div>
 
           {tab === 'info' ? (
-            <div className="card p-6">
+            <div className="card p-4 sm:p-6">
               <div className="flex items-start justify-between mb-4">
                 <div>
                   <h2 className="font-bold text-lg">Personal Information</h2>
@@ -197,7 +217,7 @@ export default function Settings() {
               </div>
 
               {editing && isFaculty ? (
-                <form onSubmit={prof.handleSubmit((b) => saveProfile.mutate(b))} className="space-y-3 max-w-md">
+                <form onSubmit={prof.handleSubmit((b) => saveProfile.mutate(b))} className="m-form space-y-3 max-w-md">
                   <div>
                     <label className="text-xs font-medium muted">Name *</label>
                     <input className="input mt-1" {...prof.register('name', { required: true })} />
@@ -218,12 +238,12 @@ export default function Settings() {
                     />
                   </div>
                   <div className="flex gap-2 pt-1">
-                    <button className="btn-primary" disabled={saveProfile.isPending}>{saveProfile.isPending ? 'Saving…' : 'Save'}</button>
-                    <button type="button" className="btn-ghost" onClick={() => { setEditing(false); if (me.data) prof.reset({ name: me.data.name, mobile: me.data.mobile || '', specialization: me.data.specialization || '' }); }}>Cancel</button>
+                    <button className="btn-primary max-lg:flex-1 max-lg:!py-2.5" disabled={saveProfile.isPending}>{saveProfile.isPending ? 'Saving…' : 'Save'}</button>
+                    <button type="button" className="btn-ghost max-lg:flex-1 max-lg:!py-2.5" onClick={() => { setEditing(false); if (me.data) prof.reset({ name: me.data.name, mobile: me.data.mobile || '', specialization: me.data.specialization || '' }); }}>Cancel</button>
                   </div>
                 </form>
               ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 divide-y sm:divide-y-0" style={{ borderColor: 'var(--color-border)' }}>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 divide-y sm:divide-y-0 max-lg:gap-2 max-lg:divide-y-0" style={{ borderColor: 'var(--color-border)' }}>
                   <Field icon={<User size={16} />} label="Name" value={name} />
                   <Field icon={<Mail size={16} />} label="Email" value={email} />
                   <Field icon={<Phone size={16} />} label="Mobile" value={mobile} />
@@ -234,10 +254,10 @@ export default function Settings() {
               )}
             </div>
           ) : (
-            <div className="card p-6 max-w-md">
+            <div className="card p-4 sm:p-6 max-w-md">
               <h2 className="font-bold text-lg mb-1">Change Password</h2>
               <p className="muted text-sm mb-4">Update your account password.</p>
-              <form onSubmit={handleSubmit(onSubmitPassword)} className="space-y-3">
+              <form onSubmit={handleSubmit(onSubmitPassword)} className="m-form space-y-3">
                 <div>
                   <label className="text-xs font-medium muted">Current Password *</label>
                   <input className="input mt-1" type="password" autoComplete="current-password" {...register('currentPassword', { required: true })} />
@@ -251,7 +271,7 @@ export default function Settings() {
                   <input className="input mt-1" type="password" autoComplete="new-password" {...register('confirmPassword', { required: true })} />
                 </div>
                 {error && <div className="text-sm text-red-500">{error}</div>}
-                <button className="btn-primary" disabled={change.isPending || !watch('newPassword')}>
+                <button className="btn-primary max-lg:w-full max-lg:!py-2.5" disabled={change.isPending || !watch('newPassword')}>
                   {change.isPending ? 'Saving…' : 'Update Password'}
                 </button>
               </form>

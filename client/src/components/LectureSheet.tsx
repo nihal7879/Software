@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useState } from 'react';
+import { cloneElement, useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Plus, X } from 'lucide-react';
+import { X, CalendarClock, Users, BookOpen, MapPin, Pencil, Trash2 } from 'lucide-react';
 import { api, fmtDate, hrs, todayIso, dubaiNow} from '../api/client';
 import { useMasters } from '../api/masters';
-import { Pagination, Section, Spinner, Table } from './ui';
+import { Pagination, Section, Spinner, Table, DateTile } from './ui';
 import { ConfirmModal } from './ConfirmModal';
 import { Select } from './Select';
 import { TimePicker } from './TimePicker';
@@ -203,11 +203,12 @@ export function LectureSheet({
     date: <CalendarPicker className="w-full" value={date} onChange={setDate} placeholder="Date" />,
     students: (
       <div className="relative">
-        <div className="flex flex-wrap items-center gap-1 rounded-lg border px-2 py-1" style={{ borderColor: 'var(--color-border)' }}>
+        <div className="m-control flex flex-wrap items-center gap-1 rounded-lg border px-2 py-1" style={{ borderColor: 'var(--color-border)', background: 'var(--color-card)' }}>
           {students.map((id) => (
-            <span key={id} className="inline-flex items-center gap-1 text-xs rounded px-1.5 py-0.5" style={{ background: 'var(--color-card-alt)' }}>
+            <span key={id} className="inline-flex items-center gap-1 text-xs rounded px-1.5 py-0.5 max-lg:text-[13px] max-lg:rounded-full max-lg:pl-2.5 max-lg:pr-1 max-lg:py-1" style={{ background: 'var(--color-card-alt)' }}>
               {byId.get(id)?.full_name || 'Student'}
-              <button type="button" className="muted hover:text-red-500" aria-label="Remove" onClick={() => setStudents(students.filter((x) => x !== id))}>
+              {/* A finger-sized target on a phone; the 11px cross is for a mouse. */}
+              <button type="button" className="muted hover:text-red-500 max-lg:grid max-lg:place-items-center max-lg:w-6 max-lg:h-6 max-lg:rounded-full" aria-label="Remove" onClick={() => setStudents(students.filter((x) => x !== id))}>
                 <X size={11} />
               </button>
             </span>
@@ -227,7 +228,7 @@ export function LectureSheet({
         </div>
         {listOpen && matches.length > 0 && (
           <div
-            className="absolute z-30 mt-1 w-72 card p-0 shadow-lg overflow-hidden"
+            className="absolute z-30 mt-1 w-full lg:w-72 card p-0 shadow-lg overflow-hidden"
             // The count sits in its own strip and the names scroll in a box of
             // their own beneath it: they pass behind nothing, so no name can
             // show through the heading. Rows snap, so none is sliced in half.
@@ -350,20 +351,73 @@ export function LectureSheet({
               </table>
             </div>
 
-            {/* Narrower: the same fields stacked, so nothing runs off the side. */}
-            <div className="lg:hidden grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {([['Date', cell.date], ['Students', cell.students], ['Subject', cell.subject],
-                 ['Time In', cell.timeIn], ['Time Out', cell.timeOut],
-                 ['Topic', cell.topic], ['Subtopic', cell.subtopic],
-                 ['Remark', cell.remark], ['Venue', cell.venue], ['Meet link', cell.link]] as const).map(([l, node]) => (
-                <div key={l}>
-                  <label className="text-xs font-medium muted block mb-1">{l}</label>
-                  {node}
+            {/* Phones and tablets: the same fields in three groups — when, who,
+                what was taught — with venue and link folded away as on laptop. */}
+            <div className="lg:hidden m-form space-y-3">
+              <div className="m-group">
+                <div className="m-group-title"><CalendarClock size={15} style={{ color: 'var(--color-primary)' }} /> When</div>
+                {/* Phone: date on its own line, times under it. Tablet: all three in a row. */}
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                  <div className="col-span-2 sm:col-span-1"><label className="m-label">Date</label>
+                    <CalendarPicker stretch value={date} onChange={setDate} placeholder="Date" /></div>
+                  <div><label className="m-label">Starts</label>{cell.timeIn}</div>
+                  <div><label className="m-label">Ends</label>{cell.timeOut}</div>
                 </div>
-              ))}
+                <div className="text-xs mt-2 muted">
+                  {hours > 0
+                    ? <>A <b style={{ color: 'var(--color-text)' }}>{hrs(hours)}</b> class</>
+                    : <span className="text-red-500">The end time must be after the start.</span>}
+                </div>
+              </div>
+
+              <div className="m-group">
+                <div className="m-group-title">
+                  <Users size={15} style={{ color: 'var(--color-primary)' }} /> Students
+                  {students.length > 0 && <span className="muted font-normal">· {students.length} added</span>}
+                </div>
+                {cell.students}
+              </div>
+
+              <div className="m-group space-y-2">
+                <div className="m-group-title !mb-1"><BookOpen size={15} style={{ color: 'var(--color-primary)' }} /> What was taught</div>
+                <div><label className="m-label">Subject</label>{cell.subject}</div>
+                {/* Labels sit above, so the boxes hint at an answer rather than repeat the label. */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <div><label className="m-label">Topic</label>{cloneElement(cell.topic, { placeholder: 'e.g. Electromagnetic induction' })}</div>
+                  <div><label className="m-label">Subtopic</label>{cloneElement(cell.subtopic, { placeholder: 'Optional' })}</div>
+                </div>
+                <div>
+                  <label className="m-label">Remark</label>
+                  <div className="relative">
+                    <input className="input !py-1.5 w-full pr-9" value={remark} onChange={(e) => setRemark(e.target.value)} placeholder="Homework, progress — or tap the mic" />
+                    <span className="absolute right-2 top-1/2 -translate-y-1/2"><DictateButton icon value={remark} onChange={setRemark} /></span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Always open, a group like the others — the client asked not to fold it away. */}
+              <div className="m-group">
+                <div className="m-group-title"><MapPin size={15} style={{ color: 'var(--color-primary)' }} /> Venue and meeting link</div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <div><label className="m-label">Venue</label>{cell.venue}</div>
+                  <div><label className="m-label">Meet link</label>{cloneElement(cell.link, { placeholder: 'For an online class' })}</div>
+                </div>
+              </div>
+
+              {error && <div className="text-sm text-red-500">{error}</div>}
+              <button
+                className="btn-primary w-full !py-3 !rounded-xl text-base"
+                disabled={save.isPending}
+                onClick={() => (problem ? setError(problem) : save.mutate())}
+              >
+                {save.isPending ? 'Saving…'
+                  : students.length && hours > 0
+                    ? `Save lecture · ${hrs(hours)} × ${students.length} student${students.length === 1 ? '' : 's'}`
+                    : 'Save lecture'}
+              </button>
             </div>
 
-            <div className="flex flex-wrap items-center gap-2 mt-3">
+            <div className="hidden lg:flex flex-wrap items-center gap-2 mt-3">
               <button
                 className="btn-primary !py-1.5 !px-6 text-sm ml-auto whitespace-nowrap"
                 disabled={save.isPending}
@@ -375,7 +429,7 @@ export function LectureSheet({
 
             {/* Only after someone presses Save — an empty line is not a mistake
                 until it is submitted, so nothing nags before then. */}
-            {error && <div className="text-sm mt-2 text-red-500">{error}</div>}
+            {error && <div className="hidden lg:block text-sm mt-2 text-red-500">{error}</div>}
           </>
         )}
       </Section>
@@ -385,6 +439,49 @@ export function LectureSheet({
         {lectures.isLoading ? <Spinner /> : classes.length === 0 ? (
           <p className="muted text-sm">Nothing logged yet — the line above saves into here.</p>
         ) : (
+          <>
+          {/* Phones and tablets: one card per class, nothing scrolls sideways. */}
+          <ul className="lg:hidden grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+            {shown.map((c) => (
+              <li key={c.id} className="rounded-2xl p-3.5" style={{ background: 'var(--color-card-alt)' }}>
+                <div className="flex gap-3">
+                  <DateTile iso={String(c.session_date).slice(0, 10)} />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="font-semibold leading-snug">{c.subject_name || 'Lecture'}</div>
+                      <span className="shrink-0 text-sm font-bold tnum" style={{ color: 'var(--color-primary)' }}>{hrs(c.total_hours)}</span>
+                    </div>
+                    <div className="text-xs muted tnum mt-0.5">{clock(c.time_in)} – {clock(c.time_out)}</div>
+                    {c.topic && <div className="text-sm mt-1.5 leading-snug">{c.topic}</div>}
+                    {c.remark && <div className="text-xs muted mt-0.5 italic">{c.remark}</div>}
+                  </div>
+                </div>
+                <div className="flex items-end gap-2 mt-3">
+                  <div className="flex flex-wrap gap-1.5 flex-1 min-w-0">
+                    {(c.attendees || []).map((a: any) => (
+                      <span key={a.id} className="inline-flex items-center gap-1 text-xs rounded-full pl-1 pr-2 py-0.5 max-w-full" style={{ background: 'var(--color-card)' }}>
+                        <span className="grid place-items-center w-5 h-5 rounded-full text-[9px] font-bold shrink-0"
+                          style={{ background: 'var(--color-accent-soft)', color: 'var(--color-primary)' }}>
+                          {String(a.name || '?').split(/\s+/).map((w: string) => w[0]).slice(0, 2).join('').toUpperCase()}
+                        </span>
+                        <span className="truncate">{a.name}</span>
+                      </span>
+                    ))}
+                  </div>
+                  <div className="flex gap-1.5 shrink-0">
+                    {forAdmin && (
+                      <button className="grid place-items-center w-9 h-9 rounded-lg border border-red-500/30 text-red-600 dark:text-red-400"
+                        onClick={() => setDeleting(c)} aria-label="Delete lecture">
+                        <Trash2 size={15} />
+                      </button>
+                    )}
+                    <button className="btn-ghost !h-9 !py-0 !px-3 text-xs" onClick={() => setEditing(c)}><Pencil size={13} /> Edit</button>
+                  </div>
+                </div>
+              </li>
+            ))}
+          </ul>
+          <div className="hidden lg:block">
           <Table head={['Date', 'Time', 'Subject / Topic', { label: 'Hours', align: 'right' }, 'Students on this lecture', '']}>
             {shown.map((c) => (
               <tr key={c.id}>
@@ -425,6 +522,8 @@ export function LectureSheet({
               </tr>
             ))}
           </Table>
+          </div>
+          </>
         )}
         {classes.length > 0 && (
           <Pagination
@@ -464,3 +563,12 @@ export function LectureSheet({
     </div>
   );
 }
+
+
+
+
+
+
+
+
+

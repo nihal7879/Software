@@ -76,3 +76,24 @@ with a code when the client needs to tell cases apart:
 
 Status codes: 400 bad input, 401 not signed in, 403 not allowed, 404 missing,
 409 conflict (already enrolled, already on this lecture), 423 locked.
+
+
+ADDED 2026-10-01
+  POST /auth/forgot          public. username -> a code to the email on file
+  POST /auth/forgot/reset    public. username + code -> the new password, once
+  POST /auth/change-password now also returns a fresh token: the change signed
+                             every device out, this one included
+  GET  /push/key             the VAPID public key, and whether push is set up
+  POST /push/subscribe       this browser
+  POST /push/unsubscribe     this browser
+  GET  /push/mine            this person's own devices
+
+  Extra codes on the error shape:
+    NO_EMAIL      the login has no address anywhere - ring the office
+    MAIL_FAILED   the code could not be emailed just now
+    PUSH_OFF      503, no VAPID keys on the server
+  And 429 for too many reset requests, from one account or one connection.
+  GET  /notifications/count  the bell's unread number
+  GET  /notifications        the last 25 for the signed-in person
+  POST /notifications/read   {} for all, or { id }
+  POST /notifications/clear  {} for all, or { id } - hides, never deletes

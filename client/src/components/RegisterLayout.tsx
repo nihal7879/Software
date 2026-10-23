@@ -1,8 +1,7 @@
 import { ReactNode, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { GraduationCap } from 'lucide-react';
 import type { FieldErrors, UseFormRegister } from 'react-hook-form';
-import { AuthHero } from './AuthHero';
+import { AuthHero, AuthBanner } from './AuthHero';
 import { api } from '../api/client';
 import { usernameProblem, passwordProblem, PASSWORD_MIN } from '../lib/credentials';
 import { passwordTip } from '../lib/passwordTip';
@@ -26,16 +25,16 @@ export function RegisterLayout({
   showSignInLink?: boolean;
 }) {
   return (
-    <div className="min-h-screen grid lg:grid-cols-2">
+    <div className="min-h-screen flex flex-col lg:grid lg:grid-cols-2">
       <AuthHero />
+      <AuthBanner />
 
-      <div className="flex items-center justify-center p-6">
+      {/* Below lg: a sheet pulled up over the banner, as on sign-in. */}
+      <div className="flex-1 relative -mt-8 lg:mt-0 rounded-t-[2rem] lg:rounded-none flex items-start lg:items-center justify-center px-6 pt-8 pb-10 lg:p-6"
+        style={{ background: 'var(--color-bg)' }}>
         <div className="w-full max-w-md">
-          <div className="lg:hidden flex items-center gap-2 text-2xl font-display font-bold mb-6" style={{ color: 'var(--color-primary)' }}>
-            <GraduationCap size={24} /> STEM Vision
-          </div>
           <div className="eyebrow mb-2">{eyebrow}</div>
-          <h2 className="font-display text-3xl font-semibold mb-1.5">{title}</h2>
+          <h2 className="font-display text-[1.75rem] sm:text-3xl font-semibold mb-1.5">{title}</h2>
           {subtitle && <p className="muted text-sm mb-8">{subtitle}</p>}
 
           {children}

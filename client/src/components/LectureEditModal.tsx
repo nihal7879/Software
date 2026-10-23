@@ -10,6 +10,7 @@ import { Select } from './Select';
 import { TimePicker } from './TimePicker';
 import { CalendarPicker } from './CalendarPicker';
 import { toast } from './Toast';
+import { useWide } from './ui';
 
 // Corrects an already-logged lecture: the wrong date, a mistyped time, the wrong
 // teacher or topic — and who was in the room, when someone was missed off the
@@ -37,6 +38,7 @@ export function LectureEditModal({
   const qc = useQueryClient();
   const [addSearch, setAddSearch] = useState('');
   const [attendeeError, setAttendeeError] = useState('');
+  const wide = useWide();
   const masters = useMasters();
   const teachers = useQuery({ queryKey: ['teachers'], queryFn: () => api.get('/teachers').then((r) => r.data.data) });
   const subjects = useQuery({ queryKey: ['subjects'], queryFn: () => api.get('/teachers/subjects').then((r) => r.data.data) });
@@ -106,7 +108,7 @@ export function LectureEditModal({
 
   return (
     <Overlay onClose={onClose}>
-      <div className="w-full max-w-xl h-full p-6 overflow-y-auto" style={{ background: 'var(--color-card)' }} onClick={(e) => e.stopPropagation()}>
+      <div className="w-full max-w-xl h-full p-4 sm:p-6 overflow-y-auto" style={{ background: 'var(--color-card)' }} onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-1">
           <h2 className="text-lg font-bold">Edit Lecture</h2>
           <button className="btn-ghost !py-1 !px-2.5 text-sm" onClick={onClose}>Close</button>
@@ -115,14 +117,15 @@ export function LectureEditModal({
           Duration is recalculated from Time In / Out, and the attendees' hours follow it.
         </p>
 
-        <form onSubmit={handleSubmit((b) => save.mutate(b))} className="space-y-3">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
+        <form onSubmit={handleSubmit((b) => save.mutate(b))} className="m-form space-y-3">
+          {/* Phones: times side by side, everything else full width. */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="col-span-2 sm:col-span-1">
               <label className="text-xs font-medium muted block mb-1">Date *</label>
               <input type="hidden" {...register('session_date', { required: true })} />
-              <CalendarPicker value={watch('session_date') || ''} onChange={(v) => setValue('session_date', v, { shouldValidate: true })} placeholder="Select date…" />
+              <CalendarPicker value={watch('session_date') || ''} onChange={(v) => setValue('session_date', v, { shouldValidate: true })} placeholder="Select date…" stretch={!wide} />
             </div>
-            <div>
+            <div className="col-span-2 sm:col-span-1">
               <label className="text-xs font-medium muted block mb-1">Venue</label>
               <input type="hidden" {...register('venue')} />
               <Select value={watch('venue') || ''} onChange={(v) => setValue('venue', v)} options={masters.venues.map((v) => ({ value: v, label: v }))} placeholder="Select venue…" allowCustom />
@@ -137,7 +140,7 @@ export function LectureEditModal({
               <input type="hidden" {...register('time_out')} />
               <TimePicker value={watch('time_out') || ''} onChange={(v) => setValue('time_out', v)} placeholder="End time" />
             </div>
-            <div>
+            <div className="col-span-2 sm:col-span-1">
               <label className="text-xs font-medium muted block mb-1">Teacher</label>
               <input type="hidden" {...register('teacher_id')} />
               <Select
@@ -147,7 +150,7 @@ export function LectureEditModal({
                 placeholder="Select teacher…"
               />
             </div>
-            <div>
+            <div className="col-span-2 sm:col-span-1">
               <label className="text-xs font-medium muted block mb-1">Subject</label>
               <input type="hidden" {...register('subject_id')} />
               <Select
@@ -194,11 +197,11 @@ export function LectureEditModal({
               <div className="flex flex-wrap items-center gap-1.5">
                 {attendees.length === 0 && <span className="muted text-sm">Nobody is on this lecture.</span>}
                 {attendees.map((a) => (
-                  <span key={a.id} className="inline-flex items-center gap-1 text-sm rounded-md px-2 py-0.5" style={{ background: 'var(--color-card-alt)' }}>
+                  <span key={a.id} className="inline-flex items-center gap-1 text-sm rounded-md px-2 py-0.5 max-lg:rounded-full max-lg:pl-2.5 max-lg:pr-1 max-lg:py-1" style={{ background: 'var(--color-card-alt)' }}>
                     {a.name}
                     <button
                       type="button"
-                      className="muted hover:text-red-500 disabled:opacity-40"
+                      className="muted hover:text-red-500 disabled:opacity-40 max-lg:grid max-lg:place-items-center max-lg:w-6 max-lg:h-6"
                       title="Take off this lecture — the hours go back"
                       aria-label={`Remove ${a.name}`}
                       disabled={removeStudent.isPending || attendees.length === 1}
@@ -245,12 +248,27 @@ export function LectureEditModal({
             </div>
           )}
 
-          <div className="flex gap-2 pt-1">
-            <button className="btn-primary flex-1" disabled={save.isPending}>{save.isPending ? 'Saving…' : 'Save changes'}</button>
-            <button type="button" className="btn-ghost" onClick={onClose}>Cancel</button>
+          {/* Phones: pinned to the bottom so Save is reachable without scrolling back. */}
+          <div className="flex gap-2 pt-1 max-lg:sticky max-lg:bottom-0 max-lg:-mx-4 max-lg:px-4 max-lg:py-3 max-lg:border-t max-lg:bg-[var(--color-card)] max-lg:border-[var(--color-border)]">
+            <button className="btn-primary flex-1 max-lg:!py-2.5" disabled={save.isPending}>{save.isPending ? 'Saving…' : 'Save changes'}</button>
+            <button type="button" className="btn-ghost max-lg:!py-2.5" onClick={onClose}>Cancel</button>
           </div>
         </form>
       </div>
     </Overlay>
   );
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+

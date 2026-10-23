@@ -96,6 +96,7 @@ export function StudentRegistrationForm({
     'year_grade', 'school_name', 'exam_board',
     'father_name', 'father_mobile', 'mother_name', 'mother_mobile',
     'guardian_name', 'guardian_mobile',
+    'father_email', 'mother_email', 'guardian_email',
     'email', 'student_mobile', 'extra_mobile',
   ] as const;
 
@@ -154,7 +155,9 @@ export function StudentRegistrationForm({
         <h4 className="font-display font-bold accent-underline mb-3">Personal Details</h4>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           {F({ name: 'first_name', label: 'First Name', required: true })}
-          {F({ name: 'middle_name', label: 'Middle Name', required: true })}
+          {/* Optional. Required, it was being satisfied with "." or "-" or the
+              first name typed again, which then showed up in the full name. */}
+          {F({ name: 'middle_name', label: 'Middle Name', placeholder: 'Optional' })}
           {F({ name: 'last_name', label: 'Last Name', required: true })}
           <div className="sm:col-span-2">
             <label className="text-xs font-semibold muted">Full Name (auto)</label>
@@ -194,13 +197,21 @@ export function StudentRegistrationForm({
       <section>
         <h4 className="font-display font-bold accent-underline mb-1">Family *</h4>
         <p className="muted text-xs mb-3">At least one — father, mother or guardian — with their mobile number.</p>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        {/* Three to a row from sm up: each person's name, number and address
+            read across together. Stacked on a phone. */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           {F({ name: 'father_name', label: 'Father Name' })}
           {F({ name: 'father_mobile', label: 'Father Mob No', type: 'tel' })}
+          {F({ name: 'father_email', label: 'Father Email id', type: 'email',
+               rules: { pattern: { value: EMAIL_RE, message: 'Enter a valid email' } } })}
           {F({ name: 'mother_name', label: 'Mother Name' })}
           {F({ name: 'mother_mobile', label: 'Mother Mob No', type: 'tel' })}
+          {F({ name: 'mother_email', label: 'Mother Email id', type: 'email',
+               rules: { pattern: { value: EMAIL_RE, message: 'Enter a valid email' } } })}
           {F({ name: 'guardian_name', label: 'Guardian Name' })}
           {F({ name: 'guardian_mobile', label: 'Guardian Mob No', type: 'tel' })}
+          {F({ name: 'guardian_email', label: 'Guardian Email id', type: 'email',
+               rules: { pattern: { value: EMAIL_RE, message: 'Enter a valid email' } } })}
         </div>
         {familyError && <div className="text-xs text-red-500 font-medium mt-2">{familyError}</div>}
       </section>

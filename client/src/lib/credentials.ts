@@ -43,3 +43,12 @@ export function passwordProblem(pw: string, username?: string | null): string | 
   if (u.length >= USERNAME_MIN && !u.includes('@') && pw.toLowerCase().includes(u)) return 'Password cannot contain your username.';
   return null;
 }
+
+
+
+
+
+
+
+
+

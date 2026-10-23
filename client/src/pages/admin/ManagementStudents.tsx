@@ -58,6 +58,19 @@ function oldNumberOwner(r: any): { person: Person; known: boolean } | null {
   return { person: PEOPLE.find(named) || 'Father', known: false };
 }
 
+/**
+ * Which parent an address that is only on the student's record is shown under.
+ *
+ * Its own question, separate from the one above: a family can have each parent's
+ * mobile recorded properly and still have the only email address filed on the
+ * student. Whoever the family named as the payer, else the first parent named.
+ */
+function addressSlot(r: any): Person {
+  const named = (p: Person) => !!String(r[`${p.toLowerCase()}_name`] ?? '').trim();
+  if (PEOPLE.includes(r.relationship) && named(r.relationship)) return r.relationship;
+  return PEOPLE.find(named) || 'Father';
+}
+
 // One family member's cell: the name, and their number underneath — the same two
 // lines in every row, so names and numbers line up down the column.
 function PersonCell({ row: r, person }: { row: any; person: Person }) {
@@ -65,7 +78,15 @@ function PersonCell({ row: r, person }: { row: any; person: Person }) {
   const name = String(r[`${key}_name`] ?? '').trim();
   const old = oldNumberOwner(r);
   const mobile = String(r[`${key}_mobile`] ?? '').trim() || (old?.person === person ? String(r.parent_mobile) : '');
-  if (!name && !mobile) return <span className="muted">—</span>;
+  const own = String(r[`${key}_email`] ?? '').trim();
+  // No address against this parent, but there is one on the student's record —
+  // and for a third of the students that address is plainly a parent's, because
+  // the office has been putting it there for years. It is shown under the same
+  // parent the orphan mobile goes to, so the family's contact details read
+  // together in one place instead of the column sitting empty.
+  const borrowed = !own && addressSlot(r) === person ? String(r.student_email ?? '').trim() : '';
+  const email = own || borrowed;
+  if (!name && !mobile && !email) return <span className="muted">—</span>;
   return (
     <div className="leading-tight">
       <div className="font-medium text-sm">{name || <span className="muted font-normal">—</span>}</div>
@@ -73,6 +94,13 @@ function PersonCell({ row: r, person }: { row: any; person: Person }) {
         {mobile || 'No mobile'}
         {old?.person === person && !old.known && <span className="italic"> · whose not recorded</span>}
       </div>
+      {/* The address rides in the same cell as the person it belongs to, so no
+          new column is needed and it is hidden with them — Father, Mother and
+          Guardian all start switched off. Truncated: an address is long and the
+          list must not scroll sideways. */}
+      {email && (
+        <div className="text-xs muted mt-0.5 truncate max-w-[14rem]" title={email}>{email}</div>
+      )}
     </div>
   );
 }

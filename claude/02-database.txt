@@ -87,3 +87,29 @@ server/scripts/backup-db.js writes a JSON snapshot. Any script that changes
 existing data writes its own backup JSON beside it first - there are many
 examples in server/scripts/ (backup_merge_170_into_8.json and so on). Do the
 same for anything you write.
+
+
+ADDED 2026-10-01
+  password_resets      one row per code asked for. otp_hash is bcrypt - the six
+                       digits are NEVER stored. Kept after use, like everything
+                       else here, so "who asked for a reset, from where" still
+                       reads later. Asking again sets used_at on the earlier row,
+                       so an old code in an old email is dead.
+  users.must_change_password  the password came out of a reset
+  users.token_version         raised by any password change; every token carries
+                              the number it was signed with, and requireAuth
+                              refuses anything lower. This is what signs the
+                              other devices out.
+  push_subscriptions   one row per BROWSER, not per person - the same parent on a
+                       phone and a laptop is two rows. endpoint is unique, so a
+                       repeat "allow" updates the one row. 404/410 from the push
+                       service marks it is_deleted.
+  notification_log     every notification attempted and what became of it, the
+                       same job email_log does. 'no_device' means that person has
+                       never turned notifications on - the usual reason one "did
+                       not arrive", and not a failure.
+  notification_log.read_at / .dismissed_at
+                       the bell. read_at is "I have seen it" (set by opening the
+                       bell, clears the count); dismissed_at is "take it off my
+                       list". Two different acts, so two columns - and clearing
+                       hides rather than deletes.

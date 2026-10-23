@@ -18,7 +18,9 @@ import { deriveMonth } from './hours';
  * The super admin is the approver, so their own changes apply at once.
  */
 
-export type ApprovalKind = 'hours_add' | 'hours_deduct' | 'hours_edit' | 'hours_delete' | 'fee_entry';
+export type ApprovalKind =
+  | 'hours_add' | 'hours_deduct' | 'hours_edit' | 'hours_delete'
+  | 'fee_entry' | 'fee_edit' | 'fee_delete';
 
 /** What each kind is called on screen and in a message to the office. */
 export const KIND_LABEL: Record<ApprovalKind, string> = {
@@ -27,6 +29,8 @@ export const KIND_LABEL: Record<ApprovalKind, string> = {
   hours_edit: 'an hours entry changed',
   hours_delete: 'an hours entry removed',
   fee_entry: 'a fee entry with a discount',
+  fee_edit: 'a payment changed',
+  fee_delete: 'a payment removed',
 };
 
 export function needsApproval(role?: string) {
@@ -131,6 +135,84 @@ export async function applyFeeEntry(conn: any, p: any, userId: number) {
   return { type: 'fee_transaction', id: txId };
 }
 
+/**
+ * Change a payment, keeping the hours it credited in step.
+ *
+ * The same code runs whether a super admin made the change directly or it came
+ * out of the queue — if these two ever drifted apart, an approved edit would
+ * land differently from the one the office previewed.
+ */
+export async function applyFeeEdit(conn: any, txId: number | string, p: any) {
+  const [[before]]: any = await conn.query(
+    'SELECT * FROM fee_transactions WHERE id = ? AND is_deleted = FALSE', [txId]);
+  if (!before) throw new Error('gone');
+
+  // `before` is the snapshot the queue displays and `request_note` the case the
+  // office made; neither is a column on fee_transactions.
+  const { request_note, before: _snapshot, ...b } = p;
+  const fields: string[] = [];
+  const params: any[] = [];
+  for (const [k, v] of Object.entries(b)) { fields.push(`${k} = ?`); params.push(v); }
+  if (b.payment_date) { fields.push('month = ?'); params.push(deriveMonth(b.payment_date)); }
+  if (fields.length) {
+    params.push(txId);
+    await conn.query(`UPDATE fee_transactions SET ${fields.join(', ')} WHERE id = ?`, params);
+  }
+
+  // Keep the linked hours package in sync so the student's statement reflects
+  // the edit. Merged (new ?? old) values.
+  const merged = { ...before, ...b };
+  const hrs = merged.course_package_hours != null ? Number(merged.course_package_hours) : 0;
+  const disc = merged.discount_hours != null ? Number(merged.discount_hours) : 0;
+  const amount = Number(merged.amount) || 0;
+  const date = merged.payment_date ? String(merged.payment_date).slice(0, 10) : null;
+  // A transaction can have picked up more than one package row over the years;
+  // the live one is the one to keep in sync, not a retired duplicate.
+  const [[existingPkg]]: any = await conn.query(
+    'SELECT id FROM fee_packages WHERE transaction_id = ? ORDER BY is_deleted ASC, is_active DESC, id DESC LIMIT 1',
+    [txId]
+  );
+  if (hrs > 0 || disc > 0) {
+    const rate = amount && hrs ? amount / hrs : 0;
+    if (existingPkg) {
+      // student_id moves with the transaction: re-assigning a payment from one
+      // student to another has to carry the credited hours across, or the old
+      // student keeps hours they never paid for and the new one shows none.
+      await conn.query(
+        `UPDATE fee_packages SET student_id = ?, package_hours = ?, discount_hours = ?, rate_per_hour = ?,
+                start_date = ?, is_active = TRUE, is_deleted = FALSE WHERE id = ?`,
+        [merged.student_id, hrs, disc, rate, date, existingPkg.id]
+      );
+    } else {
+      await conn.query(
+        `INSERT INTO fee_packages (student_id,transaction_id,package_hours,discount_hours,rate_per_hour,start_date)
+         VALUES (?,?,?,?,?,?)`,
+        [merged.student_id, txId, hrs, disc, rate, date]
+      );
+    }
+  } else if (existingPkg) {
+    // Hours cleared on the transaction → retire the credit.
+    await conn.query('UPDATE fee_packages SET is_active = FALSE, is_deleted = TRUE WHERE id = ?', [existingPkg.id]);
+  }
+  return { type: 'fee_transaction', id: Number(txId) };
+}
+
+/**
+ * Remove a payment — and the hours it bought with it.
+ *
+ * Both halves matter. A payment taken off the statement while its package stays
+ * live leaves the student holding hours nobody paid for, which is the kind of
+ * mistake that is only noticed months later on a balance that will not add up.
+ */
+export async function applyFeeDelete(conn: any, txId: number | string) {
+  const [[live]]: any = await conn.query(
+    'SELECT id FROM fee_transactions WHERE id = ? AND is_deleted = FALSE', [txId]);
+  if (!live) throw new Error('gone');
+  await conn.query('UPDATE fee_transactions SET is_deleted = TRUE WHERE id = ?', [txId]);
+  await conn.query('UPDATE fee_packages SET is_active = FALSE, is_deleted = TRUE WHERE transaction_id = ?', [txId]);
+  return { type: 'fee_transaction', id: Number(txId) };
+}
+
 /** Approve one request and carry it out, in a single transaction. */
 export async function approve(id: number, userId: number) {
   const row = await queryOne<any>(
@@ -165,6 +247,14 @@ export async function approve(id: number, userId: number) {
       }
       case 'fee_entry':
         result = await applyFeeEntry(conn, p, row.requested_by);
+        break;
+      // Both of these throw 'gone' if the payment was removed while the request
+      // waited, which rolls the transaction back and tells the super admin.
+      case 'fee_edit':
+        result = await applyFeeEdit(conn, row.target_id, p);
+        break;
+      case 'fee_delete':
+        result = await applyFeeDelete(conn, row.target_id);
         break;
       default:
         throw new Error(`Unknown approval kind ${row.kind}`);

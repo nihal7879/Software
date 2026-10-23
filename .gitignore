@@ -51,6 +51,12 @@ build/
 server/scripts/_*.js
 server/scripts/_*.py
 
+# What `vercel link` writes: the project and org ids for this machine. Not a
+# secret, but it ties a folder to one Vercel project — it belongs to whoever
+# cloned the repo, not to the repo.
+.vercel/
+**/.vercel/
+
 # Logs
 *.log
 npm-debug.log*

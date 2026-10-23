@@ -4,6 +4,7 @@ import { UserPlus } from 'lucide-react';
 import { api, num, hrs, fmtDate } from '../../api/client';
 import { useAuth } from '../../auth/AuthContext';
 import { KpiCard, Section, Spinner } from '../../components/ui';
+import { NotificationPrompt } from '../../components/NotificationPrompt';
 import { getLastSeenRegistration } from '../../lib/registrationsSeen';
 import {
   Bar, BarChart, CartesianGrid, Cell, Legend, Line, LineChart, Pie, PieChart,
@@ -51,6 +52,8 @@ export default function AdminDashboard() {
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-bold">Dashboard</h1>
+
+      <NotificationPrompt what="a student registers" />
 
       <div className={`grid grid-cols-2 gap-3 ${full ? 'md:grid-cols-3 lg:grid-cols-6' : 'md:grid-cols-4'}`}>
         <KpiCard label="Students" value={o.students.total} sub={`${o.students.active} active`} accent="blue" />

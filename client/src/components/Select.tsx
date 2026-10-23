@@ -70,7 +70,9 @@ export function Select({
     // Clamp the menu inside the viewport so it never causes horizontal scroll.
     // Compact pickers hold short values (page numbers, row counts) and would
     // look absurd stretched to the 200px a labelled list needs.
-    const minWidth = compact ? r.width : 200;
+    // A search box, though, needs room to type in: below lg a compact menu that
+    // searches is at least 180px, or the box was squeezed to a sliver.
+    const minWidth = compact ? (searchable && window.innerWidth < 1024 ? 180 : r.width) : 200;
     const width = Math.min(Math.max(r.width, minWidth), window.innerWidth - 16);
     const left = Math.max(8, Math.min(r.left, window.innerWidth - width - 8));
     const spaceBelow = window.innerHeight - r.bottom - 12;

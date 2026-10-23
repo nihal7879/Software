@@ -2,6 +2,7 @@ import { useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { api, rs, num, studentOption, parentOf } from '../../api/client';
+import { useAuth } from '../../auth/AuthContext';
 import { Section, Table, Spinner, Pagination } from '../../components/ui';
 import { CalendarPicker, CalendarRangePicker } from '../../components/CalendarPicker';
 import { Select } from '../../components/Select';
@@ -38,7 +39,15 @@ export default function Finance() {
     return !v;
   });
   const [draftsOpen, setDraftsOpen] = useState(false);
-  const [confirm, setConfirm] = useState<{ title: string; message: string; confirmLabel: string; onConfirm: () => void } | null>(null);
+  // `note` asks for a line of explanation before the action goes ahead, and it
+  // is handed back to onConfirm — see components/ConfirmModal.
+  const [confirm, setConfirm] = useState<{
+    title: string;
+    message: string;
+    confirmLabel: string;
+    note?: { label: string; placeholder?: string; help?: string; min?: number };
+    onConfirm: (note?: string) => void;
+  } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const tx = useQuery({
@@ -55,6 +64,11 @@ export default function Finance() {
   const drafts = useQuery({ queryKey: ['fee-drafts'], queryFn: () => api.get('/fees/drafts').then((r) => r.data.data) });
 
   const { register, handleSubmit, reset, watch, setValue } = useForm();
+  // Changing or removing money that has already been recorded waits for the
+  // super admin. They themselves do not wait — there is nobody above them to
+  // explain it to.
+  const { user } = useAuth();
+  const mustExplain = user?.role !== 'superadmin';
 
   const openAdd = () => { setEditing(null); reset({ student_id: '', amount: '', payment_date: '', payment_source: DEFAULT_SOURCE, transaction_reference: '', transaction_narration: '', parent_name: '', course_package_hours: '', discount_hours: '', notes: '' }); setDrawer(true); };
   // A payment carries hours with it, so anything that reads the hours ledger is
@@ -80,24 +94,44 @@ export default function Finance() {
       };
       return editing ? api.put(`/fees/transactions/${editing.id}`, payload) : api.post('/fees/transactions', payload);
     },
-    onSuccess: () => {
+    onSuccess: (r: any) => {
       invalidateFeeViews();
-      toast(editing ? 'Payment updated' : 'Payment recorded');
+      // 202 means it was parked for the super admin, not written. Saying
+      // "Payment updated" there would be a lie the office acts on.
+      if (r?.status === 202) toast(r.data?.message || 'Sent to the super admin for approval', 'info');
+      else toast(editing ? 'Payment updated' : 'Payment recorded');
       closeDrawer();
     },
     onError: (e: any) => toast(e?.response?.data?.error || 'Could not save payment', 'error'),
   });
 
   const del = useMutation({
-    mutationFn: (id: number) => api.delete(`/fees/transactions/${id}`),
-    onSuccess: () => { invalidateFeeViews(); toast('Payment deleted'); },
+    // A body on a DELETE, so the explanation does not travel in the URL where
+    // every server log would keep a copy of it.
+    mutationFn: (v: { id: number; note?: string }) =>
+      api.delete(`/fees/transactions/${v.id}`, { data: { request_note: v.note } }),
+    onSuccess: (r: any) => {
+      invalidateFeeViews();
+      if (r?.status === 202) toast(r.data?.message || 'Sent to the super admin for approval', 'info');
+      else toast('Payment deleted');
+    },
+    onError: (e: any) => toast(e?.response?.data?.error || 'Could not remove the payment', 'error'),
   });
 
   const onDelete = (t: any) => setConfirm({
-    title: 'Delete payment',
-    message: `Delete the ${rs(t.amount)} payment from ${t.student_name} on ${t.payment_date}? This cannot be undone.`,
-    confirmLabel: 'Delete',
-    onConfirm: () => del.mutate(t.id),
+    title: mustExplain ? 'Remove this payment?' : 'Delete payment',
+    message: mustExplain
+      ? `The ${rs(t.amount)} payment from ${t.student_name} on ${t.payment_date}. The super admin has to agree before it leaves the statement — the hours it paid for go with it.`
+      : `Delete the ${rs(t.amount)} payment from ${t.student_name} on ${t.payment_date}? The hours it paid for go with it.`,
+    confirmLabel: mustExplain ? 'Send for approval' : 'Delete',
+    note: mustExplain
+      ? {
+          label: 'Why is this being removed?',
+          placeholder: 'e.g. entered twice — the same transfer is already on 12 June',
+          help: 'Only the super admin sees this. It is not shown to the family.',
+        }
+      : undefined,
+    onConfirm: (note?: string) => del.mutate({ id: t.id, note }),
   });
 
   // ---- Excel import -------------------------------------------------------
@@ -423,6 +457,25 @@ export default function Finance() {
                 <label className="text-xs font-medium muted">Notes</label>
                 <textarea className="input mt-1" rows={3} {...register('notes')} />
               </div>
+              {/* Only when changing a payment that already exists. Recording a
+                  new one needs no case made for it; restating a recorded one
+                  does. Separate from Notes above, which the family can see. */}
+              {editing && mustExplain && (
+                <div className="rounded-xl p-3" style={{ background: 'var(--color-card-alt)' }}>
+                  <label className="text-xs font-semibold">
+                    Why are you changing this? <span className="text-red-500">*</span>
+                  </label>
+                  <textarea
+                    className="input mt-1"
+                    rows={2}
+                    placeholder="e.g. the bank reference was typed wrong"
+                    {...register('request_note')}
+                  />
+                  <p className="muted text-xs mt-1">
+                    Only the super admin sees this. Nothing changes on the statement until they agree.
+                  </p>
+                </div>
+              )}
               {save.isError && <div className="text-sm text-red-500">Could not save — please check the fields.</div>}
               <div className="flex gap-2 pt-2">
                 <button className="btn-primary flex-1" disabled={save.isPending}>{save.isPending ? 'Saving…' : editing ? 'Update' : 'Save'}</button>
@@ -438,8 +491,9 @@ export default function Finance() {
           title={confirm.title}
           message={confirm.message}
           confirmLabel={confirm.confirmLabel}
+          note={confirm.note}
           danger
-          onConfirm={() => { confirm.onConfirm(); setConfirm(null); }}
+          onConfirm={(note?: string) => { confirm.onConfirm(note); setConfirm(null); }}
           onClose={() => setConfirm(null)}
         />
       )}

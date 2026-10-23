@@ -1,5 +1,23 @@
-import { ReactNode } from 'react';
+import { ReactNode, RefObject, useEffect, useState } from 'react';
+
+/**
+ * True from the lg breakpoint (1024px) up — laptop and wider. For the few places
+ * a phone layout needs different props, not just different classes.
+ */
+export function useWide() {
+  const query = '(min-width: 1024px)';
+  const [wide, setWide] = useState(() => typeof window === 'undefined' || window.matchMedia(query).matches);
+  useEffect(() => {
+    const m = window.matchMedia(query);
+    const on = () => setWide(m.matches);
+    m.addEventListener('change', on);
+    return () => m.removeEventListener('change', on);
+  }, []);
+  return wide;
+}
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { Select } from './Select';
+import { Overlay } from './Overlay';
 
 const ACCENTS: Record<string, string> = {
   blue: '#f97316',   // orange (brand)
@@ -41,7 +59,8 @@ export function Section({ title, action, children }: { title: string; action?: R
     <div className="card p-4 sm:p-5">
       <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
         <h3 className="font-display font-bold text-base accent-underline">{title}</h3>
-        {action && <div className="flex flex-wrap items-center gap-2">{action}</div>}
+        {/* Full width on a phone, so a search box in here can fill the row. */}
+        {action && <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">{action}</div>}
       </div>
       {children}
     </div>
@@ -126,6 +145,69 @@ export function Table({
   );
 }
 
+/**
+ * Stacking cards, shared by the teacher's recent classes and the student's
+ * calendar list. Inside `ref`, each <section> is one day: its [data-day] header
+ * is sticky and its [data-stack] cards (class `stack-card`, top using
+ * var(--day-h)) pin beneath it. This measures the header height into --day-h
+ * (0 when a list has no day headers) and, per day, how many cards lie over each
+ * one into --depth, which the CSS turns into a slight shrink and dim.
+ */
+export function useStackDepth(ref: RefObject<HTMLElement>, deps: unknown[]) {
+  useEffect(() => {
+    const root = ref.current;
+    if (!root) return;
+    let frame = 0;
+    const measure = () => {
+      frame = 0;
+      const head = root.querySelector<HTMLElement>('[data-day]');
+      root.style.setProperty('--day-h', `${head ? head.offsetHeight : 0}px`);
+      root.querySelectorAll('section').forEach((day) => {
+        const cards = [...day.querySelectorAll<HTMLElement>('[data-stack]')];
+        const rects = cards.map((c) => c.getBoundingClientRect());
+        cards.forEach((c, i) => {
+          let depth = 0;
+          for (let j = i + 1; j < cards.length; j++) if (rects[j].top < rects[i].bottom - 12) depth++;
+          c.style.setProperty('--depth', String(Math.min(depth, 3)));
+        });
+      });
+    };
+    const onScroll = () => { if (!frame) frame = requestAnimationFrame(measure); };
+    measure();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener('resize', onScroll);
+    return () => {
+      window.removeEventListener('scroll', onScroll);
+      window.removeEventListener('resize', onScroll);
+      cancelAnimationFrame(frame);
+    };
+  }, deps); // eslint-disable-line react-hooks/exhaustive-deps
+}
+
+/** The sticky top for the i-th card of a day: under the app bar and the day header, a little lower each time. */
+export const stackTop = (i: number) => `calc(3.5rem + env(safe-area-inset-top) + var(--day-h, 0px) + ${Math.min(i, 3) * 0.5}rem)`;
+
+/** '16:30' or '16:30:00' → '4:30 PM', the way every phone list shows a time. */
+export function fmtTime(t?: string | null) {
+  const m = String(t || '').match(/^(\d{1,2}):(\d{2})/);
+  if (!m) return '';
+  const h = Number(m[1]);
+  return `${h % 12 || 12}:${m[2]} ${h >= 12 ? 'PM' : 'AM'}`;
+}
+
+const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+/** A calendar-leaf date for phone lists: day large, month small. Reads a YYYY-MM-DD string, no Date parsing. */
+export function DateTile({ iso }: { iso?: string | null }) {
+  const m = String(iso || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
+  return (
+    <div className="shrink-0 w-12 rounded-xl text-center py-1.5 self-start" style={{ background: 'var(--color-card)', border: '1px solid var(--color-border)' }}>
+      <div className="text-[10px] font-semibold leading-none" style={{ color: 'var(--color-primary)' }}>{m ? MON[Number(m[2]) - 1] : '—'}</div>
+      <div className="font-display text-lg font-bold leading-tight tnum">{m ? Number(m[3]) : '?'}</div>
+    </div>
+  );
+}
+
 export function Spinner() {
   return <div className="muted text-sm p-6">Loading…</div>;
 }
@@ -189,7 +271,10 @@ export function Pagination({
   // close without choosing something.
 
   return (
-    <div className="flex flex-wrap items-center justify-between gap-2 mt-3 text-sm">
+    <>
+    <PhonePager page={current} pages={pageCount} total={total} noun={noun} note={note}
+      pageSize={pageSize} onPage={onPage} onPageSize={onPageSize} sizeOptions={sizeOptions} />
+    <div className="hidden lg:flex flex-wrap items-center justify-between gap-2 mt-3 text-sm">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
         {onPageSize && (
           <span className="flex items-center gap-1.5 muted">
@@ -237,5 +322,84 @@ export function Pagination({
         <button className="btn-ghost" disabled={current >= pageCount} onClick={() => onPage(current + 1)}>Next</button>
       </div>
     </div>
+    </>
   );
 }
+
+/**
+ * The same pager for phones and tablets: one pill with the arrows either side.
+ * Tapping the middle opens a sheet with every page as a button and the rows
+ * choice — no tiny dropdowns to aim at.
+ */
+function PhonePager({ page, pages, total, noun, note, pageSize, onPage, onPageSize, sizeOptions }: {
+  page: number; pages: number; total?: number; noun: string; note?: string; pageSize: number;
+  onPage: (p: number) => void; onPageSize?: (n: number) => void; sizeOptions: { value: string; label: string }[];
+}) {
+  const [open, setOpen] = useState(false);
+  const arrow = 'grid place-items-center w-11 h-11 rounded-xl shrink-0 transition disabled:opacity-35';
+  const go = (p: number) => { onPage(p); setOpen(false); };
+  return (
+    <div className="lg:hidden mt-4">
+      <div className="flex items-center gap-1.5 p-1.5 rounded-2xl" style={{ background: 'var(--color-card-alt)' }}>
+        <button className={arrow} style={{ background: 'var(--color-card)' }} disabled={page <= 1} onClick={() => onPage(page - 1)} aria-label="Previous page">
+          <ChevronLeft size={18} />
+        </button>
+        <button className="flex-1 min-w-0 text-center py-1 rounded-xl" onClick={() => setOpen(true)} aria-label="Choose a page">
+          <div className="text-sm font-semibold tnum">Page {page} <span className="muted font-normal">of {pages}</span></div>
+          {(total != null || note) && (
+            <div className="text-[11px] muted truncate">{[total != null ? `${total} ${noun}` : null, note].filter(Boolean).join(' · ')}</div>
+          )}
+        </button>
+        <button className={arrow} style={{ background: 'var(--color-card)' }} disabled={page >= pages} onClick={() => onPage(page + 1)} aria-label="Next page">
+          <ChevronRight size={18} />
+        </button>
+      </div>
+
+      {open && (
+        <Overlay align="bottom" onClose={() => setOpen(false)}>
+          <div className="w-full rounded-t-3xl px-5 pt-3 animate-sheet-up max-h-[80vh] overflow-y-auto thin-scroll"
+            style={{ background: 'var(--color-card)', paddingBottom: 'calc(1.25rem + env(safe-area-inset-bottom))' }}
+            onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Choose a page">
+            <div className="mx-auto mb-4 w-10 h-1.5 rounded-full" style={{ background: 'var(--color-border)' }} />
+            <div className="flex items-baseline justify-between mb-3">
+              <h3 className="font-display font-bold">Go to page</h3>
+              {total != null && <span className="text-xs muted">{total} {noun}</span>}
+            </div>
+            <div className="grid grid-cols-5 sm:grid-cols-8 gap-2">
+              {Array.from({ length: pages }, (_, i) => i + 1).map((p) => (
+                <button key={p} onClick={() => go(p)}
+                  className={`h-11 rounded-xl text-sm font-semibold tnum transition ${p === page ? 'text-white' : ''}`}
+                  style={p === page ? { background: 'var(--color-primary)' } : { background: 'var(--color-card-alt)' }}
+                  aria-current={p === page ? 'page' : undefined}>
+                  {p}
+                </button>
+              ))}
+            </div>
+            {onPageSize && (
+              <>
+                <h3 className="font-display font-bold mt-5 mb-3">Rows on a page</h3>
+                <div className="flex gap-1 p-1 rounded-xl" style={{ background: 'var(--color-card-alt)' }}>
+                  {sizeOptions.map((o) => {
+                    const on = Number(o.value) === pageSize;
+                    return (
+                      <button key={o.value} className={`flex-1 py-2 rounded-lg text-sm font-semibold transition ${on ? 'shadow-sm' : 'muted'}`}
+                        style={on ? { background: 'var(--color-card)', color: 'var(--color-primary)' } : {}}
+                        onClick={() => { onPageSize(Number(o.value)); go(1); }}>
+                        {o.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </>
+            )}
+          </div>
+        </Overlay>
+      )}
+    </div>
+  );
+}
+
+
+
+
+

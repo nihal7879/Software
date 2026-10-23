@@ -120,13 +120,22 @@ export default function CheckIn() {
   // Leaving the page switches the camera off.
   useEffect(() => () => { stopCamera(); }, []);
 
-  // Arrived by scanning with the phone camera: /scan parked the code here.
+  // Arrived by scanning with the phone camera: /scan parked the code here, and
+  // there is nothing left to scan. Otherwise the camera opens on its own — the
+  // reason anyone comes to this screen is to scan, and asking them to press a
+  // button first is a step that does nothing.
+  //
+  // If it will not open — no camera, or the permission was refused — startCamera
+  // puts the reason on screen and the typed-code box below is still there, so a
+  // refusal costs nothing.
   useEffect(() => {
     const pending = localStorage.getItem(PENDING_SCAN);
     if (pending) {
       localStorage.removeItem(PENDING_SCAN);
       submit(pending);
+      return;
     }
+    startCamera();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -188,7 +197,7 @@ export default function CheckIn() {
 
         {!scanning && (
           <button
-            className="btn-primary w-full justify-center py-3 text-base"
+            className="btn-primary w-full justify-center !py-4 lg:!py-3 !rounded-2xl lg:!rounded-lg text-base"
             onClick={startCamera}
             disabled={send.isPending}
           >

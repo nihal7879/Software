@@ -5,6 +5,7 @@ import { requireAuth, requireRole } from '../middleware/auth';
 import { wrap } from '../middleware/error';
 import { audit } from '../utils/audit';
 import { mailConfigured, sendMail, hoursStatementEmail } from '../utils/mailer';
+import { notify, parentUserIds } from '../utils/push';
 
 const router = Router();
 router.use(requireAuth, requireRole('admin'));
@@ -72,6 +73,18 @@ router.post(
       sentBy: req.user!.userId,
     });
     await audit(req.user!.userId, 'EMAIL_HOURS_STATEMENT', 'student', student.id, null, { to: b.to, status: result.status, filename });
+    // Tell the parent's phone that the statement has gone out — but no figures:
+    // this is read off a lock screen. The hours and the fees stay behind the
+    // sign-in, where the statement itself is.
+    if (result.status === 'sent') {
+      await notify(await parentUserIds(student.id), {
+        kind: 'hours_statement',
+        title: 'Hours statement sent',
+        body: `The latest statement for ${student.full_name} has been emailed to you.`,
+        url: '/parent/hours',
+        studentId: student.id,
+      });
+    }
     res.status(result.status === 'failed' ? 502 : 200).json(result);
   })
 );

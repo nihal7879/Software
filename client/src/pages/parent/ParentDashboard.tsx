@@ -1,8 +1,10 @@
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '../../auth/AuthContext';
-import { api, hrs } from '../../api/client';
-import { StatusBadge, Spinner } from '../../components/ui';
+import { api } from '../../api/client';
+import { Spinner } from '../../components/ui';
+import { HoursHero } from '../../components/HoursHero';
 import LectureCalendar from '../../components/LectureCalendar';
+import { NotificationPrompt } from '../../components/NotificationPrompt';
 
 // Mirrors the student dashboard — minimal header, hours summary, lecture calendar.
 export default function ParentDashboard() {
@@ -19,35 +21,12 @@ export default function ParentDashboard() {
   const s = student.data;
   const allLecs = lectures.data || [];
   const L = ledger.data || {};
-  const left = Number(L.hours_left) || 0;
 
   return (
     <div className="space-y-6">
-      <div>
-        <div className="flex items-center gap-3">
-          <h1 className="text-2xl font-bold">{s.full_name}</h1>
-          <StatusBadge status={s.status} />
-        </div>
-        <p className="muted text-sm mt-0.5">
-          {s.year_grade} · {s.exam_board}{s.form_no ? ` · Form ${s.form_no}` : ''}
-        </p>
-      </div>
+      <HoursHero student={s} ledger={L} />
 
-      {/* Minimal hours summary */}
-      <div className="flex flex-wrap gap-2">
-        <span className="inline-flex items-baseline gap-1.5 px-3 py-1.5 rounded-lg" style={{ background: 'var(--color-card-alt)' }}>
-          <span className="font-bold" style={{ color: left <= 5 ? 'var(--color-accent)' : 'var(--color-primary)' }}>{hrs(left)}</span>
-          <span className="text-xs muted">hours remaining</span>
-        </span>
-        <span className="inline-flex items-baseline gap-1.5 px-3 py-1.5 rounded-lg" style={{ background: 'var(--color-card-alt)' }}>
-          <span className="font-bold">{hrs(L.total_hours_consumed)}</span>
-          <span className="text-xs muted">used</span>
-        </span>
-        <span className="inline-flex items-baseline gap-1.5 px-3 py-1.5 rounded-lg" style={{ background: 'var(--color-card-alt)' }}>
-          <span className="font-bold">{hrs(L.total_hours_credited)}</span>
-          <span className="text-xs muted">credited</span>
-        </span>
-      </div>
+      <NotificationPrompt what="your child checks in or out of a class" />
 
       {/* Modern lecture calendar — browse all lecture & hour info by month/year */}
       {lectures.isLoading ? <Spinner /> : <LectureCalendar lectures={allLecs} />}

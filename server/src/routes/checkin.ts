@@ -7,6 +7,7 @@ import { audit } from '../utils/audit';
 import { teacherByCode } from '../utils/qrCode';
 import { insertLecture } from './lectures';
 import { clientIp, deviceInfo, getReqCtx } from '../utils/reqContext';
+import { notify, parentUserIds, teacherUserId } from '../utils/push';
 
 /**
  * QR check-in. A student signed into the app scans the code on their teacher's
@@ -29,6 +30,18 @@ router.use(requireAuth);
 const DOUBLE_TAP_MINUTES = 2;
 
 const codeSchema = z.object({ code: z.string().trim().min(4).max(32) });
+
+/**
+ * "4:02 PM" from the 'YYYY-MM-DD HH:MM:SS' the driver hands back (the pool runs
+ * with dateStrings, so these are strings and not Dates). Only for the wording of
+ * a notification; nothing is calculated from it.
+ */
+const atTime = (ts: unknown) => {
+  const m = String(ts ?? '').match(/(\d{2}):(\d{2})/);
+  if (!m) return '';
+  const h = Number(m[1]);
+  return `${((h + 11) % 12) + 1}:${m[2]} ${h < 12 ? 'AM' : 'PM'}`;
+};
 
 router.post(
   '/',
@@ -90,6 +103,16 @@ router.post(
       );
       const done = await queryOne<any>('SELECT in_at, out_at, hours FROM lecture_checkins WHERE id = ?', [open.id]);
       await audit(req.user!.userId, 'CHECK_OUT', 'student', String(studentId), null, { teacher_id: teacher.id, checkin_id: open.id });
+      // The parents, so the end of a class is as visible as the start. No hours
+      // figure: the row is still only a scan, and what it costs is settled when
+      // the teacher confirms it.
+      await notify(await parentUserIds(studentId), {
+        kind: 'check_out',
+        title: `${student.full_name} has left`,
+        body: `Checked out of ${teacher.name}'s class at ${atTime(done?.out_at)}.`,
+        url: '/parent',
+        studentId,
+      });
       return res.json({
         action: 'out',
         teacher: teacher.name,
@@ -109,6 +132,27 @@ router.post(
     );
     const made = await queryOne<any>('SELECT in_at FROM lecture_checkins WHERE id = ?', [r.insertId]);
     await audit(req.user!.userId, 'CHECK_IN', 'student', String(studentId), null, { teacher_id: teacher.id, checkin_id: r.insertId });
+
+    // The teacher, who is not the one holding the phone that just scanned — this
+    // is the notice that tells them somebody has arrived.
+    await notify([await teacherUserId(teacher.id)], {
+      kind: 'check_in',
+      title: `${student.full_name} has arrived`,
+      body: `Checked in at ${atTime(made?.in_at)}. Fill in the subject and topic when the class ends.`,
+      url: '/faculty/attendance',
+      studentId,
+    });
+    // And the parents. The student is deliberately NOT notified: they are looking
+    // at the screen that just told them, and a second buzz on the same phone is
+    // noise. The parent is the one who cannot see it.
+    await notify(await parentUserIds(studentId), {
+      kind: 'check_in',
+      title: `${student.full_name} has arrived`,
+      body: `Checked in with ${teacher.name} at ${atTime(made?.in_at)}.`,
+      url: '/parent',
+      studentId,
+    });
+
     res.status(201).json({
       action: 'in',
       teacher: teacher.name,

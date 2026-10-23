@@ -103,3 +103,28 @@ THE DATABASE MACHINE IS NAMED "DEV"
 The host holding live data is called MT-DEV-SRV and sits on the office network,
 on an India-time OS. It is not a managed service and it is not a dev database
 despite the name. Treat anything you run against it as production.
+
+
+users.email IS THE USERNAME, NOT AN ADDRESS
+It holds "sachin.chawan". Anything that needs to EMAIL someone has to look on
+students.email / parents.email / teachers.email instead - see
+utils/passwordReset.ts contactEmailFor(). Only ~131 of 303 active logins have an
+address anywhere, and the admin and super admin have none, so a feature that
+assumes an address silently reaches less than half the institute.
+
+AND ONE ADDRESS CAN BE SEVERAL ACCOUNTS
+Thirty addresses on file belong to more than one active account - two children
+and their father on one Gmail. So an email can never identify WHICH account
+something is about. Sign-in already handles this with the account chooser;
+forgotten-password sidesteps it by asking for the username.
+
+AN IPHONE GETS NO NOTIFICATIONS FROM A SAFARI TAB
+Safari has no PushManager unless the site was added to the home screen first,
+and it fails silently - no error, no prompt, nothing. Detect that case by name
+and explain the Share menu; "this browser is not supported" is both wrong and
+useless when the fix is two taps. lib/push.ts blockedReason() does this.
+
+NOTHING WITH A FIGURE IN A NOTIFICATION
+It is read off a lock screen by whoever is holding the phone, and it can arrive
+on a device whose sign-in expired weeks ago. No amounts, no balances, no other
+family's name.

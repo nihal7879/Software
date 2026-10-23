@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '../../auth/AuthContext';
 import { api, hrs, num } from '../../api/client';
-import { Section, Table, Spinner, HoursValue, StatusBadge } from '../../components/ui';
+import { Section, Table, Spinner, HoursValue, StatusBadge, DateTile } from '../../components/ui';
 import { CalendarRangePicker } from '../../components/CalendarPicker';
 
 // Hours statement for the logged-in student / parent — hours credited (with
@@ -95,14 +95,14 @@ export default function HoursStatement() {
           <p className="muted text-sm">Fees paid, hours credited, hours used per lecture, and your running balance.</p>
         </div>
         {/* View toggle: concise summary vs detailed statement */}
-        <div className="inline-flex rounded-lg p-0.5" style={{ background: 'var(--color-card-alt)' }}>
+        <div className="flex w-full sm:w-auto rounded-lg p-0.5" style={{ background: 'var(--color-card-alt)' }}>
           <button
-            className={`px-3 py-1.5 text-sm font-semibold rounded-md transition ${view === 'summary' ? 'text-white' : 'muted'}`}
+            className={`flex-1 sm:flex-none px-3 py-1.5 text-sm font-semibold rounded-md transition ${view === 'summary' ? 'text-white' : 'muted'}`}
             style={view === 'summary' ? { background: 'var(--color-primary)' } : {}}
             onClick={() => setView('summary')}
           >Summary</button>
           <button
-            className={`px-3 py-1.5 text-sm font-semibold rounded-md transition ${view === 'detail' ? 'text-white' : 'muted'}`}
+            className={`flex-1 sm:flex-none px-3 py-1.5 text-sm font-semibold rounded-md transition ${view === 'detail' ? 'text-white' : 'muted'}`}
             style={view === 'detail' ? { background: 'var(--color-primary)' } : {}}
             onClick={() => setView('detail')}
           >Detailed</button>
@@ -197,6 +197,52 @@ export default function HoursStatement() {
         ) : visibleRows.length === 0 ? (
           <p className="muted text-sm">No entries in this date range.</p>
         ) : (
+          <>
+          {/* Phones and tablets: a running-balance list, newest first. */}
+          <div className="lg:hidden space-y-2">
+            <div className="grid grid-cols-3 gap-2 text-center mb-3">
+              <div className="rounded-2xl py-2.5" style={{ background: 'var(--color-card-alt)' }}>
+                <div className="font-display font-bold tnum text-emerald-600">+{num(totals.totalCredited)}</div>
+                <div className="text-[11px] muted">Credited</div>
+              </div>
+              <div className="rounded-2xl py-2.5" style={{ background: 'var(--color-card-alt)' }}>
+                <div className="font-display font-bold tnum text-red-500">−{num(totals.used)}</div>
+                <div className="text-[11px] muted">Utilised</div>
+              </div>
+              <div className="rounded-2xl py-2.5" style={{ background: 'var(--color-accent-soft)' }}>
+                <div className="font-display font-bold"><HoursValue value={l?.hours_left ?? 0} /></div>
+                <div className="text-[11px] muted">Left now</div>
+              </div>
+            </div>
+            {[...visibleRows].reverse().map((r: any, i: number) => {
+              const delta = r.kind === 'lecture' ? -(r.used || 0) : (r.totalCredited || 0);
+              return (
+                <div key={i} className="rounded-2xl p-3.5 flex gap-3" style={{ background: 'var(--color-card-alt)' }}>
+                  <DateTile iso={r.date} />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="font-semibold truncate">
+                        {r.kind === 'credit' ? 'Package added' : r.kind === 'adjustment' ? 'Hours adjusted' : r.subject || 'Lecture'}
+                      </div>
+                      <span className={`shrink-0 font-bold tnum ${delta < 0 ? 'text-red-500' : 'text-emerald-600'}`}>
+                        {delta < 0 ? '−' : '+'}{num(Math.abs(delta))} h
+                      </span>
+                    </div>
+                    <div className="text-xs muted mt-0.5">
+                      {r.kind === 'credit'
+                        ? [r.fees ? `AED ${num(r.fees)} paid` : null, r.discount ? `${num(r.discount)} h discount` : null, r.adjusted ? `${num(r.adjusted)} h adjusted` : null].filter(Boolean).join(' · ') || `${num(r.credited)} h credited`
+                        : r.kind === 'adjustment' ? (r.reason || 'Adjustment by the institute')
+                        : r.time_in || r.time_out ? `${r.time_in || '—'} – ${r.time_out || '—'}` : ''}
+                    </div>
+                    <div className="text-xs mt-1.5 flex items-center gap-1">
+                      <span className="muted">Balance after</span> <span className="font-semibold"><HoursValue value={r.remaining} /></span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <div className="hidden lg:block">
           <Table head={['Date', 'Month', 'Detail', 'In', 'Out', { label: 'Fees (AED)', align: 'right' }, { label: 'Hours Credited', align: 'right' }, { label: 'Discounted', align: 'right' }, { label: 'Adjusted', align: 'right' }, { label: 'Total Credited', align: 'right' }, { label: 'Utilised', align: 'right' }, { label: 'Hours Remaining', align: 'right' }]}>
             {visibleRows.map((r: any, i: number) => (
               <tr key={i} style={r.kind !== 'lecture' ? { background: 'var(--color-card-alt)' } : undefined}>
@@ -231,6 +277,8 @@ export default function HoursStatement() {
               <td className="table-td text-right tabular-nums font-bold"><HoursValue value={l?.hours_left ?? 0} /></td>
             </tr>
           </Table>
+          </div>
+          </>
         )}
       </Section>
       )}

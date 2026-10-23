@@ -9,6 +9,7 @@ import { api } from '../../api/client';
 import { Spinner } from '../../components/ui';
 import { StudentRegistrationForm } from '../../components/StudentRegistrationForm';
 import { toast } from '../../components/Toast';
+import { NotificationsCard } from '../../components/NotificationsCard';
 
 // Profile now carries BOTH personal info (registration form) and account security
 // (change password) — the Settings-style layout with a summary card + tabs.
@@ -56,9 +57,14 @@ export default function StudentProfile() {
         <p className="muted text-sm">Your personal information and account security.</p>
       </div>
 
+      {/* A student's menu has no Settings entry - their password and details
+          live here - so the notifications switch has to be here too, or they
+          could never reach it. */}
+      <NotificationsCard />
+
       <div className="grid grid-cols-1 lg:grid-cols-[300px_1fr] gap-5 items-start">
         {/* Left — profile summary card */}
-        <div className="card p-6 flex flex-col items-center text-center">
+        <div className="card p-5 lg:p-6 flex flex-col items-center text-center">
           <div className="w-24 h-24 rounded-full grid place-items-center text-2xl font-bold mb-3 ring-4 ring-emerald-400/60"
             style={{ background: 'var(--color-card-alt)' }}>
             {initials || <User size={28} />}
@@ -77,23 +83,23 @@ export default function StudentProfile() {
 
         {/* Right — tabs + content */}
         <div className="space-y-4">
-          <div className="flex items-center gap-6 border-b" style={{ borderColor: 'var(--color-border)' }}>
+          <div className="flex gap-1 p-1 rounded-2xl bg-[var(--color-card-alt)] lg:items-center lg:gap-6 lg:p-0 lg:rounded-none lg:bg-transparent lg:border-b" style={{ borderColor: 'var(--color-border)' }}>
             <button
-              className={`flex items-center gap-1.5 pb-2 text-sm font-semibold border-b-2 -mb-px transition ${tab === 'info' ? 'border-[var(--color-primary)] text-[var(--color-primary)]' : 'border-transparent muted'}`}
+              className={`flex-1 flex items-center justify-center gap-1.5 px-2 py-2 rounded-xl text-sm font-semibold transition whitespace-nowrap lg:flex-none lg:justify-start lg:px-0 lg:pt-0 lg:pb-2 lg:rounded-none lg:whitespace-normal lg:border-b-2 lg:-mb-px ${tab === 'info' ? 'bg-[var(--color-card)] shadow-sm text-[var(--color-primary)] lg:bg-transparent lg:shadow-none lg:border-[var(--color-primary)]' : 'muted lg:border-transparent'}`}
               onClick={() => setTab('info')}
             >
-              <User size={15} /> Personal Info
+              <User size={15} className="hidden sm:block" /> Personal Info
             </button>
             <button
-              className={`flex items-center gap-1.5 pb-2 text-sm font-semibold border-b-2 -mb-px transition ${tab === 'password' ? 'border-[var(--color-primary)] text-[var(--color-primary)]' : 'border-transparent muted'}`}
+              className={`flex-1 flex items-center justify-center gap-1.5 px-2 py-2 rounded-xl text-sm font-semibold transition whitespace-nowrap lg:flex-none lg:justify-start lg:px-0 lg:pt-0 lg:pb-2 lg:rounded-none lg:whitespace-normal lg:border-b-2 lg:-mb-px ${tab === 'password' ? 'bg-[var(--color-card)] shadow-sm text-[var(--color-primary)] lg:bg-transparent lg:shadow-none lg:border-[var(--color-primary)]' : 'muted lg:border-transparent'}`}
               onClick={() => setTab('password')}
             >
-              <Lock size={15} /> Change Password
+              <Lock size={15} className="hidden sm:block" /> <span className="lg:hidden">Password</span><span className="hidden lg:inline">Change Password</span>
             </button>
           </div>
 
           {tab === 'info' ? (
-            <div className="card p-6">
+            <div className="card p-4 sm:p-6">
               <div className="mb-4">
                 <h2 className="font-bold text-lg">Registration / My Details</h2>
                 <p className="muted text-sm">Fill in your details and submit — it goes to the institute.</p>
@@ -111,7 +117,7 @@ export default function StudentProfile() {
               />
             </div>
           ) : (
-            <div className="card p-6 max-w-md">
+            <div className="card p-4 sm:p-6 max-w-md">
               <h2 className="font-bold text-lg mb-1">Change Password</h2>
               <p className="muted text-sm mb-4">Update your account password.</p>
               <form onSubmit={handleSubmit(onSubmitPassword)} className="space-y-3">

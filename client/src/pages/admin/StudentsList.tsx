@@ -159,10 +159,16 @@ export default function StudentsList() {
                 <div className="grid grid-cols-2 gap-2">
                   {field('father_name', 'Father Name', { required: false })}
                   {field('father_mobile', 'Father Mobile', { type: 'tel', required: false })}
+                  {field('father_email', 'Father Email', { type: 'email', required: false,
+                    rules: { pattern: { value: EMAIL_RE, message: 'Enter a valid email' } } })}
                   {field('mother_name', 'Mother Name', { required: false })}
                   {field('mother_mobile', 'Mother Mobile', { type: 'tel', required: false })}
+                  {field('mother_email', 'Mother Email', { type: 'email', required: false,
+                    rules: { pattern: { value: EMAIL_RE, message: 'Enter a valid email' } } })}
                   {field('guardian_name', 'Guardian Name', { required: false })}
                   {field('guardian_mobile', 'Guardian Mobile', { type: 'tel', required: false })}
+                  {field('guardian_email', 'Guardian Email', { type: 'email', required: false,
+                    rules: { pattern: { value: EMAIL_RE, message: 'Enter a valid email' } } })}
                 </div>
                 {familyError && <div className="text-xs text-red-500 font-medium mt-1">{familyError}</div>}
               </div>

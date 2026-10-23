@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { api, hrs, fmtDate, todayIso } from '../../api/client';
-import { Section, StatusBadge, Table, Spinner } from '../../components/ui';
+import { Section, StatusBadge, Table, Spinner, DateTile, fmtTime } from '../../components/ui';
 import { DateRangePicker } from '../../components/DateRangePicker';
 
 // TEACHER → one of my students. Hours + lecture history only — NO fees.
@@ -25,16 +25,42 @@ export default function FacultyStudentDetail() {
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-wrap items-center gap-3">
-        <Link to="/faculty/students" className="btn-ghost !py-1.5 !px-3 text-sm">← My Students</Link>
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 lg:gap-3">
+        {/* The phone app bar has its own back arrow. */}
+        <Link to="/faculty/students" className="btn-ghost !py-1.5 !px-3 text-sm hidden lg:inline-flex">← My Students</Link>
         <h1 className="text-2xl font-bold">{s.full_name}</h1>
         <StatusBadge status={s.status} />
-        <span className="muted text-sm">Form {s.form_no} · {s.year_grade || '—'} · {s.exam_board || '—'} · {s.school_name || '—'}</span>
+        <span className="muted text-sm w-full lg:w-auto">Form {s.form_no} · {s.year_grade || '—'} · {s.exam_board || '—'} · {s.school_name || '—'}</span>
       </div>
 
       <DateRangePicker from={from} to={to} onFrom={setFrom} onTo={setTo} />
 
       <Section title="Lecture Log — with you">
+        {/* Phones and tablets: total first, then one card per class. */}
+        <div className="lg:hidden grid grid-cols-1 gap-2 sm:grid-cols-2">
+          <div className="col-span-full flex items-baseline justify-between rounded-2xl px-4 py-3" style={{ background: 'var(--color-accent-soft)' }}>
+            <span className="text-sm font-medium">Total in this range</span>
+            <span className="font-display text-xl font-bold tnum" style={{ color: 'var(--color-primary)' }}>{hrs(sum.hours_in_range)}</span>
+          </div>
+          {data.lectures.length === 0 && <p className="muted text-sm py-4 text-center col-span-full">No lectures in this range.</p>}
+          {data.lectures.map((l: any, i: number) => (
+            <div key={i} className="rounded-2xl p-3.5 flex gap-3" style={{ background: 'var(--color-card-alt)' }}>
+              <DateTile iso={l.session_date} />
+              <div className="min-w-0 flex-1">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="font-semibold truncate">{l.subject_name || 'Lecture'}</div>
+                  <span className="shrink-0 text-sm font-bold tnum" style={{ color: 'var(--color-primary)' }}>{hrs(l.no_of_hours)}</span>
+                </div>
+                {(l.topic || l.subtopic) && <div className="text-sm">{[l.topic, l.subtopic].filter(Boolean).join(' — ')}</div>}
+                <div className="text-xs muted mt-0.5">
+                  {[l.time_in && l.time_out ? `${fmtTime(l.time_in)} – ${fmtTime(l.time_out)}` : null, l.venue].filter(Boolean).join(' · ')}
+                </div>
+                {l.remark && <div className="text-xs mt-1.5 italic">{l.remark}</div>}
+              </div>
+            </div>
+          ))}
+        </div>
+        <div className="hidden lg:block">
         <Table head={['Date', 'Subject', 'Time In', 'Time Out', { label: 'No. of Hours', align: 'right' }, 'Topic', 'Subtopic', 'Remark', 'Venue']}>
           {data.lectures.length === 0 ? (
             <tr><td className="table-td muted" colSpan={9}>No lectures in this range.</td></tr>
@@ -61,6 +87,7 @@ export default function FacultyStudentDetail() {
             </>
           )}
         </Table>
+        </div>
       </Section>
     </div>
   );

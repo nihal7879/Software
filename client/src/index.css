@@ -146,6 +146,97 @@ aside ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.2); }
 .animate-slide-in { animation: slideInLeft 0.25s ease-out; }
 .animate-fade-in { animation: fadeIn 0.2s ease-out; }
 
+/* ============================================================
+   Mobile app shell — teacher, student and parent below lg.
+   ============================================================ */
+
+/* The hero panel on the student/parent/teacher home screens. Dark ink in both
+   themes, so the orange ring and the big number carry the screen. */
+:root { --color-ink: #2b2926; --color-ink-2: #3a3530; }
+.dark { --color-ink: #2e2823; --color-ink-2: #3d352e; }
+.hero-ink {
+  background:
+    radial-gradient(120% 90% at 100% 0%, rgba(249, 115, 22, 0.28), transparent 55%),
+    linear-gradient(160deg, var(--color-ink-2), var(--color-ink));
+  color: #f5f0ea;
+}
+
+/* Frosted bars. Solid fallback where backdrop-filter is not supported. */
+.glass-bar {
+  background: color-mix(in srgb, var(--color-card) 86%, transparent);
+  -webkit-backdrop-filter: saturate(1.6) blur(14px);
+  backdrop-filter: saturate(1.6) blur(14px);
+}
+@supports not (backdrop-filter: blur(1px)) { .glass-bar { background: var(--color-card); } }
+
+/* btn-outline is used on the attendance and check-in screens but was never
+   defined, so those buttons render as bare text. Styled as the ghost button on
+   tablets and phones only — laptop screens are left exactly as they were. */
+/* In the components layer so size utilities on the button (text-xs, !py-1) still win. */
+@layer components {
+  @media (max-width: 1023px) {
+    .btn-outline {
+      border: 1px solid var(--color-border);
+      background: var(--color-card);
+      @apply inline-flex items-center justify-center gap-1.5 rounded-lg px-4 py-2 text-sm font-medium transition-colors disabled:opacity-50;
+    }
+  }
+}
+
+/* Phone / tablet forms: every control the same 44px touch height and a
+   softer corner, whatever component drew it (input, Select, pickers). */
+@media (max-width: 1023px) {
+  .m-form .input, .m-form .m-control { min-height: 2.75rem; border-radius: 0.75rem; }
+  .m-form label.m-label { display: block; font-size: 0.75rem; font-weight: 500; color: var(--color-muted); margin-bottom: 0.3rem; }
+  /* A group of related fields on a soft panel, inputs sitting white on it. */
+  .m-group { background: var(--color-card-alt); border-radius: 1rem; padding: 0.875rem; }
+  .m-group-title { font-size: 0.8125rem; font-weight: 600; margin-bottom: 0.625rem; display: flex; align-items: center; gap: 0.4rem; }
+}
+
+.pb-safe { padding-bottom: env(safe-area-inset-bottom); }
+.pt-safe { padding-top: env(safe-area-inset-top); }
+
+/* Bottom sheet (account menu) */
+@keyframes sheetUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+.animate-sheet-up { animation: sheetUp 0.26s cubic-bezier(0.2, 0.9, 0.3, 1); }
+
+/* Tap feedback instead of hover on touch screens. */
+.tap { -webkit-tap-highlight-color: transparent; transition: transform 0.12s ease; }
+.tap:active { transform: scale(0.96); }
+
+/* iOS zooms into any field under 16px when it is focused. At the 90% root
+   size every input is under that, so on touch screens they are set to 16px. */
+@media (pointer: coarse) and (max-width: 1023px) {
+  .input, input, select, textarea { font-size: 16px !important; }
+}
+
+/* Scroll reveal: an element rises in as it enters the screen and sinks back out
+   as it leaves, both ways. useReveal() toggles .is-in. */
+.reveal {
+  opacity: 0;
+  transform: translateY(28px) scale(0.97);
+  transition: opacity 0.45s ease, transform 0.55s cubic-bezier(0.2, 0.8, 0.2, 1);
+  will-change: opacity, transform;
+}
+.reveal.is-in { opacity: 1; transform: none; }
+
+/* Stacking cards: sticky, and a card with others lying over it (--depth, set
+   on scroll) shrinks and dims a little so the pile has depth. */
+.stack-card {
+  position: sticky;
+  transform-origin: top center;
+  transform: scale(calc(1 - var(--depth, 0) * 0.045));
+  filter: brightness(calc(1 - var(--depth, 0) * 0.05));
+  transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1), filter 0.3s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reveal { opacity: 1; transform: none; transition: none; }
+  .stack-card { transform: none; filter: none; transition: none; }
+  .animate-sheet-up, .animate-slide-in, .animate-fade-in { animation: none; }
+  .tap:active { transform: none; }
+}
+
 
 
 

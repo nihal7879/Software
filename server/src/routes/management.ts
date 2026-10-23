@@ -65,8 +65,9 @@ router.get(
               ELSE s.relationship END AS paid_by,
          s.parent_mobile,
          -- every family contact with their own number, as the profile records them
-         s.father_name, s.father_mobile, s.mother_name, s.mother_mobile,
-         s.guardian_name, s.guardian_mobile,
+         s.father_name, s.father_mobile, s.father_email,
+         s.mother_name, s.mother_mobile, s.mother_email,
+         s.guardian_name, s.guardian_mobile, s.guardian_email,
          s.email AS student_email, s.student_mobile,
          s.fees_received,
          -- hours summary, computed scoped to this student (no full-table view)

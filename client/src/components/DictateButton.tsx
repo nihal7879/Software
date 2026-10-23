@@ -12,7 +12,7 @@ import { toast } from './Toast';
 //   universal-streaming-multilingual universal-3-6        universal-3-7-preview
 //   whisper-rt   u3-rt-pro   u3-rt-pro-beta-1   u3-rt-agent
 const WS_URL = 'wss://streaming.assemblyai.com/v3/ws';
-const SPEECH_MODEL = 'universal-streaming-english';
+const SPEECH_MODEL = 'universal-3-6-pro';
 // Audio is sent in small slices; their guidance is 50-1000 ms per message.
 const CHUNK_MS = 100;
 const WANT_SAMPLE_RATE = 16000;
@@ -60,9 +60,16 @@ class TapProcessor extends AudioWorkletProcessor {
 registerProcessor('mic-tap', TapProcessor);
 `;
 
-/** Browser audio is -1..1 floats; the API wants signed 16-bit samples. */
+/**
+ * Browser audio is -1..1 floats; the API wants signed 16-bit samples.
+ *
+ * Built on an explicit ArrayBuffer rather than `new Int16Array(length)`:
+ * WebSocket.send only takes a view over a plain ArrayBuffer, and TypeScript now
+ * tells that apart from one that might be sitting on a SharedArrayBuffer. Two
+ * bytes per sample.
+ */
 function toPcm16(floats: Float32Array) {
-  const out = new Int16Array(floats.length);
+  const out = new Int16Array(new ArrayBuffer(floats.length * 2));
   for (let i = 0; i < floats.length; i++) {
     const s = Math.max(-1, Math.min(1, floats[i]));
     out[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
@@ -103,7 +110,9 @@ export function DictateButton({
   const stream = useRef<MediaStream | null>(null);
   const base = useRef('');                         // what was typed before we started
   const turns = useRef(new Map<number, string>()); // turn number → its latest wording
-  const pending = useRef<Int16Array[]>([]);        // samples captured before the socket opened
+  // Whatever toPcm16 produces, so the two cannot drift apart — it is the type
+  // WebSocket.send will accept.
+  const pending = useRef<ReturnType<typeof toPcm16>[]>([]);
   const stopping = useRef(false);
 
   function teardown() {
@@ -316,3 +325,49 @@ export function DictateButton({
     </button>
   );
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

@@ -79,6 +79,44 @@ function changesFor(kind: string, p: any): { label: string; from?: string; to?: 
         ...(p.transaction_reference ? [{ label: 'Reference', value: String(p.transaction_reference) }] : []),
       ];
 
+    case 'fee_edit': {
+      const was = p.before || {};
+      const money = (v: any) => `${Number(v || 0).toLocaleString()} AED`;
+      const hrsOf = (v: any) => `${Number(v || 0)} h`;
+      const out: { label: string; from: string; to: string }[] = [];
+      const diff = (label: string, a: any, b: any, fmt: (v: any) => string) => {
+        // Only what moves. A payment has ten fields and an edit usually touches
+        // one; listing all ten buries it.
+        if (b === undefined) return;
+        if (fmt(a) !== fmt(b)) out.push({ label, from: fmt(a), to: fmt(b) });
+      };
+      diff('Amount', was.amount, p.amount, money);
+      diff('Payment date', was.payment_date, p.payment_date, dateText);
+      diff('Paid hours', was.course_package_hours, p.course_package_hours, hrsOf);
+      diff('Discount hours', was.discount_hours, p.discount_hours, hrsOf);
+      diff('Source', was.payment_source, p.payment_source, textOf);
+      diff('Reference', was.transaction_reference, p.transaction_reference, textOf);
+      diff('Narration', was.transaction_narration, p.transaction_narration, textOf);
+      diff('Payer', was.parent_name, p.parent_name, textOf);
+      diff('Notes', was.notes, p.notes, textOf);
+      // Moving a payment from one student to another is the one that must never
+      // slip past unseen: it carries the hours across with it.
+      if (p.student_id !== undefined && Number(was.student_id) !== Number(p.student_id)) {
+        out.push({ label: 'Student', from: `#${was.student_id}`, to: `#${p.student_id}` });
+      }
+      return out.length ? out : [{ label: 'Nothing changes', value: 'the payment is the same' } as any];
+    }
+
+    case 'fee_delete':
+      return [
+        { label: 'Payment being removed', value: `${Number(p.amount || 0).toLocaleString()} AED` },
+        { label: 'Payment date', value: dateText(p.payment_date) },
+        { label: 'Paid hours it credited', value: `${Number(p.course_package_hours || 0)} h` },
+        { label: 'Discount hours', value: `${Number(p.discount_hours || 0)} h` },
+        // Said plainly: approving this takes hours off the student as well.
+        { label: 'Also removed', value: 'the hours this payment bought' },
+      ];
+
     default:
       return [];
   }

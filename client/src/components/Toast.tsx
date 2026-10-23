@@ -36,7 +36,7 @@ export function Toaster() {
   }, []);
 
   return (
-    <div className="fixed top-4 right-4 z-[100] flex flex-col gap-2 max-w-[360px]">
+    <div className="fixed top-[4.5rem] inset-x-4 sm:inset-x-auto sm:right-4 lg:top-4 z-[100] flex flex-col gap-2 sm:max-w-[360px]">
       {items.map((t) => {
         const Icon = ICON[t.type];
         return (
@@ -52,5 +52,23 @@ export function Toaster() {
     </div>
   );
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 

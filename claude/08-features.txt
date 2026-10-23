@@ -91,3 +91,162 @@ If it is ever switched back on, the fix for losing the first words must go back
 in: start listening (getUserMedia) immediately and buffer, rather than waiting
 for the token and the socket. That fix is NOT currently in the file - it was
 lost in a revert.
+
+
+FORGOTTEN PASSWORD
+A code to the email on file, then a password the system makes up.
+
+The thing that shapes all of it: users.email is the LOGIN NAME, not an address.
+Most are "sachin.chawan" or "myra". The real address, where there is one, sits
+on students.email / parents.email / teachers.email, which is what
+utils/passwordReset.ts contactEmailFor() looks through, in that order.
+
+So the screen asks for the USERNAME. It cannot ask for the email: thirty
+addresses on file belong to more than one account (two children and their
+father on one Gmail), so an address does not say whose password to reset.
+
+Only about 131 of 303 active logins have an address anywhere today - the admin
+and the super admin have none at all, so put one on those two rows before this
+goes live. Nothing has to change as the office fills the rest in: the address is
+looked up at the moment someone asks.
+
+  POST /api/auth/forgot        username -> a six-digit code is emailed
+  POST /api/auth/forgot/reset  username + code -> the new password, once
+
+  The code       bcrypt-hashed, never stored in the clear. Ten minutes, one use.
+                 Five wrong tries burns it. Three per account per quarter hour,
+                 twelve per connection per hour.
+  Same answer    whether the login exists or not - a different reply is a way to
+                 find out which logins are real. The one exception is an account
+                 with NO email, which is told to ring the office: it does confirm
+                 the login exists, and it is still better than leaving a family
+                 waiting for a code that was never coming.
+  The password   shown once on screen, never emailed - an old mailbox must not be
+                 a permanent key. Syllables and digits ("dafora499") because it
+                 is read off a screen and typed on a phone.
+  Afterwards     users.must_change_password is set, and App.tsx then shows
+                 nothing but ChangePasswordRequired until they pick their own.
+
+Signing out the other devices. A password change raises users.token_version
+(utils/tokenVersion.ts); every token carries the number it was signed with and
+requireAuth refuses anything lower. Checked on every request, so it is cached
+for 30 seconds - a reset takes up to half a minute to reach another running
+instance. The reply to /auth/change-password carries a fresh token, stored by an
+interceptor in api/client.ts so the device that did the changing stays in.
+
+Client files: pages/ForgotPassword.tsx, pages/ChangePasswordRequired.tsx.
+
+
+WEB PUSH NOTIFICATIONS
+The notification that arrives with the app closed. utils/push.ts notify() is the
+whole interface - one call, never throws, writes to notification_log.
+
+  New registration       -> admin + super admin   (routes/auth.ts)
+  Registration approved  -> the student + parents (routes/registrations.ts)
+  Hours statement sent   -> the parents           (routes/email.ts)
+  Checked in             -> the teacher + parents (routes/checkin.ts)
+  Checked out            -> the parents           (routes/checkin.ts)
+
+The student is NOT notified of their own check-in: they are holding the phone
+that just scanned and the screen has already told them.
+
+NOTHING WITH A FIGURE IN IT. A notification is read off a lock screen by whoever
+has the phone, and can land on a device whose sign-in expired weeks ago. "Your
+hours statement has been updated", and a tap opens the app.
+
+Opt-in, PER DEVICE. A laptop says nothing about a phone - the card says so,
+because it is the second thing everyone asks. Expect well under half of parents
+to turn it on, so nothing may depend on a push having arrived.
+
+iPhones only get notifications once the site is ADDED TO THE HOME SCREEN -
+Safari has no PushManager in an ordinary tab, and the failure is otherwise
+invisible. lib/push.ts detects that case by name and the card explains the
+Share menu rather than saying "unsupported".
+
+  GET  /api/push/key        the VAPID public key + whether push is set up
+  POST /api/push/subscribe  this browser; "silent" skips the confirming buzz
+  POST /api/push/unsubscribe
+  GET  /api/push/mine       this person's own devices
+
+Keys: VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY in server/.env, generated once.
+Replacing them silently kills every subscription anyone has already allowed.
+
+A push service answering 404/410 means that browser is gone (cleared, or
+notifications turned off in the browser itself); the row is marked is_deleted
+rather than retried for ever.
+
+Client files: public/sw.js, public/manifest.json, lib/push.ts,
+components/NotificationsCard.tsx (on Settings and the parent's Profile).
+
+
+THE NOTIFICATION BELL
+The same notices, read inside the app. routes/notifications.ts reads
+notification_log - the table utils/push.ts already writes one row of per person
+per notice - so there is no second system and no second decision about who
+hears what.
+
+That is the point of it. A push only reaches someone who turned notifications
+on, on that device, and most will not; a row written as 'no_device' used to be
+the end of the story. It now shows in the bell the next time they open the app,
+so the news reaches everybody and the push is only what makes it arrive sooner.
+
+Every role has one - office, super admin, teacher, student, parent.
+
+  GET  /api/notifications/count   the unread number (polled every 60s)
+  GET  /api/notifications         the last 25, newest first
+  POST /api/notifications/read    {} for all, or { id }
+  POST /api/notifications/clear   {} for all, or { id }
+
+Opening the bell marks what is showing as read, which clears the number; the
+notices stay, tinted, until the person presses Clear all. Clearing sets
+dismissed_at - hidden, never deleted, so "was this parent told?" still answers
+months later.
+
+'test' (the buzz that confirms a device works) is excluded from the feed - it is
+not news, and would otherwise be the first thing in everyone's bell.
+
+There is no top bar on desktop, so the bell sits with the theme and sign-out
+buttons in the sidebar footer, and beside the theme toggle on the mobile header.
+
+Client files: components/NotificationBell.tsx, wired in components/Layout.tsx.
+
+THE "TURN ON NOTIFICATIONS" STRIP
+components/NotificationPrompt.tsx, under the heading on the faculty, admin and
+parent dashboards. It appears by itself after signing in; the browser's own
+permission box only follows a press.
+
+It is the FALLBACK. On Chrome, Edge and the other Chromium browsers the
+permission box now appears by itself a second after signing in - autoAskPush()
+in lib/push.ts, called from AuthContext - exactly as the location box already
+does on this app. The strip is for everywhere that does not work.
+
+Why both. Firefox and Safari IGNORE a permission request that nobody pressed
+for: no box, no error, nothing. So an automatic ask alone would reach no one on
+an iPhone. And the box is ONE SHOT - a person who taps Block can never be asked
+again, only they can undo it - so it is asked automatically ONCE per account,
+ever (localStorage pushAutoAsked:<userId>), because Chrome counts repeated
+dismissals as a block. After that one attempt only the strip asks, and that
+moves only when pressed.
+
+Shown only when push is available and off. On an iPhone in a Safari tab it
+shows the Add to Home Screen instruction instead, with no button - pressing one
+could not work there.
+
+"Not now" is remembered for 7 days, keyed by user id so dismissing it on a
+shared office PC does not hide it for the next person. A refusal at the browser
+box snoozes it too - that is not a question to repeat tomorrow.
+
+Students have no strip: the only notice they receive is their registration
+being approved, and they are not notified of their own check-in (they are
+holding the phone that scanned). The switch is on their Profile if they want it.
+
+Registering a device fires PUSH_ON_EVENT on the window. The strip and the
+Settings card both listen: the automatic ask lands a second after the dashboard
+has drawn, by which time the strip has already decided to show itself, and
+without this it would sit there inviting someone to switch on what they just
+switched on.
+
+TO SEE THE AUTOMATIC BOX AGAIN once it has been answered, both of these have to
+go - the browser remembers the permission and we remember having asked:
+  chrome://settings/content/notifications  -> remove the site
+  localStorage.removeItem('pushAutoAsked:<your user id>')

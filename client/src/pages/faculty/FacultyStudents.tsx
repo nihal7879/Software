@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { api } from '../../api/client';
 import { Section, StatusBadge, Table, Spinner, type Sort } from '../../components/ui';
 import { Select } from '../../components/Select';
+import { ChevronRight } from 'lucide-react';
 
 // Faculty: VIEW ONLY — see the students the admin has assigned to me.
 // Teacher→student assignment is managed by the admin (Students → Report).
@@ -76,12 +77,12 @@ export default function FacultyStudents() {
         action={
           <>
             <input
-              className="input !py-1.5 w-44"
+              className="input !py-1.5 w-full sm:w-44"
               placeholder="Name or form no…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
-            <div className="w-36">
+            <div className="flex-1 min-w-[8rem] sm:flex-none sm:w-36">
               <Select
                 compact
                 value={status}
@@ -91,7 +92,7 @@ export default function FacultyStudents() {
                           { value: 'Inactive', label: `Inactive (${all.length - counts.active})` }]}
               />
             </div>
-            <div className="w-36">
+            <div className="flex-1 min-w-[8rem] sm:flex-none sm:w-36">
               <Select
                 compact
                 value={type}
@@ -113,6 +114,37 @@ export default function FacultyStudents() {
         }
       >
         {mine.isLoading ? <Spinner /> : (
+          <>
+          {/* Phones and tablets: the whole card opens the student. */}
+          <div className="lg:hidden grid grid-cols-1 gap-2 sm:grid-cols-2">
+            {rows.length === 0 && (
+              <p className="muted text-sm py-4 text-center col-span-full">
+                {all.length === 0
+                  ? 'No students assigned to you yet. Your admin will assign students to you.'
+                  : 'No students match this filter.'}
+              </p>
+            )}
+            {rows.map((s: any) => (
+              <Link key={s.id} to={`/faculty/student/${s.id}`}
+                className="tap flex items-center gap-3 rounded-2xl p-3.5" style={{ background: 'var(--color-card-alt)' }}>
+                <span className="grid place-items-center w-11 h-11 rounded-full text-sm font-bold shrink-0"
+                  style={{ background: 'var(--color-accent-soft)', color: 'var(--color-primary)' }}>
+                  {String(s.full_name || '?').split(/\s+/).map((w: string) => w[0]).slice(0, 2).join('').toUpperCase()}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                    <span className="font-semibold leading-snug break-words">{s.full_name}</span>
+                    <StatusBadge status={s.status} />
+                  </div>
+                  <div className="text-xs muted truncate mt-0.5">
+                    Form {s.form_no}{s.year_grade ? ` · ${s.year_grade}` : ''}{s.subjects ? ` · ${s.subjects}` : ''}
+                  </div>
+                </div>
+                <ChevronRight size={18} className="muted shrink-0" />
+              </Link>
+            ))}
+          </div>
+          <div className="hidden lg:block">
           <Table
             sort={sort}
             onSort={onSort}
@@ -146,6 +178,8 @@ export default function FacultyStudents() {
               </tr>
             ))}
           </Table>
+          </div>
+          </>
         )}
       </Section>
     </div>

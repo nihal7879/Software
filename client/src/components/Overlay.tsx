@@ -27,7 +27,7 @@ export function Overlay({
    * taller than the viewport, which would otherwise have their footer and
    * buttons cut off with no way to reach them.
    */
-  align?: 'end' | 'center' | 'top';
+  align?: 'end' | 'center' | 'top' | 'bottom';
   z?: string;
 }) {
   useEffect(() => {
@@ -48,6 +48,8 @@ export function Overlay({
       className={`fixed inset-0 bg-black/40 flex ${z} ${
         align === 'center' ? 'items-center justify-center p-4'
           : align === 'top' ? 'items-start justify-center overflow-y-auto p-4'
+          // A sheet rising from the bottom edge, for phone pickers.
+          : align === 'bottom' ? 'items-end justify-center'
           : 'justify-end'
       }`}
       onClick={onClose}

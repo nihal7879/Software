@@ -214,3 +214,6 @@ export function TeacherLectures({ teacherId, teacherName }: { teacherId: number;
     </div>
   );
 }
+
+
+

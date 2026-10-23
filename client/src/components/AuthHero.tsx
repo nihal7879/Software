@@ -1,5 +1,5 @@
 import { memo } from 'react';
-import { GraduationCap } from 'lucide-react';
+import { Logo } from './Logo';
 
 // The photo panel on the left of the sign-in and registration screens, shared so
 // the two pages stay one design. Hidden below the lg breakpoint, where the form
@@ -10,22 +10,44 @@ import { GraduationCap } from 'lucide-react';
 // disappeared under a field resized it — and `bg-cover` rescaled the photo to
 // match, which read as the picture zooming in and out on each keystroke. memo:
 // it takes no props, so the form re-rendering as the user types never touches it.
+const PHOTO = 'url(https://images.unsplash.com/photo-1606761568499-6d2451b23c66?auto=format&fit=crop&w=1400&q=80)';
+
+/**
+ * The same photo as a short banner above the form on phones and tablets, where
+ * the side panel is hidden. The form's sheet overlaps its rounded bottom edge.
+ */
+export const AuthBanner = memo(function AuthBanner() {
+  return (
+    <div
+      className="lg:hidden relative bg-cover bg-center text-white px-6 pt-safe"
+      style={{
+        backgroundImage: `linear-gradient(170deg, rgba(40,30,20,0.35) 0%, rgba(30,22,16,0.85) 100%), ${PHOTO}`,
+        minHeight: 'min(38vh, 320px)',
+      }}
+    >
+      <div className="flex flex-col justify-between h-full pt-8 pb-14" style={{ minHeight: 'min(38vh, 320px)' }}>
+        {/* onDark: the panel is a photograph, so the copy whose tagline has
+            been lifted is the readable one whatever the theme. */}
+        <Logo height={40} onDark />
+        <p className="font-display text-[1.7rem] sm:text-3xl font-semibold leading-[1.15] max-w-sm">
+          Empowering Education<br />through <span style={{ color: '#fdba74' }}>Innovation</span>
+        </p>
+      </div>
+    </div>
+  );
+});
+
 export const AuthHero = memo(function AuthHero() {
   return (
     <div
       className="hidden lg:flex lg:sticky lg:top-0 lg:h-screen self-start flex-col justify-center p-14 text-white relative overflow-hidden bg-cover bg-center"
       style={{
         backgroundImage:
-          'linear-gradient(160deg, rgba(40,30,20,0.55) 0%, rgba(60,40,25,0.45) 50%, rgba(30,22,16,0.7) 100%), url(https://images.unsplash.com/photo-1606761568499-6d2451b23c66?auto=format&fit=crop&w=1400&q=80)',
+          `linear-gradient(160deg, rgba(40,30,20,0.55) 0%, rgba(60,40,25,0.45) 50%, rgba(30,22,16,0.7) 100%), ${PHOTO}`,
       }}
     >
       <div className="relative z-10 max-w-md">
-        <div className="inline-flex items-center gap-2.5 mb-10 font-display font-semibold text-2xl">
-          <span className="grid place-items-center w-11 h-11 rounded-xl" style={{ background: '#f97316' }}>
-            <GraduationCap size={24} />
-          </span>
-          STEM<span style={{ color: '#fdba74' }}>Vision</span>
-        </div>
+        <Logo height={46} onDark className="mb-10" />
         <h1 className="font-display text-[2.75rem] font-semibold leading-[1.1] mb-5">
           Empowering Education<br />through <span style={{ color: '#fdba74' }}>Innovation</span>
         </h1>

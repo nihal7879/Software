@@ -7,6 +7,7 @@ import { audit } from '../utils/audit';
 import { claimFormNo } from '../utils/formNo';
 import { today } from '../utils/dates';
 import { sendMail, registrationApprovedEmail } from '../utils/mailer';
+import { notify, studentUserId, parentUserIds } from '../utils/push';
 
 // Student self-registrations waiting for an administrator. A registration is
 // only a request (see POST /auth/register): approving it is what creates the
@@ -130,6 +131,15 @@ router.post(
       // never throws, so the approval — already committed — cannot fail on it.
       const welcome = registrationApprovedEmail({ name: fullName, username: login, approvedAs: b.student_type, formNo });
       await sendMail({ kind: 'registration_approved', to: reg.email, ...welcome, studentId: st.insertId, sentBy: req.user!.userId });
+      // The student, and any parent already linked to them — a parent who
+      // registered against this child's form number is the one really waiting.
+      await notify([await studentUserId(st.insertId), ...(await parentUserIds(st.insertId))], {
+        kind: 'registration_approved',
+        title: 'Registration approved',
+        body: `${fullName} can now sign in. Please complete the student profile.`,
+        url: '/student/profile',
+        studentId: st.insertId,
+      });
       res.json({ ok: true, student_id: st.insertId, form_no: formNo, username: login });
     } catch (e) {
       await conn.rollback();

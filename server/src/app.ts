@@ -18,6 +18,8 @@ import emailRoutes from './routes/email';
 import followUpRoutes from './routes/followUps';
 import speechRoutes from './routes/speech';
 import checkinRoutes from './routes/checkin';
+import pushRoutes from './routes/push';
+import notificationRoutes from './routes/notifications';
 import approvalRoutes from './routes/approvals';
 
 const app = express();
@@ -57,6 +59,8 @@ app.use('/api/email', emailRoutes);
 app.use('/api/follow-ups', followUpRoutes);
 app.use('/api/speech', speechRoutes);
 app.use('/api/checkin', checkinRoutes);
+app.use('/api/push', pushRoutes);
+app.use('/api/notifications', notificationRoutes);
 app.use('/api/approvals', approvalRoutes);
 
 app.use(notFound);

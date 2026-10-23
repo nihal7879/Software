@@ -3,9 +3,25 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#faf9f7" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#1a1613" media="(prefers-color-scheme: dark)" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <title>STEM Vision</title>
+
+    <!-- Added to the home screen, the app can send notifications. On Android
+         this is a convenience; on an iPhone it is the only way — Safari refuses
+         web notifications to a site opened as an ordinary tab. -->
+    <link rel="manifest" href="/manifest.json" />
+    <!-- Safari ignores the manifest's icons and reads these two instead. -->
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <meta name="apple-mobile-web-app-title" content="STEM Vision" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <!-- theme-color and apple-mobile-web-app-capable are set above, where the
+         light and dark bars are chosen; repeating them here would override the
+         pair with one fixed colour. -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link

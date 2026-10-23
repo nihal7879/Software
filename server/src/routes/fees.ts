@@ -10,7 +10,7 @@ import { audit } from '../utils/audit';
 import { blockLockedStudents } from '../utils/settings';
 import {
   needsApproval, requestApproval, noteProblem,
-  applyHoursAdd, applyHoursEdit, applyHoursDelete, applyFeeEntry,
+  applyHoursAdd, applyHoursEdit, applyHoursDelete, applyFeeEntry, applyFeeEdit, applyFeeDelete,
 } from '../utils/approvals';
 import { formNoOrder } from '../utils/formNo';
 
@@ -232,72 +232,107 @@ router.post(
   })
 );
 
-// Edit a payment (admin). Recomputes `month` when payment_date changes.
+// Edit a payment. The office may ask; the super admin decides.
+//
+// Money that has already been recorded is the one thing nobody should be able
+// to quietly restate — an edit moves the amount, the date, or the hours it
+// bought, and all three show on a family's statement. So the change is parked
+// and nothing is written until it is approved.
 router.put(
   '/transactions/:id',
   requireRole('admin'),
   wrap(async (req, res) => {
     const b = txSchema.partial().parse(req.body);
-    const before = await queryOne('SELECT * FROM fee_transactions WHERE id = ? AND is_deleted = FALSE', [req.params.id]);
+    const before = await queryOne<any>('SELECT * FROM fee_transactions WHERE id = ? AND is_deleted = FALSE', [req.params.id]);
     if (!before) return res.status(404).json({ error: 'Transaction not found' });
 
-    const fields: string[] = [];
-    const params: any[] = [];
-    for (const [k, v] of Object.entries(b)) { fields.push(`${k} = ?`); params.push(v); }
-    if (b.payment_date) { fields.push('month = ?'); params.push(deriveMonth(b.payment_date)); }
-    if (fields.length) {
-      params.push(req.params.id);
-      await query(`UPDATE fee_transactions SET ${fields.join(', ')} WHERE id = ?`, params);
+    if (needsApproval(req.user!.role)) {
+      const noteBad = noteProblem(b.request_note);
+      if (noteBad) return res.status(400).json({ error: noteBad, field: 'request_note' });
+      const id = await requestApproval({
+        note: String(b.request_note).trim(),
+        kind: 'fee_edit',
+        studentId: Number(b.student_id ?? before.student_id),
+        // The payment as it stands goes with the request, so the super admin is
+        // shown what changes rather than only what it becomes. Stripped again
+        // before anything is written — see applyFeeEdit.
+        payload: {
+          ...b,
+          before: {
+            student_id: before.student_id, amount: before.amount, payment_date: before.payment_date,
+            course_package_hours: before.course_package_hours, discount_hours: before.discount_hours,
+            payment_source: before.payment_source, transaction_reference: before.transaction_reference,
+            transaction_narration: before.transaction_narration, parent_name: before.parent_name,
+            notes: before.notes,
+          },
+        },
+        targetType: 'fee_transaction',
+        targetId: Number(req.params.id),
+        summary: `the ${before.amount} AED payment of ${String(before.payment_date).slice(0, 10)} for ${await nameOf(before.student_id)}`,
+        userId: req.user!.userId,
+      });
+      return sentForApproval(res, id, 'the change to that payment');
     }
 
-    // Keep the linked hours package in sync so the student's statement reflects
-    // the edit. Use the merged (new ?? old) values.
-    const merged = { ...before, ...b };
-    const hrs = merged.course_package_hours != null ? Number(merged.course_package_hours) : 0;
-    const disc = merged.discount_hours != null ? Number(merged.discount_hours) : 0;
-    const amount = Number(merged.amount) || 0;
-    const date = merged.payment_date ? String(merged.payment_date).slice(0, 10) : null;
-    // A transaction can have picked up more than one package row over the years;
-    // the live one is the one to keep in sync, not a retired duplicate.
-    const existingPkg = await queryOne<any>(
-      'SELECT id FROM fee_packages WHERE transaction_id = ? ORDER BY is_deleted ASC, is_active DESC, id DESC LIMIT 1',
-      [req.params.id]
-    );
-    if (hrs > 0 || disc > 0) {
-      const rate = amount && hrs ? amount / hrs : 0;
-      if (existingPkg) {
-        // student_id moves with the transaction: re-assigning a payment from one
-        // student to another has to carry the credited hours across, or the old
-        // student keeps hours they never paid for and the new one shows none.
-        await query(
-          `UPDATE fee_packages SET student_id = ?, package_hours = ?, discount_hours = ?, rate_per_hour = ?, start_date = ?, is_active = TRUE, is_deleted = FALSE WHERE id = ?`,
-          [merged.student_id, hrs, disc, rate, date, existingPkg.id]
-        );
-      } else {
-        await query(
-          `INSERT INTO fee_packages (student_id,transaction_id,package_hours,discount_hours,rate_per_hour,start_date) VALUES (?,?,?,?,?,?)`,
-          [merged.student_id, req.params.id, hrs, disc, rate, date]
-        );
-      }
-    } else if (existingPkg) {
-      // Hours cleared on the transaction → retire the credit.
-      await query('UPDATE fee_packages SET is_active = FALSE, is_deleted = TRUE WHERE id = ?', [existingPkg.id]);
+    const conn = await pool.getConnection();
+    try {
+      await conn.beginTransaction();
+      await applyFeeEdit(conn, req.params.id, b);
+      await conn.commit();
+    } catch (e) {
+      await conn.rollback();
+      throw e;
+    } finally {
+      conn.release();
     }
     await audit(req.user!.userId, 'UPDATE', 'fee_transaction', req.params.id, before, b);
-    res.json({ ok: true });
+    return res.json({ ok: true });
   })
 );
 
-// Delete a payment (admin).
+
+
+// Remove a payment. The office may ask; the super admin decides.
+//
+// The reason is carried in the request body — a DELETE with a body is unusual,
+// but the alternative is the explanation in the query string, where it would
+// end up in every server log.
 router.delete(
   '/transactions/:id',
   requireRole('admin'),
   wrap(async (req, res) => {
-    const before = await queryOne('SELECT * FROM fee_transactions WHERE id = ? AND is_deleted = FALSE', [req.params.id]);
+    const b = z.object({ request_note: z.string().trim().max(500).optional().nullable() }).parse(req.body ?? {});
+    const before = await queryOne<any>('SELECT * FROM fee_transactions WHERE id = ? AND is_deleted = FALSE', [req.params.id]);
     if (!before) return res.status(404).json({ error: 'Transaction not found' });
-    await query('UPDATE fee_transactions SET is_deleted = TRUE WHERE id = ?', [req.params.id]); // soft delete
-    // Remove the hours this payment credited from the student's ledger/statement.
-    await query('UPDATE fee_packages SET is_active = FALSE, is_deleted = TRUE WHERE transaction_id = ?', [req.params.id]);
+
+    if (needsApproval(req.user!.role)) {
+      const noteBad = noteProblem(b.request_note);
+      if (noteBad) return res.status(400).json({ error: noteBad, field: 'request_note' });
+      const id = await requestApproval({
+        note: String(b.request_note).trim(),
+        kind: 'fee_delete',
+        studentId: Number(before.student_id),
+        payload: { amount: before.amount, payment_date: before.payment_date,
+                   course_package_hours: before.course_package_hours, discount_hours: before.discount_hours },
+        targetType: 'fee_transaction',
+        targetId: Number(req.params.id),
+        summary: `the ${before.amount} AED payment of ${String(before.payment_date).slice(0, 10)} for ${await nameOf(before.student_id)}`,
+        userId: req.user!.userId,
+      });
+      return sentForApproval(res, id, 'removing that payment');
+    }
+
+    const conn = await pool.getConnection();
+    try {
+      await conn.beginTransaction();
+      await applyFeeDelete(conn, req.params.id);
+      await conn.commit();
+    } catch (e) {
+      await conn.rollback();
+      throw e;
+    } finally {
+      conn.release();
+    }
     await audit(req.user!.userId, 'DELETE', 'fee_transaction', req.params.id, before, null);
     res.json({ ok: true });
   })

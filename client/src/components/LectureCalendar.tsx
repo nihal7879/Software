@@ -1,10 +1,159 @@
-import { useMemo, useState } from 'react';
-import { ChevronLeft, ChevronRight, CalendarDays, Clock, BookOpen } from 'lucide-react';
+import { useMemo, useRef, useState } from 'react';
+import { ChevronLeft, ChevronRight, CalendarDays, Clock, BookOpen, MapPin, Video } from 'lucide-react';
 import { hrs, fmtDate, todayIso, dubaiNow } from '../api/client';
+import { useStackDepth, stackTop } from './ui';
 
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 const pad = (n: number) => String(n).padStart(2, '0');
+
+// Each subject keeps one colour everywhere in the agenda, so a week of Physics
+// reads as a stripe of the same colour. Picked by the name, not stored.
+// No red, amber or green: those mean Absent / Late / Present on the same card.
+const SUBJECT_COLOURS = ['#f97316', '#8b5cf6', '#0ea5e9', '#6366f1', '#14b8a6', '#c026d3'];
+export function subjectColour(name?: string) {
+  let h = 0;
+  for (const c of String(name || '')) h = (h * 31 + c.charCodeAt(0)) >>> 0;
+  return SUBJECT_COLOURS[h % SUBJECT_COLOURS.length];
+}
+
+/** "16:30:00" → ["4:30", "PM"]. Lecture times are stored as 24-hour HH:MM(:SS). */
+function clock12(t?: string | null): [string, string] | null {
+  const m = String(t || '').match(/^(\d{1,2}):(\d{2})/);
+  if (!m) return null;
+  const h = Number(m[1]);
+  return [`${h % 12 || 12}:${m[2]}`, h >= 12 ? 'PM' : 'AM'];
+}
+
+const ATTENDANCE: Record<string, string> = {
+  Absent: 'bg-red-500/15 text-red-600 dark:text-red-400',
+  Late: 'bg-amber-500/15 text-amber-600 dark:text-amber-400',
+  Present: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400',
+};
+
+/**
+ * The lecture detail below the calendar on phones and tablets: a timeline per
+ * day — time on the left, the class on the right with its subject's colour.
+ */
+function Agenda({ shown, selectedDay, title, onWholeMonth }: {
+  shown: any[]; selectedDay: string | null; title: string; onWholeMonth: () => void;
+}) {
+  // Group by day, keeping the order the lectures came in (newest first).
+  const days: [string, any[]][] = [];
+  for (const r of shown) {
+    const last = days[days.length - 1];
+    if (last && last[0] === r.session_date) last[1].push(r);
+    else days.push([r.session_date, [r]]);
+  }
+  const total = shown.reduce((a, l) => a + Number(l.hours_consumed || 0), 0);
+  const stackRef = useRef<HTMLDivElement>(null);
+  useStackDepth(stackRef, [shown, selectedDay]);
+  // Day-month order, as the day headings below — the shared title is US order.
+  const heading = selectedDay
+    ? new Date(selectedDay + 'T00:00').toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })
+    : title;
+
+  return (
+    <div className="lg:hidden">
+      <div className="flex items-end justify-between gap-3 pb-3 mb-4 border-b" style={{ borderColor: 'var(--color-border)' }}>
+        <div className="min-w-0">
+          <div className="text-xs muted">{selectedDay ? 'Classes on' : 'All classes in'}</div>
+          <h4 className="font-display font-bold text-lg leading-tight truncate">{heading}</h4>
+        </div>
+        {selectedDay ? (
+          <button className="btn-ghost !py-1.5 !px-3 text-xs shrink-0" onClick={onWholeMonth}>Whole month</button>
+        ) : shown.length > 0 && (
+          <div className="text-right shrink-0">
+            <div className="font-display font-bold tnum" style={{ color: 'var(--color-primary)' }}>{hrs(total)}</div>
+            <div className="text-[11px] muted">{shown.length} class{shown.length === 1 ? '' : 'es'}</div>
+          </div>
+        )}
+      </div>
+
+      {shown.length === 0 ? (
+        <div className="text-center py-10">
+          <div className="mx-auto mb-3 grid place-items-center w-12 h-12 rounded-2xl" style={{ background: 'var(--color-card-alt)', color: 'var(--color-muted)' }}>
+            <CalendarDays size={22} />
+          </div>
+          <p className="font-medium">No classes {selectedDay ? 'on this day' : 'this month'}</p>
+          <p className="muted text-sm mt-0.5">Days with classes are marked on the calendar.</p>
+        </div>
+      ) : (
+        // Stacking, as on the teacher's recent classes: each date pins under the
+        // top bar and its classes pile up beneath it; when the day's last class
+        // has gone, the date and its pile leave together.
+        <div ref={stackRef} className="space-y-5">
+          {days.map(([date, lecs]) => (
+            <section key={date} className="space-y-2.5">
+              {!selectedDay && (
+                <div data-day className="sticky z-10 flex items-baseline justify-between py-2"
+                  style={{ top: 'calc(3.5rem + env(safe-area-inset-top))', background: 'var(--color-card)' }}>
+                  <h5 className="text-sm font-semibold">
+                    {new Date(date + 'T00:00').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })}
+                  </h5>
+                  <span className="text-xs muted tnum">{hrs(lecs.reduce((a, l) => a + Number(l.hours_consumed || 0), 0))}</span>
+                </div>
+              )}
+              <ol className="space-y-2.5">
+                {lecs.map((r: any, i: number) => {
+                  const colour = subjectColour(r.subject_name);
+                  const tin = clock12(r.time_in), tout = clock12(r.time_out);
+                  const att = r.attendance_status || 'Present';
+                  return (
+                    // Solid row, so the time column of the card on top hides the one beneath.
+                    <li key={r.id} data-stack className="stack-card flex gap-3"
+                      style={{ top: stackTop(i), background: 'var(--color-card)' }}>
+                      {/* Time rail */}
+                      <div className="w-[3.25rem] shrink-0 text-right pt-3 leading-tight">
+                        {tin ? (
+                          <>
+                            <div className="text-sm font-semibold tnum">{tin[0]}<span className="text-[10px] font-medium muted ml-0.5">{tin[1]}</span></div>
+                            {tout && <div className="text-[11px] muted tnum mt-0.5">{tout[0]} {tout[1]}</div>}
+                          </>
+                        ) : <div className="text-xs muted">No time</div>}
+                      </div>
+
+                      {/* The class */}
+                      <div className="relative flex-1 min-w-0 rounded-2xl p-3.5 pl-4 overflow-hidden"
+                        style={{
+                          background: `linear-gradient(${colour}12, ${colour}12), var(--color-card)`,
+                          border: `1px solid ${colour}30`,
+                          boxShadow: '0 -8px 20px -14px rgba(0,0,0,0.35)',
+                        }}>
+                        <span className="absolute left-0 inset-y-0 w-1" style={{ background: colour }} aria-hidden />
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="font-semibold leading-snug min-w-0 break-words">{r.subject_name || 'Lecture'}</div>
+                          <span className="shrink-0 text-xs font-bold tnum px-2 py-0.5 rounded-full text-white" style={{ background: colour }}>
+                            {hrs(r.hours_consumed)}
+                          </span>
+                        </div>
+                        {(r.topic || r.subtopic) && (
+                          <div className="mt-1.5 text-sm leading-snug">
+                            {r.topic && <div className="font-medium">{r.topic}</div>}
+                            {r.subtopic && <div className="muted">{r.subtopic}</div>}
+                          </div>
+                        )}
+                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 mt-2.5 text-xs">
+                          <span className={`px-2 py-0.5 rounded-full font-semibold ${ATTENDANCE[att] || ATTENDANCE.Present}`}>{att}</span>
+                          {r.venue && <span className="inline-flex items-center gap-1 muted"><MapPin size={12} /> {r.venue}</span>}
+                          {r.meeting_link && (
+                            <a className="inline-flex items-center gap-1 font-semibold" style={{ color: colour }} href={r.meeting_link} target="_blank" rel="noreferrer">
+                              <Video size={13} /> Join link
+                            </a>
+                          )}
+                        </div>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ol>
+            </section>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 /**
  * Modern month calendar showing a student's lecture activity.
@@ -71,7 +220,7 @@ export default function LectureCalendar({ lectures }: { lectures: any[] }) {
         <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-lg" style={{ background: 'var(--color-card-alt)', color: 'var(--color-primary)' }}>
           <Clock size={13} /> {hrs(monthHours)} this month
         </span>
-        <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-lg ml-auto" style={{ background: 'var(--color-card-alt)' }}>
+        <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-lg lg:ml-auto" style={{ background: 'var(--color-card-alt)' }}>
           {all.length} total · {hrs(totalHours)} overall
         </span>
       </div>
@@ -95,7 +244,7 @@ export default function LectureCalendar({ lectures }: { lectures: any[] }) {
                   disabled={!has}
                   onClick={() => setSelectedDay(isSel ? null : ds)}
                   title={has ? `${dayLecs.length} class(es) · ${hrs(dayHours(ds))}` : ''}
-                  className={`relative aspect-square rounded-xl flex flex-col items-center justify-center transition-all text-sm
+                  className={`relative aspect-square sm:aspect-auto sm:h-14 lg:aspect-square lg:h-auto rounded-xl flex flex-col items-center justify-center transition-all text-sm
                     ${isSel ? 'text-white font-bold shadow-md scale-[1.03]' : has ? 'font-semibold hover:scale-[1.03] hover:shadow-sm' : 'muted opacity-40 cursor-default'}
                     ${isToday && !isSel ? 'ring-2' : ''}`}
                   style={{
@@ -110,7 +259,8 @@ export default function LectureCalendar({ lectures }: { lectures: any[] }) {
                     </span>
                   )}
                   {has && (
-                    <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full" style={{ background: isSel ? '#fff' : 'var(--color-accent)' }} />
+                    // Laptop only: in a phone-sized cell the dot sits on the number.
+                    <span className="hidden lg:block absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full" style={{ background: isSel ? '#fff' : 'var(--color-accent)' }} />
                   )}
                 </button>
               );
@@ -119,8 +269,16 @@ export default function LectureCalendar({ lectures }: { lectures: any[] }) {
           <p className="muted text-xs mt-3">Days with classes are highlighted with their total hours. Click a day for details.</p>
         </div>
 
-        {/* Detail panel */}
-        <div className="rounded-xl p-3 sm:p-4 min-h-[240px]" style={{ background: 'var(--color-card-alt)' }}>
+        {/* Detail panel — phones and tablets: an agenda, one timeline per day. */}
+        <Agenda
+          shown={shown}
+          selectedDay={selectedDay}
+          title={shownTitle}
+          onWholeMonth={() => setSelectedDay(null)}
+        />
+
+        {/* Detail panel — laptop and up, unchanged. */}
+        <div className="hidden lg:block rounded-xl p-3 sm:p-4 min-h-[240px]" style={{ background: 'var(--color-card-alt)' }}>
           <div className="flex items-center justify-between mb-3">
             <h4 className="font-display font-bold text-sm">{shownTitle}</h4>
             {selectedDay && (

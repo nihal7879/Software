@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { GraduationCap, UserRound, Users, ChevronRight } from 'lucide-react';
-import { AuthHero } from '../components/AuthHero';
+import { Link } from 'react-router-dom';
+import { UserRound, Users, ChevronRight } from 'lucide-react';
+import { AuthHero, AuthBanner } from '../components/AuthHero';
 import { useAuth, type AccountChoice } from '../auth/AuthContext';
 
 export default function Login() {
@@ -54,15 +55,14 @@ export default function Login() {
   const allParents = !!choice && choice.options.every((o) => o.role === 'parent');
 
   return (
-    <div className="min-h-screen grid lg:grid-cols-2">
+    <div className="min-h-screen flex flex-col lg:grid lg:grid-cols-2">
       <AuthHero />
+      <AuthBanner />
 
-      {/* Form panel */}
-      <div className="flex items-center justify-center p-6">
+      {/* Form panel. Below lg it is a sheet pulled up over the banner's edge. */}
+      <div className="flex-1 relative -mt-8 lg:mt-0 rounded-t-[2rem] lg:rounded-none flex items-start lg:items-center justify-center px-6 pt-8 pb-10 lg:p-6"
+        style={{ background: 'var(--color-bg)' }}>
         <div className="w-full max-w-md">
-          <div className="lg:hidden flex items-center gap-2 text-2xl font-display font-bold mb-6" style={{ color: 'var(--color-primary)' }}>
-            <GraduationCap size={24} /> STEM Vision
-          </div>
           {choice ? (
             <div>
               <div className="eyebrow mb-2">One more step</div>
@@ -102,23 +102,30 @@ export default function Login() {
           ) : (
           <>
           <div className="eyebrow mb-2">Welcome Back</div>
-          <h2 className="font-display text-3xl font-semibold mb-1.5">Sign in to <span className="accent-word">STEM Vision</span></h2>
-          <p className="muted text-sm mb-8">Access your dashboard to continue.</p>
+          <h2 className="font-display text-[1.75rem] sm:text-3xl font-semibold mb-1.5">Sign in to <span className="accent-word">STEM Vision</span></h2>
+          <p className="muted text-sm mb-6 sm:mb-8">Access your dashboard to continue.</p>
 
           {timedOut && (
             <div className="mb-4 text-sm rounded-lg px-3 py-2 bg-amber-500/15 text-amber-700 dark:text-amber-400">
-              You were signed out after 20 minutes of inactivity. Please sign in again.
+              You were signed out after a spell of inactivity. Please sign in again.
             </div>
           )}
           <form onSubmit={submit} className="space-y-4" autoComplete="off">
             <div>
               <label className="text-sm font-semibold">Username or email</label>
-              <input className="input mt-1.5" type="text" placeholder="Enter username or email" autoComplete="off"
+              <input className="input mt-1.5 !py-3 lg:!py-2" type="text" placeholder="Enter username or email" autoComplete="off"
+                autoCapitalize="none" autoCorrect="off" spellCheck={false}
                 value={email} onChange={(e) => setEmail(e.target.value)} />
             </div>
             <div>
-              <label className="text-sm font-semibold">Password</label>
-              <input className="input mt-1.5" type="password" placeholder="Enter password" autoComplete="new-password"
+              <div className="flex items-baseline justify-between gap-3">
+                <label className="text-sm font-semibold">Password</label>
+                <Link to="/forgot-password" className="text-xs font-semibold text-[var(--color-primary)] hover:underline">
+                  Forgotten password?
+                </Link>
+              </div>
+              {/* No show/hide toggle — the client asked for the password to stay masked. */}
+              <input className="input mt-1.5 !py-3 lg:!py-2" type="password" placeholder="Enter password" autoComplete="new-password"
                 value={password} onChange={(e) => setPassword(e.target.value)} />
             </div>
             {pending && (

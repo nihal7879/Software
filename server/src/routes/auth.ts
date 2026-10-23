@@ -3,7 +3,14 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { config } from '../config';
 import { usernameProblem, passwordProblem } from '../utils/credentials';
-import { sendMail, registrationAdminEmail } from '../utils/mailer';
+import { sendMail, registrationAdminEmail, passwordOtpEmail, passwordChangedEmail } from '../utils/mailer';
+import {
+  accountForLogin, contactEmailFor, maskEmail, makeOtp, makePassword, storeOtp, checkOtp,
+  recentRequests, recentRequestsFromIp,
+  OTP_TTL_MINUTES, MAX_REQUESTS, REQUEST_WINDOW_MINUTES, MAX_REQUESTS_PER_IP,
+} from '../utils/passwordReset';
+import { bumpTokenVersion, currentTokenVersion } from '../utils/tokenVersion';
+import { notify, adminUserIds } from '../utils/push';
 import { z } from 'zod';
 import { pool, query, queryOne } from '../db';
 import { signToken } from '../utils/jwt';
@@ -141,10 +148,18 @@ async function completeLogin(req: Request, res: any, userId: number, chosenStude
     teacherId = t?.id ?? null;
   }
 
-  const token = signToken({ userId: user.id, role: user.role, email: user.email, studentId, teacherId });
+  const token = signToken({
+    userId: user.id, role: user.role, email: user.email, studentId, teacherId,
+    tv: Number(user.token_version || 0),
+  });
   return res.json({
     token,
-    user: { id: user.id, role: user.role, email: user.email, displayName: user.display_name, studentId, teacherId },
+    user: {
+      id: user.id, role: user.role, email: user.email, displayName: user.display_name, studentId, teacherId,
+      // Set when the password came out of a reset. The app then shows nothing
+      // but the change-password screen until a password of their own is set.
+      mustChangePassword: !!user.must_change_password,
+    },
   });
 }
 
@@ -382,8 +397,17 @@ router.post(
       // can be frozen as soon as the response goes out, cutting off an email
       // still being sent. sendMail never throws — a mail failure is recorded in
       // email_log and the registration still succeeds.
-      const notify = registrationAdminEmail({ first_name: first, last_name: b.last_name, username: b.username, email: b.email, mobile: b.student_mobile });
-      await sendMail({ kind: 'registration_admin', to: config.mail.adminNotify, ...notify });
+      const mail = registrationAdminEmail({ first_name: first, last_name: b.last_name, username: b.username, email: b.email, mobile: b.student_mobile });
+      await sendMail({ kind: 'registration_admin', to: config.mail.adminNotify, ...mail });
+      // And a notification on whatever device the office has allowed one on.
+      // Nobody sits watching the Registrations page, and a request waiting
+      // unseen is a student who cannot sign in.
+      await notify(await adminUserIds(), {
+        kind: 'registration_new',
+        title: 'New student registration',
+        body: `${[first, b.last_name].filter(Boolean).join(' ')} is waiting to be approved.`,
+        url: '/admin/registrations',
+      });
       return res.status(201).json({ pending: true, id: r.insertId });
     }
 
@@ -456,10 +480,18 @@ router.get(
   requireAuth,
   wrap(async (req, res) => {
     const u = req.user!;
-    const row = await queryOne<any>('SELECT id, role, email, display_name FROM users WHERE id = ?', [
-      u.userId,
-    ]);
-    res.json({ ...row, studentId: u.studentId ?? null, teacherId: u.teacherId ?? null });
+    const row = await queryOne<any>(
+      'SELECT id, role, email, display_name, must_change_password FROM users WHERE id = ?',
+      [u.userId]
+    );
+    res.json({
+      ...row,
+      studentId: u.studentId ?? null,
+      teacherId: u.teacherId ?? null,
+      // Read from the row, not the token: a reset done on another device has to
+      // reach this one too.
+      mustChangePassword: !!row?.must_change_password,
+    });
   })
 );
 
@@ -477,10 +509,161 @@ router.post(
     const ok = await bcrypt.compare(body.currentPassword, user.password_hash);
     if (!ok) return res.status(400).json({ error: 'Current password is incorrect' });
     const hash = await bcrypt.hash(body.newPassword, 10);
-    await query('UPDATE users SET password_hash = ? WHERE id = ?', [hash, user.id]);
-    res.json({ ok: true });
+    // must_change_password is cleared here: the reset handed out a password the
+    // system made up, and this is the person replacing it with their own.
+    await query('UPDATE users SET password_hash = ?, must_change_password = 0 WHERE id = ?', [hash, user.id]);
+    await finishPasswordChange(user, req.user!.userId);
+
+    // Raising the version turned off every token for this account — including
+    // the one this request arrived with. A fresh one goes back, so the device
+    // that did the changing stays signed in and every other device does not.
+    const token = signToken({
+      userId: user.id, role: user.role, email: user.email,
+      studentId: req.user!.studentId ?? null, teacherId: req.user!.teacherId ?? null,
+      tv: await currentTokenVersion(user.id),
+    });
+    res.json({ ok: true, token });
   })
 );
+
+// ---------------------------------------------------------------------------
+// FORGOT PASSWORD — a code to the email on file, then a password we make up.
+//
+// Both steps are public, which is what shapes them:
+//
+//   • The answer is the same whether the login exists or not. A different reply
+//     for "no such account" is a way to find out which logins are real.
+//   • Three codes per account per quarter hour, and a ceiling per connection.
+//     Without a cap this is a free way to send mail from the institute's address.
+//   • The code is stored as a hash and dies after five wrong tries. Six digits is
+//     a million guesses, which a script makes in minutes.
+//
+// The one deliberate exception to the first rule: an account with no email
+// anywhere is told so, and told to ring the office. That does confirm the login
+// exists — but today most accounts have no address on file, and leaving those
+// families at a screen that says a code is coming when none ever will is worse.
+// See utils/passwordReset.ts for where an address is looked for.
+// ---------------------------------------------------------------------------
+
+// The same words whatever happened, so nothing is learned from which one comes
+// back. Not "we have sent" — we may not have.
+const SENT_MESSAGE = 'If that login exists and has an email saved, a code has been sent to it.';
+
+router.post(
+  '/forgot',
+  wrap(async (req, res) => {
+    const b = z.object({ username: z.string().trim().min(1).max(120) }).parse(req.body);
+    const ip = clientIp(req);
+
+    // The per-connection ceiling is checked before anything is looked up, so it
+    // also covers someone walking through a list of guessed usernames.
+    if (await recentRequestsFromIp(ip) >= MAX_REQUESTS_PER_IP) {
+      return res.status(429).json({ error: 'Too many requests from this connection. Please try again later, or contact the institute admin.' });
+    }
+
+    const user = await accountForLogin(b.username);
+    if (!user) return res.json({ sent: true, message: SENT_MESSAGE });
+
+    if (await recentRequests(user.id) >= MAX_REQUESTS) {
+      return res.status(429).json({
+        error: `A code has already been sent ${MAX_REQUESTS} times in the last ${REQUEST_WINDOW_MINUTES} minutes. Please check your email, or try again shortly.`,
+      });
+    }
+
+    const to = await contactEmailFor(user);
+    if (!to) {
+      return res.status(400).json({
+        code: 'NO_EMAIL',
+        error: 'There is no email saved for this login. Please contact the institute admin to get a new password.',
+      });
+    }
+
+    const otp = makeOtp();
+    await storeOtp(user.id, otp, to, ip, deviceInfo(req));
+    const mail = passwordOtpEmail({ otp, minutes: OTP_TTL_MINUTES });
+    // Awaited: on Vercel the function can be frozen the moment the response goes
+    // out, which would cut off an email still being sent. sendMail never throws.
+    const result = await sendMail({ kind: 'password_otp', to, ...mail });
+    // The code itself is never written to the audit log — it would be a password
+    // in plain text sitting in a table anyone with the log can read.
+    await audit(user.id, 'PASSWORD_RESET_REQUEST', 'user', user.id, null, {
+      username: user.username, sent_to: maskEmail(to), email_status: result.status,
+    });
+
+    // A mail server that refused is worth saying plainly — the person would
+    // otherwise sit waiting for a code that was never going to arrive.
+    if (result.status !== 'sent') {
+      return res.status(502).json({
+        error: 'The code could not be emailed just now. Please contact the institute admin.',
+        code: 'MAIL_FAILED',
+      });
+    }
+    res.json({ sent: true, message: SENT_MESSAGE, sent_to: maskEmail(to) });
+  })
+);
+
+router.post(
+  '/forgot/reset',
+  wrap(async (req, res) => {
+    const b = z
+      .object({
+        username: z.string().trim().min(1).max(120),
+        // Generous about what arrives: people paste the code with a space in it.
+        otp: z.string().trim().transform((v) => v.replace(/\D/g, '')),
+      })
+      .parse(req.body);
+
+    const user = await accountForLogin(b.username);
+    // Same words as a wrong code: whether the login exists is not answered here
+    // either. Someone who got this far already knows their own username.
+    const nope = { error: 'That code is no longer valid. Please ask for a new one.' };
+    if (!user) return res.status(400).json(nope);
+
+    const check = await checkOtp(user.id, b.otp);
+    if (!check.ok) return res.status(400).json({ error: check.error });
+
+    // The code was right. The password is made here and shown once on the reply —
+    // never emailed, so an old mailbox is not a permanent key to the account.
+    const password = makePassword(user.username);
+    const hash = await bcrypt.hash(password, 10);
+    await query(
+      'UPDATE users SET password_hash = ?, must_change_password = 1 WHERE id = ?',
+      [hash, user.id]
+    );
+    await query('UPDATE password_resets SET used_at = NOW() WHERE id = ?', [check.resetId]);
+    await finishPasswordChange(user as any, user.id);
+
+    res.json({
+      ok: true,
+      username: user.username,
+      password,
+      // Said on the screen as well as enforced: the next sign-in asks for a
+      // password of their own.
+      must_change: true,
+    });
+  })
+);
+
+/**
+ * The three things that follow any password change, by reset or in Settings:
+ * every other device is signed out, it goes in the audit log, and the person is
+ * told by email — which is how a family notices a change they did not make.
+ *
+ * Neither password, old or new, is written anywhere but the hash column.
+ */
+async function finishPasswordChange(user: { id: number; email?: string; username?: string }, actorId: number) {
+  const username = user.email || user.username || '';
+  await bumpTokenVersion(user.id);
+  await audit(actorId, 'PASSWORD_CHANGE', 'user', user.id, null, {
+    username,
+    by: actorId === user.id ? 'the account holder' : 'another user',
+  });
+  const when = new Date().toLocaleString('en-GB', {
+    timeZone: 'Asia/Dubai', day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
+  });
+  const to = await contactEmailFor({ id: user.id, role: '', username, display_name: null });
+  if (to) await sendMail({ kind: 'password_changed', to, ...passwordChangedEmail({ username, when: `${when} (Dubai)` }) });
+}
 
 // Logout — token is cleared client-side; this records the event (IP/GPS/device) in the audit trail.
 router.post(

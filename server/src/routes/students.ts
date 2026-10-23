@@ -30,10 +30,16 @@ const studentSchema = z.object({
   exam_board: z.string().optional().nullable(),
   father_name: z.string().optional().nullable(),
   father_mobile: z.string().optional().nullable(),
+  // One address per person, beside their own number. The father and the mother
+  // usually have different ones, and this is where a statement goes and where a
+  // forgotten-password code is sent when the student has no address of their own.
+  father_email: z.string().optional().nullable().or(z.literal('')),
   mother_name: z.string().optional().nullable(),
   mother_mobile: z.string().optional().nullable(),
+  mother_email: z.string().optional().nullable().or(z.literal('')),
   guardian_name: z.string().optional().nullable(),
   guardian_mobile: z.string().optional().nullable(),
+  guardian_email: z.string().optional().nullable().or(z.literal('')),
   // Null when nobody has been named yet — a record read and written back
   // carries that null, and it should not be an error.
   relationship: z.enum(['Father', 'Mother', 'Guardian']).nullable().optional(),
@@ -163,8 +169,9 @@ router.post(
          year_grade,school_name,exam_board,father_name,mother_name,relationship,
          email,dob,age,gender,nationality,student_mobile,parent_mobile,extra_mobile,
          fees_received,form_received,branch_id,user_id,
-         father_mobile,mother_mobile,guardian_name,guardian_mobile)
-       VALUES (UUID(),?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+         father_mobile,mother_mobile,guardian_name,guardian_mobile,
+         father_email,mother_email,guardian_email)
+       VALUES (UUID(),?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       [
         b.date_of_joining || null, b.status, b.student_type,
         // A trial's clock starts on the joining date, or today if none given.
@@ -181,6 +188,9 @@ router.post(
         b.extra_mobile || null, b.fees_received ?? 0,
         b.form_received ?? false, b.branch_id ?? null, userId,
         b.father_mobile || null, b.mother_mobile || null, b.guardian_name || null, b.guardian_mobile || null,
+        // Positional, like every value above: the column list and this array are
+        // read together, and one missing entry shifts all of them.
+        b.father_email || null, b.mother_email || null, b.guardian_email || null,
       ]
     );
     const id = (result as any).insertId;

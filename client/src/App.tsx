@@ -4,6 +4,8 @@ import { Layout } from './components/Layout';
 import { Spinner } from './components/ui';
 
 import Login from './pages/Login';
+import ForgotPassword from './pages/ForgotPassword';
+import ChangePasswordRequired from './pages/ChangePasswordRequired';
 import StudentRegister from './pages/StudentRegister';
 import ParentRegister from './pages/ParentRegister';
 import TeacherRegister from './pages/TeacherRegister';
@@ -69,9 +71,18 @@ export default function App() {
   const { user, loading } = useAuth();
   if (loading) return <Spinner />;
 
+  // A password that came out of a reset was made by the system, and is in a
+  // WhatsApp message within the hour. Until one of their own is set, this is the
+  // only screen there is — whatever the address bar says. Sign out is the way
+  // past it, which someone on a shared computer needs.
+  if (user?.mustChangePassword) return <ChangePasswordRequired />;
+
   return (
     <Routes>
       <Route path="/login" element={user ? <Navigate to={homeFor(user.role)} replace /> : <Login />} />
+      {/* Public, and asks for the username rather than the email: one email can
+          belong to a whole family, so it cannot say whose password to reset. */}
+      <Route path="/forgot-password" element={user ? <Navigate to={homeFor(user.role)} replace /> : <ForgotPassword />} />
       {/* Where the printed desk QR points. Public: it only parks the code and
           sends the student on to the login they already have. */}
       <Route path="/scan" element={<Scan />} />

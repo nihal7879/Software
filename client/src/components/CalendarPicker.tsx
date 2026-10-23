@@ -103,7 +103,10 @@ export function CalendarPicker({
   className = '',
   align = 'left',
   openYear,
+  stretch = false,
 }: {
+  /** Fill the row like a text box — the phone forms, where fields stack full width. */
+  stretch?: boolean;
   value: string;
   onChange: (d: string) => void;
   placeholder?: string;
@@ -131,11 +134,13 @@ export function CalendarPicker({
   const nextMonth = () => { const d = new Date(viewY, viewM + 1, 1); setViewY(d.getFullYear()); setViewM(d.getMonth()); };
 
   return (
-    <div className={`relative inline-block ${className}`}>
-      <button ref={btnRef} type="button" className="btn-ghost flex items-center gap-2 whitespace-nowrap" onClick={() => setOpen((o) => !o)}>
+    <div className={`relative ${stretch ? 'block w-full' : 'inline-block'} ${className}`}>
+      <button ref={btnRef} type="button"
+        className={`btn-ghost flex items-center gap-2 whitespace-nowrap ${stretch ? 'm-control w-full !justify-start' : ''}`}
+        onClick={() => setOpen((o) => !o)}>
         <CalendarDays size={16} className="muted shrink-0" />
         <span className="font-medium whitespace-nowrap">{value ? fmtDate(value) : placeholder}</span>
-        <ChevronDown size={15} className="muted shrink-0" />
+        <ChevronDown size={15} className={`muted shrink-0 ${stretch ? 'ml-auto' : ''}`} />
       </button>
 
       {open && (

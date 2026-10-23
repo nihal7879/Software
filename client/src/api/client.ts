@@ -50,7 +50,18 @@ api.interceptors.request.use((cfg) => {
 });
 
 api.interceptors.response.use(
-  (r) => r,
+  (r) => {
+    // Changing a password signs every device out — the server raises the
+    // account's token version, which kills every token already handed out,
+    // including the one this browser just used. A fresh one comes back in the
+    // same reply and is stored here rather than at each of the three screens
+    // that offer a password change, so none of them can forget and leave the
+    // person staring at a sign-in page straight after succeeding.
+    if (r.config.url?.includes('/auth/change-password') && r.data?.token) {
+      localStorage.setItem('token', r.data.token);
+    }
+    return r;
+  },
   (err) => {
     if (err.response?.status === 401) {
       localStorage.removeItem('token');
