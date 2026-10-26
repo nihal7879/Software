@@ -81,6 +81,21 @@ export const num = (n: number | string | null | undefined) =>
 export const hrs = (n: number | string | null | undefined) =>
   `${Number(n ?? 0).toLocaleString('en-AE', { maximumFractionDigits: 2 })} h`;
 
+/**
+ * What a lecture takes off the student's balance.
+ *
+ * A class can be taught and deliberately not charged — a make-up for one the
+ * institute cancelled, a free session before an exam. `hours_consumed` still
+ * holds its real length, because the student was there and the teacher taught
+ * it; it is simply not billed. So every running total has to ask this rather
+ * than read the column, or the months will not add up to the balance.
+ *
+ * The server's own figures already work this way (utils/hoursSummary.ts). This
+ * is for the totals the screens add up themselves from a list of lectures.
+ */
+export const chargedHours = (l: { hours_consumed?: number | string | null; is_billable?: number | boolean | null } | null | undefined) =>
+  l?.is_billable === 0 || l?.is_billable === false ? 0 : Number(l?.hours_consumed ?? 0);
+
 // Format a date as dd-mm-yy. Accepts a 'YYYY-MM-DD' string or Date; returns the
 // input unchanged if it can't be parsed.
 export const fmtDate = (d: string | Date | null | undefined) => {
@@ -139,4 +154,56 @@ export function dubaiNow(): Date {
 export function todayIso() {
   const d = dubaiNow();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+/**
+ * What went wrong, in words the office can act on.
+ *
+ * The server already answers with a sentence written for a person — zod gives
+ * the first failed rule ("Amount is required"), and the error handler passes
+ * through anything thrown. Screens were discarding all of it and printing
+ * "Could not save — please check the fields", which names no field and sent
+ * people hunting through a form that was perfectly valid.
+ *
+ * Returns the sentence, plus `detail` when the cause is technical rather than
+ * something the person mistyped — so a real fault can be reported accurately
+ * instead of being mistaken for a bad entry.
+ */
+export function apiError(e: any, fallback = 'Something went wrong.'): { message: string; detail?: string } {
+  const res = e?.response;
+
+  // Never reached the server at all.
+  if (!res) {
+    return { message: 'Could not reach STEM Vision. Check your connection and try again.' };
+  }
+
+  const data = res.data || {};
+  const said = String(data.error || '').trim();
+
+  // zod names the fields it refused; listing them beats a general plea to
+  // "check the fields".
+  const fields = data.details?.fieldErrors as Record<string, string[]> | undefined;
+  if (fields) {
+    const named = Object.keys(fields).filter((k) => fields[k]?.length);
+    if (named.length) {
+      const pretty = named.map((k) => k.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()));
+      return { message: `${said || 'Please check these fields'} — ${pretty.join(', ')}` };
+    }
+  }
+
+  // A database or server fault is not the person's mistake, and telling them to
+  // check the fields sends them looking for a problem that is not there.
+  const technical = /unknown column|ER_[A-Z_]+|SQL syntax|ECONNREFUSED|ETIMEDOUT|cannot read/i.test(said);
+  if (technical || res.status >= 500) {
+    return {
+      message: 'The server could not save this. Nothing has been changed — please report this to support.',
+      detail: said || `HTTP ${res.status}`,
+    };
+  }
+
+  if (res.status === 401) return { message: 'Your session has ended. Please sign in again.' };
+  if (res.status === 403) return { message: said || 'You do not have permission to do that.' };
+  if (res.status === 404) return { message: said || 'That record no longer exists — it may have been removed.' };
+
+  return { message: said || fallback };
 }

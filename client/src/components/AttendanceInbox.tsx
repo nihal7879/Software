@@ -11,6 +11,7 @@ import { ConfirmModal } from './ConfirmModal';
 import { QrCode } from './QrCode';
 import { DictateButton } from './DictateButton';
 import { toast } from './Toast';
+import { BillableToggle } from './BillableToggle';
 import { printQrCards, scanUrl } from '../lib/qr';
 
 /**
@@ -51,6 +52,8 @@ type Row = {
   teacher_name: string;
   subject_name: string | null;
   added_by_hand: number;
+  /** Whether confirming this one charges the student. 1 unless the teacher said no. */
+  is_billable: number;
 };
 
 type Student = { id: number; full_name: string; form_no?: string | number };
@@ -64,6 +67,7 @@ type Edit = {
   meeting_link: string;
   in_time: string;
   out_time: string;
+  is_billable: boolean;
 };
 
 const pad = (n: number) => String(n).padStart(2, '0');
@@ -106,6 +110,8 @@ const seed = (r: Row): Edit => ({
   meeting_link: r.meeting_link || '',
   in_time: timeOf(r.in_at),
   out_time: timeOf(r.out_at),
+  // Charged unless this row has already been marked not billable.
+  is_billable: Number(r.is_billable) !== 0,
 });
 
 // The same two lines as the lecture sheet: the class on top, what was taught
@@ -224,6 +230,7 @@ export function AttendanceInbox({
       remark: e.remark || null,
       venue: e.venue || null,
       meeting_link: e.meeting_link || null,
+      is_billable: e.is_billable,
     };
     if (e.in_time && e.in_time !== base.in_time) body.in_time = e.in_time.slice(0, 5);
     if (e.out_time && e.out_time !== base.out_time) body.out_time = e.out_time.slice(0, 5);
@@ -293,7 +300,17 @@ export function AttendanceInbox({
   });
 
   const confirmMany = useMutation({
-    mutationFn: (ids: number[]) => api.post('/checkin/confirm', { ids }),
+    // Anything typed into a selected row is saved before the batch is
+    // confirmed. Confirming reads the stored row, so without this a teacher who
+    // marked a class not billable and then used "Confirm 6" would have had it charged
+    // after all — the one unsaved edit here that costs a family money.
+    mutationFn: async (ids: number[]) => {
+      for (const id of ids) {
+        const r = rows.find((x) => x.id === id);
+        if (r && edits[id]) await api.patch(`/checkin/${id}`, payloadOf(r));
+      }
+      return api.post('/checkin/confirm', { ids });
+    },
     onSuccess: (r: any) => {
       const { confirmed, skipped } = r.data;
       toast(
@@ -731,12 +748,25 @@ export function AttendanceInbox({
                         </tr>
                       </thead>
                       <tbody>
-                        {dayRows.map((r) => {
+                        {dayRows.map((r, i) => {
                           const e = editOf(r);
                           const live = hoursBetween(e.in_time, e.out_time);
+                          // Each student takes two lines, and with nothing
+                          // between them the next student's topic reads as a
+                          // continuation of this one. So the pair carries one
+                          // tinted band, alternating down the day, and the
+                          // entry opens with a firm rule — which is what makes
+                          // one entry tell itself apart from the next.
+                          // A not-billable scan is tinted the moment it is
+                          // marked, before it is confirmed — that is the one
+                          // the teacher wants to look at twice.
+                          const band = !e.is_billable
+                            ? 'rgba(251, 191, 36, 0.12)'
+                            : i % 2 === 1 ? 'var(--color-card-alt)' : 'var(--color-card)';
+                          const starts = { borderTop: '2px solid var(--color-border)' } as const;
                           return [
-                            <tr key={`${r.id}-a`}>
-                              <td className="table-td align-top" colSpan={ROW_ONE[0]}>
+                            <tr key={`${r.id}-a`} style={{ background: band }}>
+                              <td className="table-td align-top" colSpan={ROW_ONE[0]} style={starts}>
                                 <label className="flex items-start gap-2 cursor-pointer">
                                   <input type="checkbox" className="mt-1" checked={picked.has(r.id)} onChange={() => toggle(r.id)} />
                                   <span>
@@ -757,18 +787,18 @@ export function AttendanceInbox({
                                   </span>
                                 </label>
                               </td>
-                              <td className="table-td align-top" colSpan={ROW_ONE[1]}>
+                              <td className="table-td align-top" colSpan={ROW_ONE[1]} style={starts}>
                                 <Select compact value={e.subject_id} onChange={(v) => setEdit(r, { subject_id: v })}
                                   options={subjectOptions} placeholder="Subject…" />
                               </td>
-                              <td className="table-td align-top" colSpan={ROW_ONE[2]}>
+                              <td className="table-td align-top" colSpan={ROW_ONE[2]} style={starts}>
                                 <TimePicker value={e.in_time} onChange={(v) => setEdit(r, { in_time: v })} placeholder="In" />
                               </td>
-                              <td className="table-td align-top" colSpan={ROW_ONE[3]}>
+                              <td className="table-td align-top" colSpan={ROW_ONE[3]} style={starts}>
                                 <TimePicker value={e.out_time} onChange={(v) => setEdit(r, { out_time: v })} placeholder="Out" />
                               </td>
-                              <td className="table-td align-top" colSpan={ROW_ONE[4]}>
-                                <div className="flex items-center gap-1.5 justify-end">
+                              <td className="table-td align-top" colSpan={ROW_ONE[4]} style={starts}>
+                                <div className="flex flex-wrap items-center gap-1.5 gap-y-1.5 justify-end">
                                   <span
                                     className={`text-sm tabular-nums whitespace-nowrap mr-1 ${(live || Number(r.hours || 0)) >= LONG_HOURS ? 'text-red-600 font-semibold' : ''}`}
                                     title={(live || Number(r.hours || 0)) >= LONG_HOURS ? 'Longer than a usual class — check the time out before confirming' : undefined}
@@ -792,7 +822,7 @@ export function AttendanceInbox({
                                 </div>
                               </td>
                             </tr>,
-                            <tr key={`${r.id}-b`}>
+                            <tr key={`${r.id}-b`} style={{ background: band }}>
                               <td className="table-td align-top pt-0" colSpan={ROW_TWO[0]} style={JOINED}>
                                 <input className="input !py-1.5 w-full" placeholder="Topic" value={e.topic}
                                   onChange={(ev) => setEdit(r, { topic: ev.target.value })} />
@@ -817,6 +847,10 @@ export function AttendanceInbox({
                               <td className="table-td align-top pt-0" colSpan={ROW_TWO[4]} style={JOINED}>
                                 <input className="input !py-1.5 w-full" placeholder="Meet link" value={e.meeting_link}
                                   onChange={(ev) => setEdit(r, { meeting_link: ev.target.value })} />
+                                <div className="mt-1.5">
+                                  <BillableToggle compact value={e.is_billable}
+                                    onChange={(v) => setEdit(r, { is_billable: v })} />
+                                </div>
                               </td>
                             </tr>,
                           ];
@@ -837,7 +871,13 @@ export function AttendanceInbox({
                       const open = openMore.has(r.id);
                       return (
                         <div key={r.id} className="rounded-2xl border overflow-hidden transition-colors"
-                          style={{ borderColor: on ? 'var(--color-primary)' : 'var(--color-border)', background: 'var(--color-card)' }}>
+                          style={{
+                            // The same amber the wide table uses, so a card and
+                            // a row say the same thing the same way.
+                            borderColor: !e.is_billable ? 'rgba(245, 158, 11, 0.5)'
+                              : on ? 'var(--color-primary)' : 'var(--color-border)',
+                            background: !e.is_billable ? 'rgba(251, 191, 36, 0.10)' : 'var(--color-card)',
+                          }}>
                           <label className="flex items-center gap-3 p-3.5 cursor-pointer"
                             style={{ background: on ? 'var(--color-accent-soft)' : 'var(--color-card-alt)' }}>
                             <input type="checkbox" className="w-5 h-5 shrink-0 accent-[var(--color-primary)]" checked={on} onChange={() => toggle(r.id)}
@@ -909,6 +949,18 @@ export function AttendanceInbox({
                                   <input className="input !py-1.5 w-full" placeholder="For an online class" value={e.meeting_link} onChange={(ev) => setEdit(r, { meeting_link: ev.target.value })} /></div>
                               </div>
                             )}
+
+                            <div className="flex items-center justify-between gap-2 pt-1">
+                              <span className="text-sm font-semibold">
+                                Charge for this class
+                                {!e.is_billable && (
+                                  <span className="block text-xs font-normal text-amber-700 dark:text-amber-400">
+                                    Recorded in full, no hours charged
+                                  </span>
+                                )}
+                              </span>
+                              <BillableToggle value={e.is_billable} onChange={(v) => setEdit(r, { is_billable: v })} />
+                            </div>
                           </div>
 
                           <div className="grid grid-cols-[auto_1fr_1.4fr] gap-2 px-3.5 pb-3.5">

@@ -208,7 +208,7 @@ router.get(
     if (isFaculty) { teacherFilter = 'AND l.teacher_id = ?'; params.push(tid); }
 
     const lectures = await query(
-      `SELECT l.session_date, l.month, l.time_in, l.time_out, a.hours_consumed AS no_of_hours,
+      `SELECT l.session_date, l.month, l.time_in, l.time_out, a.hours_consumed AS no_of_hours, a.is_billable,
               t.name AS teacher_name, sub.name AS subject_name,
               l.topic, l.subtopic, l.remark, l.venue, a.attendance_status
        FROM lecture_attendees a
@@ -430,6 +430,9 @@ router.get(
                  WHERE m.teacher_id = ? AND m.student_id = s.id) AS subjects,
               EXISTS(SELECT 1 FROM student_teacher_mapping m
                        WHERE m.teacher_id = ? AND m.student_id = s.id) AS is_assigned,
+              -- Every hour taught, billable or not: the teacher did the work
+              -- whoever paid for it, so this is not filtered on is_billable
+              -- the way the student's balance is.
               COALESCE((SELECT SUM(a.hours_consumed) FROM lecture_attendees a
                           JOIN lecture_sessions l ON l.id = a.lecture_id
                           WHERE l.teacher_id = ? AND a.student_id = s.id

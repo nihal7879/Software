@@ -18,6 +18,11 @@ import ExcelJS from 'exceljs';
 // feature), which rules out a document meant to be sent to a parent.
 
 const HEAD_BG = '#1F2937';      // table header
+// A not-billable class, in the same pale amber the screens use. Light enough
+// to print and to read black text on — the point is to find the line, not to
+// shout at whoever opens the file.
+const FREE_BG = '#FFF4D6';
+const FREE_INK = '#8A5A00';     // dark amber ink, readable on that fill
 const BAND_BG = '#F8FAFC';      // zebra banding
 const LINE = '#D1D5DB';
 
@@ -58,6 +63,8 @@ export type StatementLecture = {
   time_in?: string | null;
   time_out?: string | null;
   hours_consumed?: number | string | null;
+  /** 0 when the class was taught but not charged. */
+  is_billable?: number | boolean | null;
   teacher_name?: string | null;
   subject_name?: string | null;
 };
@@ -111,10 +118,15 @@ export async function buildHoursStatement(input: StatementInput): Promise<{ buff
     .filter((p) => (!input.from || p.date >= input.from) && (!input.to || p.date <= input.to));
 
   // One column per month that has either hours or money, oldest first.
+  // Charged hours only. A free class is listed below with its real length and
+  // marked, but it must not appear in the month totals — those are what the
+  // family checks against the balance, and they would not add up.
+  const charged = (l: StatementLecture) =>
+    l.is_billable === 0 || l.is_billable === false ? 0 : num(l.hours_consumed);
   const hoursByMonth = new Map<string, number>();
   for (const l of lectures) {
     const ym = String(l.session_date).slice(0, 7);
-    hoursByMonth.set(ym, (hoursByMonth.get(ym) || 0) + num(l.hours_consumed));
+    hoursByMonth.set(ym, (hoursByMonth.get(ym) || 0) + charged(l));
   }
   const feesByMonth = new Map<string, number>();
   for (const p of payments) {
@@ -142,7 +154,7 @@ export async function buildHoursStatement(input: StatementInput): Promise<{ buff
     },
   });
 
-  const DETAIL_COLS = 8; // DATE .. Name of Teacher
+  const DETAIL_COLS = 9; // DATE .. Charged
   const width = Math.max(DETAIL_COLS, months.length + 3);
 
   const border = () => ({
@@ -220,7 +232,7 @@ export async function buildHoursStatement(input: StatementInput): Promise<{ buff
   r += 2;
 
   // ---- lecture detail ------------------------------------------------------
-  const HEADERS = ['DATE', 'Month', 'Form No', 'Student Name', 'Time In', 'Time Out', 'No of Hrs', 'Name of Teacher'];
+  const HEADERS = ['DATE', 'Month', 'Form No', 'Student Name', 'Time In', 'Time Out', 'No of Hrs', 'Name of Teacher', 'Charged'];
   HEADERS.forEach((h, i) => {
     const cell = ws.getCell(r, i + 1);
     cell.value = h;
@@ -243,16 +255,31 @@ export async function buildHoursStatement(input: StatementInput): Promise<{ buff
       clockTime(l.time_out),
       num(l.hours_consumed),
       l.teacher_name || '',
+      // The length is the real one; this column says whether it was billed.
+      charged(l) > 0 ? 'Yes' : 'Not billable',
     ];
+    const free = charged(l) === 0;
     row.forEach((v, c) => {
       const cell = ws.getCell(r, c + 1);
       cell.value = v as any;
-      cell.font = { name: 'Calibri', size: 10 };
+      cell.font = {
+        name: 'Calibri', size: 10,
+        ...(free ? { color: { argb: argb(FREE_INK) } } : {}),
+        // The hours column on a not-billable line is struck through. Without
+        // it somebody adds that column up, gets more than the month totals
+        // above, and reasonably concludes the statement is wrong — the figure
+        // is the real length of the class, and it is not counted.
+        ...(free && c === 6 ? { strike: true, bold: true } : {}),
+      };
       cell.border = border();
-      if (i % 2 === 1) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: argb(BAND_BG) } };
+      // The amber wins over the zebra banding: one of these lines in a page of
+      // forty is exactly what somebody is looking for.
+      if (free) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: argb(FREE_BG) } };
+      else if (i % 2 === 1) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: argb(BAND_BG) } };
       if (c === 0) { cell.numFmt = 'd-mmm-yyyy'; cell.alignment = { horizontal: 'left' }; }
       if (c === 1 || c === 2 || c === 4 || c === 5) cell.alignment = { horizontal: 'center' };
       if (c === 6) { cell.numFmt = '0.0'; cell.alignment = { horizontal: 'center' }; }
+      if (c === 8) { cell.alignment = { horizontal: 'center' }; if (free) cell.font = { ...cell.font, bold: true }; }
     });
     r++;
   });
@@ -275,7 +302,8 @@ export async function buildHoursStatement(input: StatementInput): Promise<{ buff
   ws.getColumn(6).width = 13;
   ws.getColumn(7).width = 11;
   ws.getColumn(8).width = 22;
-  for (let c = 9; c <= width; c++) ws.getColumn(c).width = 11;
+  ws.getColumn(9).width = 10;
+  for (let c = 10; c <= width; c++) ws.getColumn(c).width = 11;
 
   ws.headerFooter.oddFooter = `&C &P of &N &R Created ${stamp}`;
 

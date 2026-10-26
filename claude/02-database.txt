@@ -113,3 +113,11 @@ ADDED 2026-10-01
                        bell, clears the count); dismissed_at is "take it off my
                        list". Two different acts, so two columns - and clearing
                        hides rather than deletes.
+
+ADDED 2026-10-26
+  lecture_attendees.is_billable  whether this student is charged for this class.
+                       Default TRUE. The balance counts billable rows only; see
+                       03-hours-and-fees.txt. hours_consumed keeps the real
+                       length either way.
+  lecture_checkins.is_billable   the same choice made in the QR inbox, carried
+                       onto the lecture when the row is confirmed.

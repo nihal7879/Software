@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '../../auth/AuthContext';
-import { api, rs, hrs, num, fmtDate, todayIso } from '../../api/client';
+import { api, rs, hrs, num, fmtDate, todayIso, chargedHours } from '../../api/client';
+import { NotBillableChip, NOT_BILLABLE_ROW, notBillable } from '../../components/BillableToggle';
 import { KpiCard, Section, StatusBadge, Table, HoursValue, Spinner } from '../../components/ui';
 import { DateRangePicker } from '../../components/DateRangePicker';
 
@@ -47,7 +48,7 @@ export default function Tracker() {
     const hKey = gran === 'month' ? 'month' : 'session_date';
     const fKey = gran === 'month' ? 'month' : 'payment_date';
     const map: Record<string, { hours: number; fees: number }> = {};
-    lecs.forEach((l) => { const k = l[hKey]; if (k) (map[k] ||= { hours: 0, fees: 0 }).hours += Number(l.hours_consumed || 0); });
+    lecs.forEach((l) => { const k = l[hKey]; if (k) (map[k] ||= { hours: 0, fees: 0 }).hours += chargedHours(l); });
     fees.forEach((f) => { const k = f[fKey]; if (k) (map[k] ||= { hours: 0, fees: 0 }).fees += Number(f.amount || 0); });
     const keys = Object.keys(map).sort();
     if (gran === 'date') keys.reverse(); // most recent day first
@@ -59,7 +60,7 @@ export default function Tracker() {
 
   const allFees = rawFees.reduce((a, f) => a + Number(f.amount || 0), 0);          // all-time (KPI)
   const presentCount = rawLecs.filter((x) => x.attendance_status !== 'Absent').length; // all-time (KPI)
-  const rangeHours = lecs.reduce((a, l) => a + Number(l.hours_consumed || 0), 0);   // in selected range
+  const rangeHours = lecs.reduce((a, l) => a + chargedHours(l), 0);   // in selected range
   const rangeFees = fees.reduce((a, f) => a + Number(f.amount || 0), 0);            // in selected range
 
   return (
@@ -129,7 +130,7 @@ export default function Tracker() {
           {lecs.length === 0 ? (
             <tr><td className="table-td muted" colSpan={11}>No lectures in this range.</td></tr>
           ) : lecs.map((r: any) => (
-            <tr key={r.id}>
+            <tr key={r.id} className={notBillable(r.is_billable) ? NOT_BILLABLE_ROW : undefined}>
               <td className="table-td whitespace-nowrap">{fmtDate(r.session_date)}</td>
               <td className="table-td whitespace-nowrap">{fmtMonth(r.month)}</td>
               <td className="table-td font-mono">{r.form_no}</td>
@@ -139,7 +140,9 @@ export default function Tracker() {
               <td className="table-td">{r.subtopic || '—'}</td>
               <td className="table-td">{r.time_in || '—'}</td>
               <td className="table-td">{r.time_out || '—'}</td>
-              <td className="table-td text-right tabular-nums font-semibold">{hrs(r.hours_consumed)}</td>
+              <td className="table-td text-right tabular-nums font-semibold whitespace-nowrap">
+                <NotBillableChip is_billable={r.is_billable} /> {hrs(r.hours_consumed)}
+              </td>
               <td className="table-td">
                 <span className={`text-xs px-2 py-0.5 rounded-full ${
                   r.attendance_status === 'Absent' ? 'bg-red-500/15 text-red-600'

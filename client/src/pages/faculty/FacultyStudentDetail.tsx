@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { api, hrs, fmtDate, todayIso } from '../../api/client';
+import { NotBillableChip, NOT_BILLABLE_ROW, notBillable } from '../../components/BillableToggle';
 import { Section, StatusBadge, Table, Spinner, DateTile, fmtTime } from '../../components/ui';
 import { DateRangePicker } from '../../components/DateRangePicker';
 
@@ -49,7 +50,10 @@ export default function FacultyStudentDetail() {
               <div className="min-w-0 flex-1">
                 <div className="flex items-start justify-between gap-2">
                   <div className="font-semibold truncate">{l.subject_name || 'Lecture'}</div>
-                  <span className="shrink-0 text-sm font-bold tnum" style={{ color: 'var(--color-primary)' }}>{hrs(l.no_of_hours)}</span>
+                  <span className="shrink-0 flex items-center gap-1">
+                    <NotBillableChip is_billable={l.is_billable} />
+                    <span className="text-sm font-bold tnum" style={{ color: 'var(--color-primary)' }}>{hrs(l.no_of_hours)}</span>
+                  </span>
                 </div>
                 {(l.topic || l.subtopic) && <div className="text-sm">{[l.topic, l.subtopic].filter(Boolean).join(' — ')}</div>}
                 <div className="text-xs muted mt-0.5">
@@ -67,12 +71,14 @@ export default function FacultyStudentDetail() {
           ) : (
             <>
               {data.lectures.map((l: any, i: number) => (
-                <tr key={i}>
+                <tr key={i} className={notBillable(l.is_billable) ? NOT_BILLABLE_ROW : undefined}>
                   <td className="table-td whitespace-nowrap">{fmtDate(l.session_date)}</td>
                   <td className="table-td">{l.subject_name || '—'}</td>
                   <td className="table-td">{l.time_in || '—'}</td>
                   <td className="table-td">{l.time_out || '—'}</td>
-                  <td className="table-td text-right tabular-nums font-semibold">{hrs(l.no_of_hours)}</td>
+                  <td className="table-td text-right tabular-nums font-semibold whitespace-nowrap">
+                    <NotBillableChip is_billable={l.is_billable} /> {hrs(l.no_of_hours)}
+                  </td>
                   <td className="table-td">{l.topic || '—'}</td>
                   <td className="table-td">{l.subtopic || '—'}</td>
                   <td className="table-td">{l.remark || '—'}</td>

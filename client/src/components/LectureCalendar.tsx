@@ -1,6 +1,7 @@
 import { useMemo, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight, CalendarDays, Clock, BookOpen, MapPin, Video } from 'lucide-react';
-import { hrs, fmtDate, todayIso, dubaiNow } from '../api/client';
+import { hrs, fmtDate, todayIso, dubaiNow, chargedHours } from '../api/client';
+import { NotBillableChip } from './BillableToggle';
 import { useStackDepth, stackTop } from './ui';
 
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -45,7 +46,7 @@ function Agenda({ shown, selectedDay, title, onWholeMonth }: {
     if (last && last[0] === r.session_date) last[1].push(r);
     else days.push([r.session_date, [r]]);
   }
-  const total = shown.reduce((a, l) => a + Number(l.hours_consumed || 0), 0);
+  const total = shown.reduce((a, l) => a + chargedHours(l), 0);
   const stackRef = useRef<HTMLDivElement>(null);
   useStackDepth(stackRef, [shown, selectedDay]);
   // Day-month order, as the day headings below — the shared title is US order.
@@ -91,7 +92,7 @@ function Agenda({ shown, selectedDay, title, onWholeMonth }: {
                   <h5 className="text-sm font-semibold">
                     {new Date(date + 'T00:00').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })}
                   </h5>
-                  <span className="text-xs muted tnum">{hrs(lecs.reduce((a, l) => a + Number(l.hours_consumed || 0), 0))}</span>
+                  <span className="text-xs muted tnum">{hrs(lecs.reduce((a, l) => a + chargedHours(l), 0))}</span>
                 </div>
               )}
               <ol className="space-y-2.5">
@@ -123,8 +124,11 @@ function Agenda({ shown, selectedDay, title, onWholeMonth }: {
                         <span className="absolute left-0 inset-y-0 w-1" style={{ background: colour }} aria-hidden />
                         <div className="flex items-start justify-between gap-2">
                           <div className="font-semibold leading-snug min-w-0 break-words">{r.subject_name || 'Lecture'}</div>
-                          <span className="shrink-0 text-xs font-bold tnum px-2 py-0.5 rounded-full text-white" style={{ background: colour }}>
-                            {hrs(r.hours_consumed)}
+                          <span className="shrink-0 flex items-center gap-1">
+                            <NotBillableChip is_billable={r.is_billable} />
+                            <span className="text-xs font-bold tnum px-2 py-0.5 rounded-full text-white" style={{ background: colour }}>
+                              {hrs(r.hours_consumed)}
+                            </span>
                           </span>
                         </div>
                         {(r.topic || r.subtopic) && (
@@ -186,9 +190,9 @@ export default function LectureCalendar({ lectures }: { lectures: any[] }) {
   const stepYear = (delta: number) => { setSelectedDay(null); setViewY((y) => y + delta); };
 
   const monthLectures = all.filter((l) => l.session_date?.startsWith(monthKey));
-  const monthHours = monthLectures.reduce((a, l) => a + Number(l.hours_consumed || 0), 0);
-  const totalHours = all.reduce((a, l) => a + Number(l.hours_consumed || 0), 0);
-  const dayHours = (ds: string) => (byDate[ds] || []).reduce((a, l) => a + Number(l.hours_consumed || 0), 0);
+  const monthHours = monthLectures.reduce((a, l) => a + chargedHours(l), 0);
+  const totalHours = all.reduce((a, l) => a + chargedHours(l), 0);
+  const dayHours = (ds: string) => (byDate[ds] || []).reduce((a, l) => a + chargedHours(l), 0);
 
   const shown = selectedDay ? (byDate[selectedDay] || []) : monthLectures;
   const shownTitle = selectedDay
@@ -295,8 +299,11 @@ export default function LectureCalendar({ lectures }: { lectures: any[] }) {
                     <div className="min-w-0">
                       <div className="font-semibold text-sm truncate">{r.subject_name || 'Lecture'}</div>
                     </div>
-                    <span className="shrink-0 text-xs font-bold px-2 py-0.5 rounded-full" style={{ background: 'var(--color-card-alt)', color: 'var(--color-primary)' }}>
-                      {hrs(r.hours_consumed)}
+                    <span className="shrink-0 flex items-center gap-1">
+                      <NotBillableChip is_billable={r.is_billable} />
+                      <span className="text-xs font-bold px-2 py-0.5 rounded-full" style={{ background: 'var(--color-card-alt)', color: 'var(--color-primary)' }}>
+                        {hrs(r.hours_consumed)}
+                      </span>
                     </span>
                   </div>
 

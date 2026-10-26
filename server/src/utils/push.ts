@@ -27,6 +27,8 @@ export type PushKind =
   | 'hours_statement'        // → the parents: a statement has gone out
   | 'check_in'               // → the teacher, and the parents
   | 'check_out'              // → the parents
+  | 'approval_request'       // → the super admin, and the office that asked
+  | 'approval_decided'       // → the admin who asked: approved or not
   | 'test';                  // → whoever just pressed "turn on notifications"
 
 export type PushStatus = 'sent' | 'no_device' | 'failed' | 'not_configured';
@@ -80,6 +82,18 @@ async function logNotice(userId: number | null, n: Notice, status: PushStatus, d
  * flight. It is cheap, and it cannot throw.
  */
 export async function notify(userIds: (number | null | undefined)[], n: Notice): Promise<void> {
+  // Wrapped whole: the comment above has always promised callers this cannot
+  // throw, but the subscription lookup is a database read like any other. A
+  // payment must not fail to save because the push table was briefly
+  // unreachable, and the caller has nothing useful to do with the error.
+  try {
+    await send(userIds, n);
+  } catch (e) {
+    console.error('notify failed:', e);
+  }
+}
+
+async function send(userIds: (number | null | undefined)[], n: Notice): Promise<void> {
   const ids = [...new Set(userIds.filter((id): id is number => typeof id === 'number' && id > 0))];
   if (ids.length === 0) return;
 
@@ -154,6 +168,20 @@ export async function notify(userIds: (number | null | undefined)[], n: Notice):
 export async function adminUserIds(): Promise<number[]> {
   const rows = await query<any>(
     "SELECT id FROM users WHERE role IN ('admin', 'superadmin') AND is_active = TRUE AND is_deleted = FALSE"
+  );
+  return rows.map((r) => r.id);
+}
+
+/**
+ * The super admin alone — for the things only they can act on.
+ *
+ * Separate from adminUserIds() on purpose: an approval request is addressed to
+ * the person who can approve it, and sending it to the whole office would put
+ * "waiting for your approval" in front of five people who cannot give it.
+ */
+export async function superAdminUserIds(): Promise<number[]> {
+  const rows = await query<any>(
+    "SELECT id FROM users WHERE role = 'superadmin' AND is_active = TRUE AND is_deleted = FALSE"
   );
   return rows.map((r) => r.id);
 }

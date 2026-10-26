@@ -80,11 +80,13 @@ router.get(
            SELECT SUM(ft.amount) FROM fee_transactions ft
            WHERE ft.student_id = s.id AND ft.is_deleted = FALSE AND (? IS NULL OR ft.month = ?)
          ),0) AS fees_paid,
-         -- hours consumed in selected month (or all-time)
+         -- hours charged in selected month (or all-time). Billable only, so
+         -- the month columns still add up to the balance.
          COALESCE((
            SELECT SUM(a.hours_consumed) FROM lecture_attendees a
            JOIN lecture_sessions l ON l.id = a.lecture_id
            WHERE a.student_id = s.id AND a.is_deleted = FALSE AND l.is_deleted = FALSE
+             AND a.is_billable = TRUE
              AND (? IS NULL OR l.month = ?)
          ),0) AS hours_in_period,
          -- assigned teachers
@@ -136,7 +138,7 @@ router.get(
       ),
       query(
         `SELECT l.id AS lecture_id, l.session_date, l.month, l.time_in, l.time_out,
-                a.hours_consumed AS no_of_hours, l.teacher_id, t.name AS teacher_name,
+                a.hours_consumed AS no_of_hours, a.is_billable, l.teacher_id, t.name AS teacher_name,
                 l.subject_id, sub.name AS subject_name, l.topic, l.subtopic, l.remark,
                 l.venue, l.meeting_link, a.attendance_status
          FROM lecture_attendees a
@@ -185,7 +187,8 @@ router.get(
   wrap(async (_req, res) => {
     const rows = await query(
       `SELECT s.form_no, s.full_name AS student_name, s.status, l.month,
-              SUM(a.hours_consumed) AS hours
+              SUM(CASE WHEN a.is_billable = TRUE THEN a.hours_consumed ELSE 0 END) AS hours,
+              SUM(CASE WHEN a.is_billable = TRUE THEN 0 ELSE a.hours_consumed END) AS free_hours
        FROM lecture_attendees a
        JOIN lecture_sessions l ON l.id = a.lecture_id AND a.is_deleted = FALSE
        JOIN students s ON s.id = a.student_id

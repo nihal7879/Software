@@ -1,0 +1,218 @@
+================================================================================
+STEM VISION - RELEASE NOTES
+Prepared 26 October 2026
+================================================================================
+
+Everything below is built and tested but NOT yet committed or deployed. Both
+databases (the office server and Shastra) already carry every schema change it
+needs, so the code can go up whenever you are ready.
+
+
+================================================================================
+1. BILLABLE AND NOT BILLABLE LECTURES                                      NEW
+================================================================================
+
+A class can now be taught and deliberately not charged - a make-up for one the
+institute cancelled, a free session before an exam, a demo for a student still
+deciding. Until now the only ways to not charge were to not record the class at
+all, which loses the teacher's work and the student's attendance, or to record
+it and then correct the balance by hand.
+
+  - The choice is per STUDENT per class, not per lecture. A group class can be
+    charged to four students and not charged for the fifth who sat in.
+
+  - Billable is the default everywhere. Nobody has to remember the normal case.
+
+  - Set it in three places:
+      * the lecture entry sheet (teacher's own, and the admin's on a teacher's
+        behalf) - below the Meet link, and on the phone above Save
+      * the QR attendance inbox, per scan, BEFORE confirming - so a class is
+        never charged first and corrected afterwards
+      * the Teachers page, afterwards, one click per student, if it was got
+        wrong in the moment
+
+  - The real length of the class is still recorded. A free two-hour class reads
+    as two hours on the statement, marked "Not billable" - not as a zero-hour
+    class that looks like a mistake.
+
+  - What counts billable hours only: the student's balance, the month columns,
+    the hours pivot, the Excel month totals.
+    What still counts every class: attendance, the last-attended date, and the
+    teacher's own taught hours. The teacher did the work whoever paid for it.
+
+  - A not-billable entry is tinted pale amber wherever entries are listed, and
+    in the Excel statement its row is amber with the hours struck through and
+    "Not billable" in the Charged column. The struck-through figure matters:
+    without it somebody adds that column up, gets more than the month totals,
+    and concludes the statement is wrong.
+
+  - The word is "Not billable", never "Free". On a statement "free" reads as a
+    discount the family was given, when all that is meant is that this class is
+    not billed.
+
+  Verified against the real data: 215 students, hours attended equals hours
+  charged (13,773.61 h) - the change moved nobody's balance. 21 lecture tests
+  and 12 QR tests passed; the Excel was generated and read back.
+
+
+================================================================================
+2. FINANCE
+================================================================================
+
+  - FIXED: "Unknown column 'request_note'" when saving a payment. The deployed
+    backend was running code from before the fix.
+
+  - FIXED: "Could not save - please check the fields." That message named no
+    field and appeared even when the fault was the server's, sending the office
+    hunting through a form that was perfectly valid. The screen now shows what
+    the server actually said - the fields it refused by name, or, for a real
+    fault, "The server could not save this. Nothing has been changed - please
+    report this to support."
+
+  - Edit Payment now says which student the payment belongs to, with the amount,
+    the date and who paid, so there is no guessing when the drawer opens.
+
+  - Editing or removing a payment goes to the super admin for approval. The
+    office enters it as they always did and is told it was sent; nothing is
+    written to the statement until it is approved.
+
+
+================================================================================
+3. APPROVALS AND NOTIFICATIONS
+================================================================================
+
+  - An admin sending anything for approval now raises a web push to the SUPER
+    ADMIN ("Waiting for your approval"), and the same notice appears in the
+    sending admin's own bell. A request nobody looks at is worse than no
+    request: the office believes the change is made and the family's statement
+    says otherwise.
+
+  - Approving or rejecting tells the admin who asked. A rejection carries the
+    super admin's own reason, because the queue is their screen alone and that
+    reason had nowhere else to be read.
+
+  - NEW PAGE: Notifications, in the admin sidebar. Tabs for Everything, Finance,
+    New logins and Lectures, with a search. Each row shows the exact wording
+    sent, who it went to, when, and whether it reached a device - "On 2 devices",
+    "In their bell only", "Did not send" or "Push is off". The second of those
+    is said plainly because push is opt-in per device and most people never turn
+    it on; it is not a failure.
+
+  - Web push for five events: a new registration (office and super admin), an
+    approved registration (the student and their parents), an hours statement
+    (the parents), a check-in (the teacher and the parents) and a check-out
+    (the parents).
+
+  - A bell for every role, which clears its own count when opened. It reads the
+    same log the push is written to, so there is no second list and no second
+    decision about who hears what.
+
+  - Notifications are turned on per device, from the bell, and the app asks once
+    after signing in rather than hiding it in Settings.
+
+  - Nothing with a figure in it is ever put in a notification. It is read off a
+    lock screen by whoever is holding the phone.
+
+  - FIXED: using "Confirm 6" in the QR inbox discarded anything typed into those
+    rows. A teacher who marked a class not billable and then used the bulk
+    button would have had it charged after all.
+
+
+================================================================================
+4. FORGOTTEN PASSWORD
+================================================================================
+
+  - A code by email for admin, teacher, parent and student. The system makes the
+    new password; the account must then choose its own on the next sign-in.
+
+  - An account with no email on file is told to contact the institute admin,
+    rather than being left at a dead end.
+
+  - Changing a password signs every other device out.
+
+
+================================================================================
+5. PARENTS AND STUDENT RECORDS
+================================================================================
+
+  - Separate father, mother and guardian email addresses on the student profile,
+    shown in the Parent column of the student master (hidden by default).
+
+  - 75 students' parent emails filled in from existing parent logins and student
+    records.
+
+  - The middle name is optional, and junk middle names ("-", ".", a repeat of
+    the first name) were cleared.
+
+
+================================================================================
+6. SMALLER CHANGES
+================================================================================
+
+  - A top bar on every page, carrying the bell, the theme switch and the account
+    menu. The phone view is unchanged.
+
+  - The STEM Vision logo through the app, and a new favicon (the brain mark).
+
+  - A student stays signed in for 15 days.
+
+  - Check-in opens the camera straight away.
+
+  - A microphone button on the attendance remark field.
+
+
+================================================================================
+7. DATABASE
+================================================================================
+
+Every migration below is applied to BOTH the office database and Shastra. The
+two schemas were compared column by column afterwards: 29 tables, no difference.
+
+  2026-10-01_password_reset.sql          forgotten-password codes
+  2026-10-01_push_notifications.sql      subscriptions and the notification log
+  2026-10-01_notification_read.sql       the bell's read / cleared columns
+  2026-10-08_fee_edit_delete_approval.sql  new kinds in the approvals queue
+  2026-10-22_parent_email.sql            father / mother / guardian emails
+  2026-10-26_billable_lectures.sql       is_billable, and the rebuilt view
+
+On 26 October the office database was also copied up to Shastra: 800 new rows
+(105 lectures, 133 attendee rows, 11 payments, 5 students and the rest), by
+upsert, nothing deleted. Both sides then matched exactly - AED 1,693,810.24
+received and 13,774.57 charged hours on each. A backup was taken first, at
+D:/db-backups/shastra-prod-before-sync-2026-10-26.sql.
+
+NOTE: run that top-up once more on the day Vercel is pointed at Shastra, or
+anything entered in the office in between will be missing.
+
+
+================================================================================
+8. PENDING - NOT BUILT YET
+================================================================================
+
+DELETE OPTIONS
+  - A delete option in the STUDENT MASTER. Soft delete: the record is marked
+    removed and stays in the database, the way everything else here works.
+  - A delete option in FINANCE on the same footing.
+  - Both to go through approval by the admin in a later step, as the fee edit
+    and delete already do today.
+
+DATA TO CLEAN
+  - Form 205, Zakariya Riyas, is still on the system and needs to be deleted.
+  - 80 students have no email address anywhere (19 of them active, 9 with no
+    phone number either) - a list for the office to chase.
+
+BEFORE GOING LIVE
+  - Commit and push. Nothing is committed yet.
+  - Point Vercel at Shastra, after the final top-up sync.
+  - Rotate the production database password and the Vercel token.
+  - Give the admin and super admin accounts an email address - neither has one,
+    so neither can recover its own password.
+
+WAITING ON A DECISION
+  - Should registration also check the father / mother / guardian email
+    addresses? A student registering on their father's address gets through
+    today, and 30 addresses on file already belong to more than one account.
+  - A notification when a teacher saves a lecture entry, so the Lectures tab of
+    the notification log has an event of its own.
+  - A screen where the office can see their own approval requests. Today the
+    decision notice is the only way they learn the outcome.

@@ -20,6 +20,7 @@ import Finance from './pages/admin/Finance';
 import Teachers from './pages/admin/Teachers';
 import Pivots from './pages/admin/Pivots';
 import Approvals from './pages/admin/Approvals';
+import Notifications from './pages/admin/Notifications';
 import FacultyDashboard from './pages/faculty/FacultyDashboard';
 import FacultyStudents from './pages/faculty/FacultyStudents';
 import FacultyStudentDetail from './pages/faculty/FacultyStudentDetail';
@@ -110,6 +111,7 @@ export default function App() {
       <Route path="/admin/approvals" element={<Protected roles={['superadmin']}><Approvals /></Protected>} />
       {/* Scanned check-ins for any teacher, and the printed desk codes. */}
       <Route path="/admin/attendance" element={<Protected roles={['admin']}><AdminAttendance /></Protected>} />
+      <Route path="/admin/notifications" element={<Protected roles={['admin']}><Notifications /></Protected>} />
       <Route path="/admin/settings" element={<Protected roles={['admin']}><Settings /></Protected>} />
 
       {/* Faculty */}

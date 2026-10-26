@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Bell, UserPlus, CheckCircle2, FileSpreadsheet, LogIn, LogOut, Inbox } from 'lucide-react';
+import { Bell, UserPlus, CheckCircle2, FileSpreadsheet, LogIn, LogOut, Inbox, ShieldQuestion, Gavel } from 'lucide-react';
 import { api, dubaiNow } from '../api/client';
 import { useAnchoredMenu } from './anchoredMenu';
 
@@ -20,6 +20,8 @@ import { useAnchoredMenu } from './anchoredMenu';
  */
 
 const ICONS: Record<string, any> = {
+  approval_request: ShieldQuestion,
+  approval_decided: Gavel,
   registration_new: UserPlus,
   registration_approved: CheckCircle2,
   hours_statement: FileSpreadsheet,

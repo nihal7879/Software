@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '../../auth/AuthContext';
-import { api, hrs } from '../../api/client';
+import { api, hrs, chargedHours } from '../../api/client';
 import { Section, Table, Spinner, KpiCard } from '../../components/ui';
 
 const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -25,7 +25,7 @@ export default function StudentFees() {
     const map: Record<string, number> = {};
     (lectures.data || []).forEach((x: any) => {
       const m = x.month || x.session_date?.slice(0, 7);
-      if (m) map[m] = (map[m] || 0) + Number(x.hours_consumed || 0);
+      if (m) map[m] = (map[m] || 0) + chargedHours(x);
     });
     return Object.keys(map).sort().reverse().map((m) => ({ month: m, label: fmtMonth(m), hours: map[m] }));
   }, [lectures.data]);

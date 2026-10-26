@@ -3,6 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { api, rs, hrs, num, fmtDate, todayIso } from '../../api/client';
+import { NotBillableChip, NOT_BILLABLE_ROW, notBillable } from '../../components/BillableToggle';
 import { KpiCard, Section, StatusBadge, Table, HoursValue, Spinner } from '../../components/ui';
 import { toast } from '../../components/Toast';
 import { DateRangePicker } from '../../components/DateRangePicker';
@@ -270,14 +271,16 @@ export default function StudentReport() {
             return visible.length === 0 ? (
             <tr><td className="table-td muted" colSpan={12}>No lectures{lecTeacher ? ' for this teacher' : ''}{lecFrom || lecTo ? ' in these dates' : ' in this range'}.</td></tr>
           ) : visible.map((l: any, i: number) => (
-            <tr key={l.lecture_id || i}>
+            <tr key={l.lecture_id || i} className={notBillable(l.is_billable) ? NOT_BILLABLE_ROW : undefined}>
               <td className="table-td whitespace-nowrap">{fmtDate(l.session_date)}</td>
               <td className="table-td">{l.month}</td>
               <td className="table-td">{l.teacher_name || '—'}</td>
               <td className="table-td">{l.subject_name || '—'}</td>
               <td className="table-td">{l.time_in || '—'}</td>
               <td className="table-td">{l.time_out || '—'}</td>
-              <td className="table-td text-right font-semibold">{hrs(l.no_of_hours)}</td>
+              <td className="table-td text-right font-semibold whitespace-nowrap">
+                <NotBillableChip is_billable={l.is_billable} /> {hrs(l.no_of_hours)}
+              </td>
               <td className="table-td">{l.topic || '—'}</td>
               <td className="table-td">{l.subtopic || '—'}</td>
               <td className="table-td">{l.remark || '—'}</td>

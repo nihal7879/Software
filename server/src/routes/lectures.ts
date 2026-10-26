@@ -37,6 +37,9 @@ const lectureSchema = z.object({
       z.object({
         student_id: z.number().int(),
         hours_consumed: z.number().optional(),
+        // Whether this student is charged for the class. Absent means yes:
+        // the ordinary case must be the one nobody has to remember to send.
+        is_billable: z.boolean().optional(),
         attendance_status: z.enum(['Present', 'Absent', 'Late']).optional(),
         homework: z.string().optional().nullable(),
         notes: z.string().optional().nullable(),
@@ -75,7 +78,7 @@ router.get(
               l.hours_rounded, l.topic, l.subtopic, l.remark, l.venue, l.meeting_link,
               t.name AS teacher_name, sub.name AS subject_name,
               a.student_id, s.form_no, s.full_name AS student_name, a.hours_consumed,
-              a.attendance_status, a.homework, a.notes, a.performance_rating
+              a.is_billable, a.attendance_status, a.homework, a.notes, a.performance_rating
        FROM lecture_sessions l
        JOIN lecture_attendees a ON a.lecture_id = l.id AND a.is_deleted = FALSE
        JOIN students s ON s.id = a.student_id
@@ -118,10 +121,11 @@ export async function insertLecture(conn: any, b: any, teacherId: number | null,
     // same row rather than failing on the key.
     await conn.query(
       `INSERT INTO lecture_attendees
-        (lecture_id,student_id,hours_consumed,attendance_status,homework,notes,performance_rating)
-       VALUES (?,?,?,?,?,?,?)
+        (lecture_id,student_id,hours_consumed,is_billable,attendance_status,homework,notes,performance_rating)
+       VALUES (?,?,?,?,?,?,?,?)
        ON DUPLICATE KEY UPDATE
          hours_consumed = VALUES(hours_consumed),
+         is_billable = VALUES(is_billable),
          attendance_status = VALUES(attendance_status),
          homework = VALUES(homework),
          notes = VALUES(notes),
@@ -129,6 +133,9 @@ export async function insertLecture(conn: any, b: any, teacherId: number | null,
          is_deleted = FALSE`,
       [
         lectureId, a.student_id, a.hours_consumed ?? totalHours,
+        // Only an explicit false makes a class free. Anything else — missing,
+        // null, an older client that knows nothing about this — is charged.
+        a.is_billable === false ? 0 : 1,
         a.attendance_status || 'Present', a.homework || null,
         a.notes || null, a.performance_rating ?? null,
       ]
@@ -260,7 +267,9 @@ router.put(
           merged.venue || null, merged.meeting_link || null, req.params.id,
         ]
       );
-      // Attendees are created carrying the session total, so they follow it here.
+      // Attendees are created carrying the session total, so they follow it
+      // here. is_billable is deliberately left alone: correcting a mistyped
+      // time must not quietly start charging for a class marked free.
       if (Number(before.total_hours) !== totalHours) {
         await conn.query('UPDATE lecture_attendees SET hours_consumed = ? WHERE lecture_id = ? AND is_deleted = FALSE', [totalHours, req.params.id]);
       }
@@ -331,7 +340,7 @@ router.get(
     if (sessions.length === 0) return res.json({ data: [], ...meta });
 
     const attendees = await query<any>(
-      `SELECT a.lecture_id, a.student_id, a.hours_consumed, s.form_no, s.full_name, s.status
+      `SELECT a.lecture_id, a.student_id, a.hours_consumed, a.is_billable, s.form_no, s.full_name, s.status
          FROM lecture_attendees a JOIN students s ON s.id = a.student_id
         WHERE a.lecture_id IN (?) AND a.is_deleted = FALSE
         ORDER BY s.full_name`,
@@ -364,7 +373,9 @@ router.post(
   '/:id/attendees',
   requireRole('admin', 'faculty'),
   wrap(async (req, res) => {
-    const studentId = Number(z.object({ student_id: z.number().int() }).parse(req.body).student_id);
+    const body = z.object({ student_id: z.number().int(), is_billable: z.boolean().optional() }).parse(req.body);
+    const studentId = Number(body.student_id);
+    const billable = body.is_billable === false ? 0 : 1;
     const lecture = await queryOne<any>('SELECT * FROM lecture_sessions WHERE id = ? AND is_deleted = FALSE', [req.params.id]);
     if (!lecture) return res.status(404).json({ error: 'Lecture not found' });
     const denied = await mayChangeAttendees(req, lecture);
@@ -383,13 +394,64 @@ router.post(
     // Someone taken off this lecture before still has their row; putting them
     // back updates it rather than failing on the (lecture, student) key.
     await query(
-      `INSERT INTO lecture_attendees (lecture_id, student_id, hours_consumed, attendance_status)
-       VALUES (?,?,?,'Present')
-       ON DUPLICATE KEY UPDATE hours_consumed = VALUES(hours_consumed), attendance_status = 'Present', is_deleted = FALSE`,
-      [lecture.id, studentId, hours]
+      `INSERT INTO lecture_attendees (lecture_id, student_id, hours_consumed, is_billable, attendance_status)
+       VALUES (?,?,?,?,'Present')
+       ON DUPLICATE KEY UPDATE hours_consumed = VALUES(hours_consumed), is_billable = VALUES(is_billable),
+         attendance_status = 'Present', is_deleted = FALSE`,
+      [lecture.id, studentId, hours, billable]
     );
-    await audit(req.user!.userId, 'ADD_ATTENDEE', 'lecture', lecture.id, null, { student_id: studentId, hours_consumed: hours });
-    res.status(201).json({ ok: true, student_id: studentId, hours_consumed: hours });
+    await audit(req.user!.userId, 'ADD_ATTENDEE', 'lecture', lecture.id, null,
+      { student_id: studentId, hours_consumed: hours, is_billable: !!billable });
+    res.status(201).json({ ok: true, student_id: studentId, hours_consumed: hours, is_billable: !!billable });
+  })
+);
+
+// Charge for this class, or stop charging for it.
+//
+// The choice is made when the lecture is recorded, but it is the kind of thing
+// that is got wrong in the moment and noticed on the statement — "that was the
+// make-up for the one I cancelled". The correction is here rather than in the
+// lecture edit above, because it is about one student on the class and not the
+// class itself.
+//
+// This moves the student's balance by the length of the lecture, so it is
+// written down with both sides of the change, and a teacher may only do it to
+// their own class.
+router.patch(
+  '/:id/attendees/:studentId/billable',
+  requireRole('admin', 'faculty'),
+  wrap(async (req, res) => {
+    const b = z.object({ is_billable: z.boolean() }).parse(req.body ?? {});
+    const lecture = await queryOne<any>(
+      'SELECT id, session_date, teacher_id, total_hours FROM lecture_sessions WHERE id = ? AND is_deleted = FALSE',
+      [req.params.id]
+    );
+    if (!lecture) return res.status(404).json({ error: 'Lecture not found' });
+    const denied = await mayChangeAttendees(req, lecture);
+    if (denied) return res.status(403).json({ error: denied });
+
+    const row = await queryOne<any>(
+      'SELECT * FROM lecture_attendees WHERE lecture_id = ? AND student_id = ? AND is_deleted = FALSE',
+      [lecture.id, req.params.studentId]
+    );
+    if (!row) return res.status(404).json({ error: 'That student is not on this lecture.' });
+
+    const want = b.is_billable ? 1 : 0;
+    if (Number(row.is_billable) === want) {
+      return res.json({ ok: true, is_billable: !!want, hours_moved: 0 });
+    }
+    await query('UPDATE lecture_attendees SET is_billable = ? WHERE id = ?', [want, row.id]);
+    await audit(req.user!.userId, 'SET_BILLABLE', 'lecture', lecture.id,
+      { student_id: row.student_id, is_billable: !!Number(row.is_billable) },
+      { student_id: row.student_id, is_billable: !!want, hours: Number(row.hours_consumed) || 0 });
+
+    // Said in the reply so the screen can tell the office what just moved,
+    // rather than leaving them to work it out from the balance.
+    res.json({
+      ok: true,
+      is_billable: !!want,
+      hours_moved: (want ? -1 : 1) * (Number(row.hours_consumed) || 0),
+    });
   })
 );
 

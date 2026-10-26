@@ -9,6 +9,10 @@ import { Select } from './Select';
 import { TimePicker } from './TimePicker';
 import { CalendarPicker } from './CalendarPicker';
 import { LectureEditModal } from './LectureEditModal';
+import { BillableToggle, NotBillableChip, NOT_BILLABLE_ROW, notBillable } from './BillableToggle';
+
+/** A class with anyone on it not being charged — the chips say which. */
+const hasUnbilled = (c: any) => (c.attendees || []).some((a: any) => notBillable(a.is_billable));
 import { DictateButton } from './DictateButton';
 import { toast } from './Toast';
 
@@ -98,6 +102,10 @@ export function LectureSheet({
   // The log grows a line per class, so it is paged rather than run on forever.
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(15);
+  // Charged unless the teacher says otherwise. It resets to charged after every
+  // save, below: a class nobody is charged for is the exception, and one
+  // entered at four o'clock must not quietly do the same to the next three.
+  const [billable, setBillable] = useState(true);
 
   const me = useQuery({ queryKey: ['teacher-me'], queryFn: () => api.get('/teachers/me').then((r) => r.data), enabled: !forAdmin });
   const roster = useQuery({
@@ -119,7 +127,7 @@ export function LectureSheet({
             id: l.lecture_id,
             students: (l.students || []).map((s: any) => s.full_name),
             // Kept with their ids too, so the Edit dialog can change who is on it.
-            attendees: (l.students || []).map((s: any) => ({ id: s.student_id, name: s.full_name, form_no: s.form_no })),
+            attendees: (l.students || []).map((s: any) => ({ id: s.student_id, name: s.full_name, form_no: s.form_no, is_billable: s.is_billable })),
           })))
       : api.get('/lectures', { params: { limit: 300 } }).then((r) => r.data.data as any[])
     ),
@@ -146,7 +154,7 @@ export function LectureSheet({
     for (const r of lectures.data || []) {
       const at = by.get(r.id) || { ...r, students: [] as string[], attendees: [] as { id: number; name: string; form_no?: string }[] };
       at.students.push(r.student_name);
-      at.attendees.push({ id: r.student_id, name: r.student_name, form_no: r.form_no });
+      at.attendees.push({ id: r.student_id, name: r.student_name, form_no: r.form_no, is_billable: r.is_billable });
       by.set(r.id, at);
     }
     return [...by.values()].sort((a, b) =>
@@ -170,14 +178,18 @@ export function LectureSheet({
       remark: remark || null,
       venue: venue || null,
       meeting_link: link || null,
-      attendees: students.map((id) => ({ student_id: id })),
+      attendees: students.map((id) => ({ student_id: id, is_billable: billable })),
     }),
     onSuccess: (r: any) => {
-      toast(`Lecture saved — ${r.data.total_hours}h for ${students.length} student${students.length === 1 ? '' : 's'}`);
+      toast(
+        `Lecture saved — ${r.data.total_hours}h for ${students.length} student${students.length === 1 ? '' : 's'}`
+        + (billable ? '' : ', not charged')
+      );
       ['ledger', 'ledger-all', 'lectures', 'workload', 'teacher-lectures'].forEach((k) => qc.invalidateQueries({ queryKey: [k] }));
       // The line empties for the next class. Date and times stay, because the
       // next class of the day follows on from the last.
       setStudents([]); setSearch(''); setTopic(''); setRemark(''); setSubtopic(''); setLink('');
+      setBillable(true);
       setError('');
     },
     onError: (e: any) => setError(e?.response?.data?.error || 'Could not save the lecture.'),
@@ -404,6 +416,20 @@ export function LectureSheet({
                 </div>
               </div>
 
+              {/* Beside the Save button, not inside a folded group: whether the
+                  family is charged is not a detail to go looking for. */}
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-sm font-semibold">
+                  Charge for this class
+                  {!billable && (
+                    <span className="block text-xs font-normal text-amber-700 dark:text-amber-400">
+                      Recorded in full, no hours charged
+                    </span>
+                  )}
+                </span>
+                <BillableToggle value={billable} onChange={setBillable} />
+              </div>
+
               {error && <div className="text-sm text-red-500">{error}</div>}
               <button
                 className="btn-primary w-full !py-3 !rounded-xl text-base"
@@ -418,6 +444,12 @@ export function LectureSheet({
             </div>
 
             <div className="hidden lg:flex flex-wrap items-center gap-2 mt-3">
+              <BillableToggle value={billable} onChange={setBillable} />
+              {!billable && (
+                <span className="text-xs text-amber-700 dark:text-amber-400">
+                  Recorded in full, but no hours come off {students.length === 1 ? 'the student' : 'these students'}.
+                </span>
+              )}
               <button
                 className="btn-primary !py-1.5 !px-6 text-sm ml-auto whitespace-nowrap"
                 disabled={save.isPending}
@@ -443,7 +475,8 @@ export function LectureSheet({
           {/* Phones and tablets: one card per class, nothing scrolls sideways. */}
           <ul className="lg:hidden grid grid-cols-1 gap-2.5 sm:grid-cols-2">
             {shown.map((c) => (
-              <li key={c.id} className="rounded-2xl p-3.5" style={{ background: 'var(--color-card-alt)' }}>
+              <li key={c.id} className={`rounded-2xl p-3.5 ${hasUnbilled(c) ? NOT_BILLABLE_ROW : ''}`}
+                style={hasUnbilled(c) ? undefined : { background: 'var(--color-card-alt)' }}>
                 <div className="flex gap-3">
                   <DateTile iso={String(c.session_date).slice(0, 10)} />
                   <div className="min-w-0 flex-1">
@@ -465,6 +498,7 @@ export function LectureSheet({
                           {String(a.name || '?').split(/\s+/).map((w: string) => w[0]).slice(0, 2).join('').toUpperCase()}
                         </span>
                         <span className="truncate">{a.name}</span>
+                        <NotBillableChip is_billable={a.is_billable} />
                       </span>
                     ))}
                   </div>
@@ -484,7 +518,7 @@ export function LectureSheet({
           <div className="hidden lg:block">
           <Table head={['Date', 'Time', 'Subject / Topic', { label: 'Hours', align: 'right' }, 'Students on this lecture', '']}>
             {shown.map((c) => (
-              <tr key={c.id}>
+              <tr key={c.id} className={hasUnbilled(c) ? NOT_BILLABLE_ROW : undefined}>
                 <td className="table-td whitespace-nowrap">{fmtDate(String(c.session_date).slice(0, 10))}</td>
                 <td className="table-td whitespace-nowrap">{clock(c.time_in)} – {clock(c.time_out)}</td>
                 <td className="table-td">
@@ -502,6 +536,7 @@ export function LectureSheet({
                       <span key={a.id} className="inline-flex items-center gap-1 text-xs rounded-md px-1.5 py-0.5" style={{ background: 'var(--color-card-alt)' }}>
                         {a.form_no != null && <span className="font-mono muted">{a.form_no}</span>}
                         {a.name}
+                        <NotBillableChip is_billable={a.is_billable} />
                       </span>
                     ))}
                   </div>

@@ -185,14 +185,16 @@ router.get(
   }))
 );
 
-// Hours pivot — hours consumed per student per month (paginated by student)
+// Hours pivot — hours CHARGED per student per month (paginated by student).
+// Billable only, so a row across the months adds up to what came off that
+// student's balance; a free class is taught but never charged.
 router.get(
   '/hours-pivot',
   requireSuperAdmin,
   wrap((req, res) => pivot(req, res, {
     valueExpr: 'SUM(a.hours_consumed)', valueAlias: 'hours',
     src: 'lecture_attendees a JOIN lecture_sessions l ON l.id = a.lecture_id',
-    where: 'l.is_deleted = FALSE AND a.is_deleted = FALSE', monthCol: 'l.month',
+    where: 'l.is_deleted = FALSE AND a.is_deleted = FALSE AND a.is_billable = TRUE', monthCol: 'l.month',
   }))
 );
 

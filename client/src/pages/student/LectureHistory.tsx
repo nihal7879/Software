@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '../../auth/AuthContext';
-import { api, hrs, fmtDate, dubaiNow} from '../../api/client';
+import { api, hrs, fmtDate, dubaiNow, chargedHours } from '../../api/client';
+import { NotBillableChip, NOT_BILLABLE_ROW, notBillable } from '../../components/BillableToggle';
 import { CalendarDays, ChevronDown } from 'lucide-react';
 import { Section, Table, Spinner, KpiCard } from '../../components/ui';
 
@@ -46,7 +47,7 @@ export default function LectureHistory() {
   // lectures shown in the list: selected day, else whole visible month
   const monthLectures = all.filter((l) => l.session_date?.startsWith(monthKey));
   const shown = selectedDay ? (byDate[selectedDay] || []) : monthLectures;
-  const monthHours = monthLectures.reduce((a, l) => a + Number(l.hours_consumed || 0), 0);
+  const monthHours = monthLectures.reduce((a, l) => a + chargedHours(l), 0);
 
   const triggerLabel = selectedDay || `${MONTHS[viewM]} ${viewY}`;
 
@@ -126,7 +127,7 @@ export default function LectureHistory() {
         ) : (
           <Table head={['Date', 'Subject', 'Topic', 'Subtopic', 'Remark', 'Time In', 'Time Out', { label: 'Duration', align: 'right' }, 'Present', 'Venue', 'Link']}>
             {shown.map((r: any) => (
-              <tr key={r.id}>
+              <tr key={r.id} className={notBillable(r.is_billable) ? NOT_BILLABLE_ROW : undefined}>
                 <td className="table-td whitespace-nowrap">{fmtDate(r.session_date)}</td>
                 <td className="table-td">{r.subject_name || '—'}</td>
                 <td className="table-td">{r.topic || '—'}</td>
@@ -134,7 +135,9 @@ export default function LectureHistory() {
                 <td className="table-td">{r.remark || '—'}</td>
                 <td className="table-td whitespace-nowrap">{r.time_in || '—'}</td>
                 <td className="table-td whitespace-nowrap">{r.time_out || '—'}</td>
-                <td className="table-td text-right tabular-nums">{hrs(r.hours_consumed)}</td>
+                <td className="table-td text-right tabular-nums whitespace-nowrap">
+                  <NotBillableChip is_billable={r.is_billable} /> {hrs(r.hours_consumed)}
+                </td>
                 <td className="table-td">
                   <span className={`text-xs px-2 py-0.5 rounded-full ${
                     r.attendance_status === 'Absent' ? 'bg-red-500/15 text-red-600'

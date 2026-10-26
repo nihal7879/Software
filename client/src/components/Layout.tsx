@@ -2,7 +2,7 @@ import { ReactNode, useState } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, Users, Clock, Wallet, GraduationCap, BarChart3,
-  BookOpen, User, LogOut, Moon, Sun, ChevronLeft, Menu, Settings, Lock, QrCode, KeyRound, Plus,
+  BookOpen, User, LogOut, Moon, Sun, ChevronLeft, Menu, Settings, Lock, QrCode, KeyRound, Plus, BellRing,
 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '../auth/AuthContext';
@@ -31,6 +31,7 @@ const NAV: Record<string, Item[]> = {
     { to: '/admin/finance', label: 'Finance', icon: Wallet },
     { to: '/admin/teachers', label: 'Teachers', icon: GraduationCap },
     { to: '/admin/attendance', label: 'Attendance', icon: QrCode },
+    { to: '/admin/notifications', label: 'Notifications', icon: BellRing, short: 'Alerts' },
     { to: '/admin/settings', label: 'Settings', icon: Settings },
   ],
   superadmin: [
@@ -42,6 +43,7 @@ const NAV: Record<string, Item[]> = {
     { to: '/admin/pivots', label: 'Pivots', icon: BarChart3 },
     { to: '/admin/attendance', label: 'Attendance', icon: QrCode },
     { to: '/admin/approvals', label: 'Approvals', icon: KeyRound },
+    { to: '/admin/notifications', label: 'Notifications', icon: BellRing, short: 'Alerts' },
     { to: '/admin/settings', label: 'Settings', icon: Settings },
   ],
   faculty: [

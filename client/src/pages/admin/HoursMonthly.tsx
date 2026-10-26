@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Pencil, Trash2 } from 'lucide-react';
-import { api, hrs, num, studentOption } from '../../api/client';
+import { api, hrs, num, studentOption, chargedHours } from '../../api/client';
 import { useAuth } from '../../auth/AuthContext';
 import { Section, Table, Spinner, KpiCard, HoursValue, StatusBadge, Pagination, type Sort } from '../../components/ui';
 import { Select } from '../../components/Select';
@@ -11,6 +11,7 @@ import { AdjustHoursModal, type AdjustmentRow } from '../../components/AdjustHou
 import { ConfirmModal } from '../../components/ConfirmModal';
 import { toast } from '../../components/Toast';
 import { downloadHoursStatement } from '../../lib/hoursStatementExcel';
+import { NotBillableChip, NOT_BILLABLE_ROW, notBillable } from '../../components/BillableToggle';
 import { EmailStatementDialog } from '../../components/EmailStatementDialog';
 import { FollowUpCell, FollowUpNotesDialog } from '../../components/FollowUpNotes';
 
@@ -124,6 +125,9 @@ export default function HoursMonthly() {
       fees?: number; credited?: number; discount?: number; adjusted?: number; totalCredited?: number; used?: number;
       // Carried on adjustment rows only — they are the ones that can be corrected.
       adjustment?: any;
+      // On lecture rows: 0 when it was taught but not charged, so the line can
+      // show its real length while `used` stays at nil.
+      is_billable?: number | boolean | null;
     };
     const events: Ev[] = [];
 
@@ -159,7 +163,8 @@ export default function HoursMonthly() {
         date: String(l.session_date).slice(0, 10),
         teacher: l.teacher_name, subject: l.subject_name,
         time_in: l.time_in, time_out: l.time_out,
-        used: Number(l.hours_consumed || 0),
+        used: chargedHours(l),
+        is_billable: l.is_billable,
       });
     }
 
@@ -429,7 +434,9 @@ export default function HoursMonthly() {
             ) : (
               <Table head={['Date', 'Month', 'Detail', 'In', 'Out', { label: 'Fees (AED)', align: 'right' }, { label: 'Hours Credited', align: 'right' }, { label: 'Discount', align: 'right' }, { label: 'Adjusted', align: 'right' }, { label: 'Total Credited', align: 'right' }, { label: 'Used', align: 'right' }, { label: 'Hours Remaining', align: 'right' }]}>
                 {pagedRows.map((r: any, i: number) => (
-                  <tr key={i} style={r.kind !== 'lecture' ? { background: 'var(--color-card-alt)' } : undefined}>
+                  <tr key={i}
+                    className={r.kind === 'lecture' && notBillable(r.is_billable) ? NOT_BILLABLE_ROW : undefined}
+                    style={r.kind !== 'lecture' ? { background: 'var(--color-card-alt)' } : undefined}>
                     <td className="table-td whitespace-nowrap">{r.date || '—'}</td>
                     <td className="table-td whitespace-nowrap muted">{r.month}</td>
                     {/* An adjustment carries a written reason, which can run to a
@@ -482,7 +489,14 @@ export default function HoursMonthly() {
                     )}
                     <td className="table-td text-right tabular-nums">{r.kind === 'credit' || r.kind === 'adjustment' ? num(r.adjusted) : '—'}</td>
                     <td className="table-td text-right tabular-nums font-medium">{r.kind === 'credit' || r.kind === 'adjustment' ? num(r.totalCredited) : '—'}</td>
-                    <td className="table-td text-right tabular-nums text-red-500">{r.kind === 'lecture' ? num(r.used) : '—'}</td>
+                    {/* A free class took nothing off the balance, so the Used
+                        column is nil and the chip says why — showing its length
+                        here would make the column stop adding up. */}
+                    <td className="table-td text-right tabular-nums text-red-500 whitespace-nowrap">
+                      {r.kind !== 'lecture' ? '—'
+                        : r.is_billable === 0 || r.is_billable === false ? <NotBillableChip is_billable={0} />
+                        : num(r.used)}
+                    </td>
                     <td className="table-td text-right tabular-nums font-semibold"><HoursValue value={r.remaining} /></td>
                   </tr>
                 ))}

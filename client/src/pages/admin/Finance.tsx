@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
-import { api, rs, num, studentOption, parentOf } from '../../api/client';
+import { api, rs, num, fmtDate, apiError, studentOption, parentOf } from '../../api/client';
 import { useAuth } from '../../auth/AuthContext';
 import { Section, Table, Spinner, Pagination } from '../../components/ui';
 import { CalendarPicker, CalendarRangePicker } from '../../components/CalendarPicker';
@@ -80,7 +80,20 @@ export default function Finance() {
     }
   };
 
-  const openEdit = (t: any) => { setEditing(t); reset({ ...t, course_package_hours: t.course_package_hours ?? '', discount_hours: t.discount_hours ?? '' }); setDrawer(true); };
+  const openEdit = (t: any) => {
+    setEditing(t);
+    // The student picker only holds the 50 students the current search returned.
+    // A payment whose student was not among them had a student_id with no
+    // matching option, so the box fell back to "Search student…" and looked as
+    // though nobody were chosen. Seeding the list with this payment's own
+    // student means the field always shows who it belongs to.
+    setDrawerExtra(t.student_id
+      ? [{ id: t.student_id, full_name: t.student_name, form_no: t.form_no }]
+      : []);
+    setDrawerChildren([]);
+    reset({ ...t, course_package_hours: t.course_package_hours ?? '', discount_hours: t.discount_hours ?? '' });
+    setDrawer(true);
+  };
   const closeDrawer = () => { setDrawer(false); setEditing(null); reset(); save.reset(); setDrawerChildren([]); setDrawerExtra([]); };
 
   const save = useMutation({
@@ -102,7 +115,7 @@ export default function Finance() {
       else toast(editing ? 'Payment updated' : 'Payment recorded');
       closeDrawer();
     },
-    onError: (e: any) => toast(e?.response?.data?.error || 'Could not save payment', 'error'),
+    onError: (e: any) => toast(apiError(e, 'Could not save this payment.').message, 'error'),
   });
 
   const del = useMutation({
@@ -115,7 +128,7 @@ export default function Finance() {
       if (r?.status === 202) toast(r.data?.message || 'Sent to the super admin for approval', 'info');
       else toast('Payment deleted');
     },
-    onError: (e: any) => toast(e?.response?.data?.error || 'Could not remove the payment', 'error'),
+    onError: (e: any) => toast(apiError(e, 'Could not remove this payment.').message, 'error'),
   });
 
   const onDelete = (t: any) => setConfirm({
@@ -358,7 +371,18 @@ export default function Finance() {
       {drawer && (
         <Overlay onClose={closeDrawer}>
           <div className="w-full max-w-md h-full p-6 overflow-y-auto" style={{ background: 'var(--color-card)' }} onClick={(e) => e.stopPropagation()}>
-            <h2 className="text-lg font-bold mb-4">{editing ? 'Edit Payment' : 'Record Payment'}</h2>
+            <h2 className="text-lg font-bold mb-1">{editing ? 'Edit Payment' : 'Record Payment'}</h2>
+            {editing ? (
+              <p className="muted text-sm mb-4">
+                {rs(editing.amount)} on {fmtDate(editing.payment_date)} for{' '}
+                <span className="font-semibold" style={{ color: 'var(--color-text)' }}>
+                  {editing.form_no ? `${editing.form_no} — ` : ''}{editing.student_name || 'this student'}
+                </span>
+                {editing.parent_name ? <>, paid by <span className="font-semibold" style={{ color: 'var(--color-text)' }}>{editing.parent_name}</span></> : null}
+              </p>
+            ) : (
+              <div className="mb-4" />
+            )}
             <form onSubmit={handleSubmit((b) => save.mutate(b))} className="space-y-3">
               <div>
                 <label className="text-xs font-medium muted block mb-1">Parent / Guardian</label>
@@ -476,7 +500,19 @@ export default function Finance() {
                   </p>
                 </div>
               )}
-              {save.isError && <div className="text-sm text-red-500">Could not save — please check the fields.</div>}
+              {/* What the server actually said. "Could not save — please check
+                  the fields" named no field and was shown even when the fault
+                  was a server one, sending people hunting through a form that
+                  was perfectly valid. */}
+              {save.isError && (() => {
+                const { message, detail } = apiError(save.error, 'Could not save this payment.');
+                return (
+                  <div className="text-sm text-red-500">
+                    {message}
+                    {detail && <div className="text-xs muted mt-0.5 break-all">Technical detail: {detail}</div>}
+                  </div>
+                );
+              })()}
               <div className="flex gap-2 pt-2">
                 <button className="btn-primary flex-1" disabled={save.isPending}>{save.isPending ? 'Saving…' : editing ? 'Update' : 'Save'}</button>
                 <button type="button" className="btn-ghost" onClick={closeDrawer}>Cancel</button>

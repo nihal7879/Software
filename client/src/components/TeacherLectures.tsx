@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { X } from 'lucide-react';
+import { Gift, X } from 'lucide-react';
 import { api, hrs, fmtDate } from '../api/client';
+import { NOT_BILLABLE_ROW, notBillable } from './BillableToggle';
 import { Table, Spinner, Pagination } from './ui';
 import { CalendarRangePicker } from './CalendarPicker';
 import { ConfirmModal } from './ConfirmModal';
@@ -59,6 +60,29 @@ export function TeacherLectures({ teacherId, teacherName }: { teacherId: number;
     },
   });
 
+  // Charge for one student's place on a lecture, or stop charging for it.
+  //
+  // The teacher chooses when they record the class, but this is the thing that
+  // gets noticed later — "that was the make-up for the one I cancelled". Here
+  // it is one click per student, and the toast says which way the hours went so
+  // nobody has to go and check the balance to see what happened.
+  const setBillable = useMutation({
+    mutationFn: (v: { lectureId: number; studentId: number; is_billable: boolean }) =>
+      api.patch(`/lectures/${v.lectureId}/attendees/${v.studentId}/billable`, { is_billable: v.is_billable })
+        .then((r) => r.data),
+    onSuccess: (r: any, v) => {
+      const who = rows.flatMap((l: any) => l.students || [])
+        .find((s: any) => s.student_id === v.studentId)?.full_name || 'The student';
+      toast(
+        v.is_billable
+          ? `${who} is charged for this lecture — ${hrs(Math.abs(r.hours_moved))} taken`
+          : `${who} is not charged for this lecture — ${hrs(Math.abs(r.hours_moved))} given back`
+      );
+      refresh();
+    },
+    onError: (e: any) => toast(e?.response?.data?.error || 'Could not change that', 'error'),
+  });
+
   const remove = useMutation({
     mutationFn: (v: { lectureId: number; studentId: number }) =>
       api.delete(`/lectures/${v.lectureId}/attendees/${v.studentId}`).then((r) => r.data),
@@ -110,7 +134,8 @@ export function TeacherLectures({ teacherId, teacherName }: { teacherId: number;
         <>
           <Table head={['Date', 'Time', 'Subject / Topic', { label: 'Hours', align: 'right' }, 'Students on this lecture', '']}>
             {rows.map((l) => (
-              <tr key={l.id}>
+              <tr key={l.id}
+                className={(l.students || []).some((x: any) => notBillable(x.is_billable)) ? NOT_BILLABLE_ROW : undefined}>
                 <td className="table-td whitespace-nowrap align-top">{fmtDate(String(l.session_date).slice(0, 10))}</td>
                 <td className="table-td whitespace-nowrap align-top tabular-nums text-sm">
                   {l.time_in ? `${clock(l.time_in)} – ${clock(l.time_out)}` : '—'}
@@ -133,6 +158,29 @@ export function TeacherLectures({ teacherId, teacherName }: { teacherId: number;
                         <Link to={`/admin/student/${s.student_id}`} className="hover:underline" title="Open student report">
                           <span className="font-mono muted">{s.form_no}</span> {s.full_name}
                         </Link>
+                        {/* One click, both ways: a class charged by mistake, or
+                            a class that should not have been charged. */}
+                        <button
+                          type="button"
+                          className={`grid place-items-center w-5 h-5 rounded-full transition ${
+                            Number(s.is_billable) === 0
+                              ? 'text-amber-600 bg-amber-500/15 hover:bg-amber-500/25'
+                              : 'muted hover:bg-[var(--color-card)]'
+                          }`}
+                          title={Number(s.is_billable) === 0
+                            ? `Not billable — click to charge ${s.full_name} ${hrs(s.hours_consumed)} for this lecture`
+                            : `Charged ${hrs(s.hours_consumed)} — click to stop charging ${s.full_name} for this lecture`}
+                          aria-label={`Charge ${s.full_name} for this lecture`}
+                          aria-pressed={Number(s.is_billable) === 0}
+                          disabled={setBillable.isPending}
+                          onClick={() => setBillable.mutate({
+                            lectureId: l.lecture_id ?? l.id,
+                            studentId: s.student_id,
+                            is_billable: Number(s.is_billable) === 0,
+                          })}
+                        >
+                          <Gift size={12} strokeWidth={2.5} />
+                        </button>
                         {l.students.length > 1 ? (
                           <button
                             type="button"

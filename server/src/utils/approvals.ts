@@ -1,5 +1,6 @@
 import { pool, query, queryOne } from '../db';
 import { audit } from './audit';
+import { notify, superAdminUserIds } from './push';
 import { deriveMonth } from './hours';
 
 /**
@@ -37,6 +38,74 @@ export function needsApproval(role?: string) {
   return role !== 'superadmin';
 }
 
+/** Who asked — their own name where we have one, their login otherwise. */
+async function askerName(userId: number): Promise<string> {
+  const r = await queryOne<any>(
+    `SELECT COALESCE(NULLIF(u.display_name, ''), t.name, u.email) AS name
+       FROM users u LEFT JOIN teachers t ON t.user_id = u.id
+      WHERE u.id = ?`,
+    [userId]
+  );
+  return r?.name || 'The office';
+}
+
+/**
+ * Telling people a request is waiting.
+ *
+ * A request that nobody looks at is worse than no request at all: the office
+ * believes the change is made, the family's statement says otherwise, and the
+ * only sign is a number on a menu the super admin has to be looking at. So the
+ * super admin is told, and the admin who asked gets the same notice in their
+ * own bell — their one record that it was sent, since the queue itself is the
+ * super admin's alone.
+ *
+ * Deliberately without the amount or the student's name: utils/push.ts explains
+ * why (a notification is read off a lock screen). The figures are in the queue,
+ * behind the sign-in.
+ */
+async function announceRequest(kind: ApprovalKind, userId: number) {
+  const label = KIND_LABEL[kind];
+  const who = await askerName(userId);
+
+  await notify(await superAdminUserIds(), {
+    kind: 'approval_request',
+    title: 'Waiting for your approval',
+    body: `${who} has sent a request: ${label}.`,
+    url: '/admin/approvals',
+  });
+
+  await notify([userId], {
+    kind: 'approval_request',
+    title: 'Sent for approval',
+    body: `You sent ${label}. It takes effect once the super admin approves it.`,
+    url: '/admin/notifications',
+  });
+}
+
+/**
+ * Telling the office what was decided.
+ *
+ * The queue is the super admin's screen, so without this the office never
+ * learns the answer — they would have to go and look at the statement to guess.
+ * A rejection carries the super admin's own words, because that reason is the
+ * whole message and there is nowhere else the office can read it.
+ */
+async function announceDecision(row: any, approved: boolean, note?: string | null) {
+  const label = KIND_LABEL[row.kind as ApprovalKind] || 'your request';
+  const why = String(note || '').trim();
+  await notify([row.requested_by], {
+    kind: 'approval_decided',
+    title: approved ? 'Approved' : 'Not approved',
+    body: approved
+      ? `The super admin approved your request: ${label}.`
+      : why
+        ? `Your request was not approved: ${label} — ${why}`
+        : `Your request was not approved: ${label}. Please ask the super admin why.`,
+    url: '/admin/notifications',
+    studentId: row.student_id ?? null,
+  });
+}
+
 /**
  * Park a change for the super admin. Nothing else is written.
  *
@@ -62,6 +131,7 @@ export async function requestApproval(opts: {
   );
   await audit(opts.userId, 'REQUEST_APPROVAL', 'approval', r.insertId, null,
     { kind: opts.kind, student_id: opts.studentId, summary: opts.summary, note: opts.note });
+  await announceRequest(opts.kind, opts.userId);
   return r.insertId as number;
 }
 
@@ -271,6 +341,8 @@ export async function approve(id: number, userId: number) {
     // approved it — and the request it came from, so the trail joins up.
     await audit(userId, 'APPROVE', result.type, result.id, null,
       { approval_id: row.id, kind: row.kind, requested_by: row.requested_by, payload: p });
+    // After the commit: the change is real whether or not the notice goes out.
+    await announceDecision(row, true);
     return { ok: true as const, result };
   } catch (e: any) {
     await conn.rollback();
@@ -295,5 +367,6 @@ export async function reject(id: number, userId: number, note?: string | null) {
     [userId, note || null, row.id]
   );
   await audit(userId, 'REJECT', 'approval', row.id, row, { note: note || null });
+  await announceDecision(row, false, note);
   return { ok: true as const };
 }

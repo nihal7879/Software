@@ -196,7 +196,7 @@ async function inboxTeacherId(req: any): Promise<number | null> {
 }
 
 const INBOX_COLUMNS = `
-  c.id, c.session_date, c.in_at, c.out_at, c.hours, c.status,
+  c.id, c.session_date, c.in_at, c.out_at, c.hours, c.is_billable, c.status,
   c.subject_id, c.topic, c.subtopic, c.remark, c.venue, c.meeting_link,
   c.student_id, s.full_name AS student_name, s.form_no,
   c.teacher_id, t.name AS teacher_name, sub.name AS subject_name,
@@ -309,6 +309,10 @@ const fillSchema = z.object({
   // 'HH:MM' — for the student who forgot to scan out.
   in_time: z.string().regex(/^\d{2}:\d{2}$/).optional(),
   out_time: z.string().regex(/^\d{2}:\d{2}$/).optional(),
+  // Whether confirming this one charges the student. Set here, while the row
+  // is still waiting, so a free class never has to be charged first and
+  // corrected after — and it is carried onto the lecture on confirm.
+  is_billable: z.boolean().optional(),
 });
 
 /** May this person touch this row? A teacher only their own. */
@@ -342,6 +346,7 @@ async function applyFields(id: number, b: z.infer<typeof fillSchema>, sessionDat
   for (const k of ['subject_id', 'topic', 'subtopic', 'remark', 'venue', 'meeting_link'] as const) {
     if (b[k] !== undefined) { cols.push(`${k} = ?`); params.push(b[k] === '' ? null : b[k]); }
   }
+  if (b.is_billable !== undefined) { cols.push('is_billable = ?'); params.push(b.is_billable ? 1 : 0); }
   if (b.in_time) { cols.push('in_at = ?'); params.push(`${sessionDate} ${b.in_time}:00`); }
   if (b.out_time) { cols.push('out_at = ?'); params.push(`${sessionDate} ${b.out_time}:00`); }
   if (b.in_time || b.out_time) {
@@ -413,7 +418,12 @@ async function confirmOne(req: any, id: number): Promise<{ ok: boolean; reason?:
         topic: row.topic, subtopic: row.subtopic, remark: row.remark,
         venue: row.venue, meeting_link: row.meeting_link,
         // Their own in-to-out time, not a shared class length.
-        attendees: [{ student_id: row.student_id, hours_consumed: hours }],
+        // Charged unless the teacher marked this scan free in the inbox.
+        attendees: [{
+          student_id: row.student_id,
+          hours_consumed: hours,
+          is_billable: Number(row.is_billable) !== 0,
+        }],
       },
       row.teacher_id,
       req.user.userId
@@ -423,7 +433,8 @@ async function confirmOne(req: any, id: number): Promise<{ ok: boolean; reason?:
       [made.id, req.user.userId, row.id]
     );
     await conn.commit();
-    await audit(req.user.userId, 'CONFIRM_CHECKIN', 'lecture', made.id, row, { checkin_id: row.id, hours });
+    await audit(req.user.userId, 'CONFIRM_CHECKIN', 'lecture', made.id, row,
+      { checkin_id: row.id, hours, is_billable: Number(row.is_billable) !== 0 });
     return { ok: true };
   } catch (e) {
     await conn.rollback();

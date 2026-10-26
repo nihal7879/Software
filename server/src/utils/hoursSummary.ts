@@ -17,14 +17,23 @@ export const CREDITED_EXPR =
 
 // `l.is_deleted = FALSE` throughout: a deleted lecture must stop consuming the
 // student's hours, or deleting one changes nothing anybody can see.
+//
+// `a.is_billable = TRUE`: a lecture can be taught and deliberately not charged
+// — a make-up for a class the institute cancelled, a free session before an
+// exam. The row keeps its real length, because the student was there for it and
+// the teacher taught it; it simply does not come off the balance. This is the
+// ONLY place that decides that, and every figure a family sees reads it.
 export const CONSUMED_EXPR =
   `COALESCE((SELECT SUM(a.hours_consumed) FROM lecture_attendees a ` +
   `JOIN lecture_sessions l ON l.id = a.lecture_id ` +
-  `WHERE a.student_id = s.id AND l.is_deleted = FALSE AND a.is_deleted = FALSE),0)`;
+  `WHERE a.student_id = s.id AND l.is_deleted = FALSE AND a.is_deleted = FALSE ` +
+  `AND a.is_billable = TRUE),0)`;
 
 export const PENDING_EXPR =
   `COALESCE((SELECT pending_fees FROM ledger_adjustments WHERE student_id = s.id),0)`;
 
+// Not filtered on is_billable, unlike the sum above: a free class is still a
+// class they attended, and "last attended" is about attendance, not money.
 export const LAST_LECTURE_EXPR =
   `(SELECT MAX(l.session_date) FROM lecture_attendees a ` +
   `JOIN lecture_sessions l ON l.id = a.lecture_id ` +

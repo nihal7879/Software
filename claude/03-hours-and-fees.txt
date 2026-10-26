@@ -26,6 +26,7 @@ else - if a figure is needed somewhere new, import these expressions.
 
   consumed = SUM(hours_consumed) from lecture_attendees
              where the attendee row AND its lecture are both not deleted
+             AND the attendee row is_billable
 
   hours_left = credited - consumed          (may be negative - never clamp it)
 
@@ -38,6 +39,46 @@ Two details that look like bugs but are not:
     their package, and the office needs to see it.
   - The lecture's is_deleted is checked as well as the attendee's. Deleting a
     lecture must give its hours back, or deleting changes nothing visible.
+
+
+BILLABLE AND NOT BILLABLE                                   added 2026-10-26
+-------------------------
+lecture_attendees.is_billable, default TRUE. A class can be taught and
+deliberately not charged: a make-up for one the institute cancelled, a free
+session before an exam, a demo for somebody still deciding.
+
+The flag is on the ATTENDEE row, not the lecture, because a group class can be
+charged to four students and free for the fifth who was sitting in.
+
+hours_consumed still holds the REAL length of the class. The hours are not
+zeroed - the student was there and the teacher taught it. Only the balance
+ignores them. So:
+
+  the balance, the month columns, the hours pivot   billable rows only
+  the statement line, attendance, last attended     every row, tinted amber
+                                                    and marked "Not billable"
+  the teacher's taught hours                        every row, unfiltered
+                                                    (they did the work)
+
+The word is "Not billable", never "Free" - on a statement "free" reads as a
+discount the family was given, when all that is meant is that this class is not
+billed. One pale amber (NOT_BILLABLE_ROW in components/BillableToggle.tsx, and
+FREE_BG in lib/hoursStatementExcel.ts) marks it on every screen and in the
+Excel, so it is recognised without being read.
+
+Where a screen adds up a list of lectures itself, it must use chargedHours()
+from api/client.ts and never Number(l.hours_consumed) - otherwise the months
+stop adding up to the balance. The server side is already decided in
+CONSUMED_EXPR and nowhere else.
+
+Set when the lecture is recorded (the sheet, and the QR inbox before confirming
+- lecture_checkins.is_billable carries the choice onto the lecture). Corrected
+afterwards, per student, with
+  PATCH /lectures/:id/attendees/:studentId/billable
+which moves the balance by the length of that lecture and is audited as
+SET_BILLABLE with both sides. It is NOT behind the approval queue, for the same
+reason a lecture entry is not: recording the class is the teacher's job, and
+they already decide its length.
 
 
 WHY IT IS WRITTEN AS SUBQUERIES
