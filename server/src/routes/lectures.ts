@@ -285,14 +285,22 @@ router.put(
   })
 );
 
-// DELETE a lecture (admin) — soft delete. Every hours query filters on
-// is_deleted, so the attendees' consumed hours come back to the students.
+// DELETE a lecture — soft delete. Every hours query filters on is_deleted, so
+// the attendees' consumed hours come back to the students.
+//
+// A teacher may delete their own, and only their own: the same rule that
+// already lets them correct the time, the topic and who was in the room. They
+// are the one who knows a class was logged twice or never happened, and until
+// now the only way to undo it was to ask the office — while the student's
+// balance stayed wrong in the meantime.
 router.delete(
   '/:id',
-  requireRole('admin'),
+  requireRole('admin', 'faculty'),
   wrap(async (req, res) => {
     const before = await queryOne<any>('SELECT * FROM lecture_sessions WHERE id = ? AND is_deleted = FALSE', [req.params.id]);
     if (!before) return res.status(404).json({ error: 'Lecture not found' });
+    const denied = await mayChangeAttendees(req, before);
+    if (denied) return res.status(403).json({ error: 'You can only delete your own lectures.' });
     await query('UPDATE lecture_sessions SET is_deleted = TRUE WHERE id = ?', [req.params.id]);
     await audit(req.user!.userId, 'DELETE', 'lecture', req.params.id, before, null);
     res.json({ ok: true });

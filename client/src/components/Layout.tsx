@@ -143,7 +143,7 @@ export function Layout({ children }: { children: ReactNode }) {
           </button>
         ) : (
           <button onClick={goHome} className="flex-1 min-w-0 text-left" title="Go to dashboard">
-            <Logo height={30} />
+            <Logo height={26} />
           </button>
         )}
         {!mini && (
@@ -258,7 +258,7 @@ export function Layout({ children }: { children: ReactNode }) {
               )}
               <div className="min-w-0 flex-1">
                 {pathname === home ? (
-                  <Logo height={22} />
+                  <Logo height={19} />
                 ) : (
                   <div className="font-display font-bold text-[1.05rem] leading-tight truncate">
                     {current?.label || 'STEM Vision'}
@@ -279,7 +279,7 @@ export function Layout({ children }: { children: ReactNode }) {
           /* Mobile top bar */
           <header className="md:hidden flex items-center justify-between p-4 border-b sticky top-0 z-30" style={{ background: 'var(--color-card)', borderColor: 'var(--color-border)' }}>
             <button onClick={() => setOpen(true)} aria-label="Open menu"><Menu /></button>
-            <Logo height={26} />
+            <Logo height={22} />
             <span className="flex items-center gap-1">
               <NotificationBell />
               <button onClick={toggle}>{dark ? <Sun size={20} /> : <Moon size={20} />}</button>

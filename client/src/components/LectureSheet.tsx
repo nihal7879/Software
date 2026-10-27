@@ -503,12 +503,13 @@ export function LectureSheet({
                     ))}
                   </div>
                   <div className="flex gap-1.5 shrink-0">
-                    {forAdmin && (
-                      <button className="grid place-items-center w-9 h-9 rounded-lg border border-red-500/30 text-red-600 dark:text-red-400"
-                        onClick={() => setDeleting(c)} aria-label="Delete lecture">
-                        <Trash2 size={15} />
-                      </button>
-                    )}
+                    {/* A teacher sees only their own lectures in this list,
+                        and the server checks that again, so there is nobody
+                        here whose class this is not. */}
+                    <button className="grid place-items-center w-9 h-9 rounded-lg border border-red-500/30 text-red-600 dark:text-red-400"
+                      onClick={() => setDeleting(c)} aria-label="Delete lecture">
+                      <Trash2 size={15} />
+                    </button>
                     <button className="btn-ghost !h-9 !py-0 !px-3 text-xs" onClick={() => setEditing(c)}><Pencil size={13} /> Edit</button>
                   </div>
                 </div>
@@ -544,14 +545,12 @@ export function LectureSheet({
                 <td className="table-td">
                   <div className="flex items-center gap-1.5 justify-end">
                     <button className="btn-ghost !py-1 !px-2.5 text-xs" onClick={() => setEditing(c)}>Edit</button>
-                    {forAdmin && (
-                      <button
-                        className="!py-1 !px-2.5 text-xs rounded-lg border border-red-500/30 text-red-600 hover:bg-red-500/10 transition-colors"
-                        onClick={() => setDeleting(c)}
-                      >
-                        Delete
-                      </button>
-                    )}
+                    <button
+                      className="!py-1 !px-2.5 text-xs rounded-lg border border-red-500/30 text-red-600 hover:bg-red-500/10 transition-colors"
+                      onClick={() => setDeleting(c)}
+                    >
+                      Delete
+                    </button>
                   </div>
                 </td>
               </tr>

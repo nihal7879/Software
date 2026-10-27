@@ -1,7 +1,8 @@
 import { useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
-import { api, rs, num, fmtDate, apiError, studentOption, parentOf } from '../../api/client';
+import { api, rs, num, fmtDate, apiError, studentOption } from '../../api/client';
+import { PayerField } from '../../components/PayerField';
 import { useAuth } from '../../auth/AuthContext';
 import { Section, Table, Spinner, Pagination } from '../../components/ui';
 import { CalendarPicker, CalendarRangePicker } from '../../components/CalendarPicker';
@@ -137,13 +138,22 @@ export default function Finance() {
       ? `The ${rs(t.amount)} payment from ${t.student_name} on ${t.payment_date}. The super admin has to agree before it leaves the statement — the hours it paid for go with it.`
       : `Delete the ${rs(t.amount)} payment from ${t.student_name} on ${t.payment_date}? The hours it paid for go with it.`,
     confirmLabel: mustExplain ? 'Send for approval' : 'Delete',
+    // Asked either way. The office must answer, because the super admin reads
+    // it before deciding; the super admin need not, because nobody is waiting
+    // on them — but what they write is kept on the audit trail, and in a year
+    // it is the only thing that says why the money left the statement.
     note: mustExplain
       ? {
           label: 'Why is this being removed?',
           placeholder: 'e.g. entered twice — the same transfer is already on 12 June',
           help: 'Only the super admin sees this. It is not shown to the family.',
         }
-      : undefined,
+      : {
+          label: 'Why is this being removed?',
+          placeholder: 'e.g. entered twice — the same transfer is already on 12 June',
+          help: 'Kept on the record with the deletion. Not shown to the family.',
+          min: 0,
+        },
     onConfirm: (note?: string) => del.mutate({ id: t.id, note }),
   });
 
@@ -347,13 +357,36 @@ export default function Finance() {
                     ) : <span className="muted">—</span>}
                   </td>
                 )}
-                <td className="table-td">{t.parent_name || '—'}</td>
+                {/* Who paid, if it was recorded. Where it never was — imported
+                    rows, and entries made before the field was reached — the
+                    family's own name is shown instead, greyed and marked, so a
+                    dash never stands in for a family we do know. */}
+                <td className="table-td">
+                  {t.parent_name || (t.profile_parent
+                    ? <span className="muted italic" title={`Not recorded on this payment. ${t.profile_parent_role || 'Parent'} on ${t.student_name}'s profile.`}>
+                        {t.profile_parent}
+                      </span>
+                    : '—')}
+                </td>
                 <td className="table-td text-right">{t.course_package_hours ?? '—'}</td>
                 <td className="table-td text-right">{t.discount_hours ?? '—'}</td>
                 <td className="table-td max-w-[200px] truncate" title={t.notes}>{t.notes || '—'}</td>
                 <td className="table-td">
                   <div className="flex gap-1.5 whitespace-nowrap">
                     <button className="btn-ghost !py-1 !px-2.5 text-xs" onClick={() => openEdit(t)}>Edit</button>
+                    {/* The office asks and the super admin agrees; the super
+                        admin's own removal takes effect at once. Either way the
+                        hours the payment bought go with it, which is why the
+                        dialog says so before anything moves. */}
+                    <button
+                      className="!py-1 !px-2.5 text-xs rounded-lg border border-red-500/30 text-red-600 hover:bg-red-500/10 transition-colors"
+                      title={mustExplain
+                        ? 'Send this payment to the super admin to be removed'
+                        : 'Remove this payment — the hours it paid for go with it'}
+                      onClick={() => onDelete(t)}
+                    >
+                      Delete
+                    </button>
                   </div>
                 </td>
               </tr>
@@ -418,12 +451,11 @@ export default function Finance() {
                   value={watch('student_id') || ''}
                   onChange={(v) => {
                     setValue('student_id', v, { shouldValidate: true });
-                    // A fee is nearly always paid by the parent on record, so
-                    // picking the student fills the payer in. It stays editable
-                    // for the relative or third party who sometimes sends it.
-                    const s = [...drawerExtra, ...(students.data || [])].find((x: any) => String(x.id) === String(v));
-                    const parent = s ? parentOf(s) : '';
-                    if (parent) setValue('parent_name', parent);
+                    // Who paid is settled below, from the names on this
+                    // student's own profile: one is filled in, two or three are
+                    // offered. Cleared first, or the previous student's parent
+                    // would be left sitting on this payment.
+                    setValue('parent_name', '');
                     setDrawerChildren([]);
                   }}
                   options={[
@@ -432,6 +464,20 @@ export default function Finance() {
                   ].map((s: any) => studentOption(s))}
                   onSearch={setStudentSearch}
                   placeholder="Search student…"
+                />
+                {/* On an edit as well as a new payment. Most of the payments
+                    with no payer on them were entered by picking the student
+                    alone, and the edit is where that gets put right — so the
+                    family's names have to be offered there too. Nothing already
+                    recorded is overwritten; the chips only follow a click.
+
+                    It sits under the student, not under the name field above
+                    it, because it is the student that decides who the choices
+                    are. */}
+                <PayerField
+                  studentId={watch('student_id')}
+                  value={watch('parent_name') || ''}
+                  onPick={(name) => setValue('parent_name', name)}
                 />
               </div>
               <div>
@@ -656,17 +702,19 @@ function DraftRow({
             onChange={(v) => {
               setStudentId(v);
               setChildChoices([]);
-              // Picked the student directly: the parent on their record fills in
-              // — still editable, because the sender is not always the parent.
-              const st = studentList.find((x: any) => String(x.id) === String(v));
-              const parent = st ? parentOf(st) : '';
-              if (parent) setParentName(parent);
+              // Cleared so the names on this student's profile decide it, the
+              // same way as in the Record Payment drawer.
+              setParentName('');
             }}
             options={studentList.map((st: any) => studentOption(st))}
             onSearch={onStudentSearch}
             placeholder="Search student…"
           />
         ))}
+        {/* No label and no wrapper of its own: it renders nothing until a
+            student is chosen, and a wrapper would hold an empty column open
+            in the grid until then. */}
+        <PayerField compact studentId={studentId} value={parentName} onPick={setParentName} />
         {field('Source', <Select value={source} onChange={setSource} options={sourceOptions} allowCustom compact placeholder="Source…" />)}
         {field('Note', <input className="input !py-1 w-full" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Add note…" />)}
       </div>

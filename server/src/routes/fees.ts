@@ -133,6 +133,41 @@ router.get(
   })
 );
 
+/**
+ * Who the family is, off the student's own profile.
+ *
+ * Not the same thing as who paid: that is fee_transactions.parent_name, and on
+ * 36 of the payments on the system it was never filled in — imported rows, and
+ * entries made before the field was reached. Those showed a bare dash in the
+ * Parent column even for families whose father and mother are both on record,
+ * which reads as "we do not know these people".
+ *
+ * So the list carries the profile name alongside, for the screen to fall back
+ * to and mark as such. Nothing is written: a payment with no payer recorded
+ * still has no payer recorded.
+ */
+const PROFILE_PARENT = `COALESCE(
+    CASE s.relationship
+      WHEN 'Mother'   THEN NULLIF(TRIM(s.mother_name), '')
+      WHEN 'Father'   THEN NULLIF(TRIM(s.father_name), '')
+      WHEN 'Guardian' THEN NULLIF(TRIM(s.guardian_name), '')
+    END,
+    NULLIF(TRIM(s.father_name), ''),
+    NULLIF(TRIM(s.mother_name), ''),
+    NULLIF(TRIM(s.guardian_name), '')
+  )`;
+
+const PROFILE_PARENT_ROLE = `CASE
+    WHEN COALESCE(CASE s.relationship
+      WHEN 'Mother'   THEN NULLIF(TRIM(s.mother_name), '')
+      WHEN 'Father'   THEN NULLIF(TRIM(s.father_name), '')
+      WHEN 'Guardian' THEN NULLIF(TRIM(s.guardian_name), '')
+    END, '') <> '' THEN s.relationship
+    WHEN NULLIF(TRIM(s.father_name), '')   IS NOT NULL THEN 'Father'
+    WHEN NULLIF(TRIM(s.mother_name), '')   IS NOT NULL THEN 'Mother'
+    WHEN NULLIF(TRIM(s.guardian_name), '') IS NOT NULL THEN 'Guardian'
+  END`;
+
 // All transactions (admin) — Finance Tracker
 router.get(
   '/transactions',
@@ -162,7 +197,9 @@ router.get(
 
     const [rows, totalRows] = await Promise.all([
       query(
-        `SELECT ft.*, s.full_name AS student_name, s.form_no
+        `SELECT ft.*, s.full_name AS student_name, s.form_no,
+                ${PROFILE_PARENT} AS profile_parent,
+                ${PROFILE_PARENT_ROLE} AS profile_parent_role
          FROM fee_transactions ft JOIN students s ON s.id = ft.student_id
          ${whereSql} ORDER BY ft.payment_date DESC, ft.id DESC
          LIMIT ? OFFSET ?`,
@@ -333,7 +370,11 @@ router.delete(
     } finally {
       conn.release();
     }
-    await audit(req.user!.userId, 'DELETE', 'fee_transaction', req.params.id, before, null);
+    // The super admin is not made to explain themselves, but if they did, it
+    // is kept: in a year this line is the only thing that says why the money
+    // left the statement.
+    await audit(req.user!.userId, 'DELETE', 'fee_transaction', req.params.id, before,
+      String(b.request_note ?? '').trim() ? { reason: String(b.request_note).trim() } : null);
     res.json({ ok: true });
   })
 );

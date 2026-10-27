@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import bcrypt from 'bcryptjs';
-import { query, queryOne } from '../db';
+import { pool, query, queryOne } from '../db';
 import { requireAuth, requireRole, ensureOwnStudent } from '../middleware/auth';
 import { wrap } from '../middleware/error';
 import { audit } from '../utils/audit';
@@ -9,6 +9,7 @@ import { usernameProblem, passwordProblem } from '../utils/credentials';
 import { clientIp, deviceInfo, getReqCtx } from '../utils/reqContext';
 import { claimFormNo, formNoOrder } from '../utils/formNo';
 import { today } from '../utils/dates';
+import { needsApproval, requestApproval, noteProblem, applyStudentDelete } from '../utils/approvals';
 
 const router = Router();
 router.use(requireAuth);
@@ -136,6 +137,62 @@ router.post(
         trial_hours: z.number().positive().optional(),
       })
       .parse(req.body);
+
+    /**
+     * An address is required to add a student.
+     *
+     * It is the only way back into an account nobody can get into: the
+     * forgotten-password code has nowhere else to go, and an hours statement
+     * has nowhere to be sent. 80 of the students already on the system have no
+     * address anywhere, and each one is a phone call to the family to fix.
+     * Enforced here rather than in studentSchema, because that schema is also
+     * what a profile edit is read with, and an old record being corrected must
+     * not be refused for a gap it already had.
+     */
+    const email = String(b.email ?? '').trim();
+    if (!email) {
+      return res.status(400).json({
+        error: 'An email address is required to add a student — it is where their password reset and statements are sent.',
+      });
+    }
+
+    /**
+     * Is this person already on the system?
+     *
+     * Checked by name and by address, because a family registering twice does
+     * it in one of two ways: the same child entered again by hand, or the same
+     * address used for a second account. Both come back as a refusal the office
+     * can read and then overrule — it is a warning, not a rule. Two children
+     * really can share a name, and a family really does share one address.
+     */
+    if (req.body?.force !== true) {
+      const name = fullName(b).trim();
+      const dupes = await query<any>(
+        `SELECT id, form_no, full_name, status, student_type, email, year_grade,
+                parent_mobile, student_mobile, date_of_joining,
+                (LOWER(TRIM(full_name)) = LOWER(?)) AS same_name,
+                (LOWER(TRIM(COALESCE(email,''))) = LOWER(?)) AS same_email
+           FROM students
+          WHERE is_deleted = FALSE
+            AND ( LOWER(TRIM(full_name)) = LOWER(?)
+               OR (TRIM(COALESCE(email,'')) <> '' AND LOWER(TRIM(email)) = LOWER(?)) )
+          ORDER BY (status = 'Active') DESC, id DESC
+          LIMIT 10`,
+        [name, email, name, email]
+      );
+      if (dupes.length) {
+        const byName = dupes.some((d) => Number(d.same_name));
+        const byEmail = dupes.some((d) => Number(d.same_email));
+        const what = byName && byEmail ? 'name and email address'
+          : byName ? 'name'
+          : 'email address';
+        return res.status(409).json({
+          code: 'DUPLICATE_STUDENT',
+          error: `A student with this ${what} is already on the system. Check it is not the same person, then add anyway if it is not.`,
+          duplicates: dupes,
+        });
+      }
+    }
 
     // If a login + password are given, create the student's login account first.
     let userId: number | null = null;
@@ -301,6 +358,128 @@ router.post(
     await query('UPDATE users SET is_active = FALSE WHERE id = (SELECT user_id FROM students WHERE id = ?)', [req.params.id]);
     await audit(req.user!.userId, 'ARCHIVE', 'student', req.params.id, null, null);
     res.json({ ok: true });
+  })
+);
+
+/**
+ * Remove a student record — through the super admin, like the money.
+ *
+ * Archive and remove are different acts and both exist. Archiving is for a
+ * child who has left: they stay on the list, their history stays reachable,
+ * and one click puts them back. Removing is for a record that should never
+ * have existed — a duplicate, a test row, a registration typed into the wrong
+ * name — and it takes the record off every list.
+ *
+ * It is soft, like everything here, and it does not cascade: the student's
+ * lectures and payments are left untouched. What it needs is the super admin,
+ * for the same reason a payment does — the person who would notice the mistake
+ * is the one who can no longer find the record.
+ */
+router.delete(
+  '/:id',
+  requireRole('admin'),
+  wrap(async (req, res) => {
+    const before = await queryOne<any>(
+      'SELECT * FROM students WHERE id = ? AND is_deleted = FALSE', [req.params.id]);
+    if (!before) return res.status(404).json({ error: 'Student not found' });
+
+    const b = z.object({ request_note: z.string().optional() }).parse(req.body ?? {});
+
+    // What is attached. The super admin reads this before deciding, and the
+    // office is told before asking — "Form 74 has 12 payments behind her" is
+    // the sentence that stops the wrong record being removed.
+    const [{ payments, received }] = await query<any>(
+      `SELECT COUNT(*) AS payments, COALESCE(SUM(amount),0) AS received
+         FROM fee_transactions WHERE student_id = ? AND is_deleted = FALSE`,
+      [req.params.id]
+    );
+    const [{ lectures }] = await query<any>(
+      `SELECT COUNT(*) AS lectures FROM lecture_attendees a
+         JOIN lecture_sessions l ON l.id = a.lecture_id
+        WHERE a.student_id = ? AND a.is_deleted = FALSE AND l.is_deleted = FALSE`,
+      [req.params.id]
+    );
+
+    /**
+     * A student who has paid is archived, not removed.
+     *
+     * Their money stays on the books either way — the revenue total counts
+     * fee_transactions and never asks whether the student is still listed — so
+     * removing them leaves the figures standing with nobody behind them, and
+     * the office looking for a student who is no longer anywhere. Archiving
+     * does everything that was actually wanted and loses nothing.
+     */
+    if (Number(payments) > 0) {
+      return res.status(409).json({
+        code: 'STUDENT_HAS_PAYMENTS',
+        error: `${before.full_name} has ${payments} payment${Number(payments) === 1 ? '' : 's'} on record (AED ${Number(received).toLocaleString()}). A student who has paid cannot be removed — archive them instead, which takes them off the active list and keeps the money where it belongs.`,
+        payments: Number(payments),
+        received: Number(received),
+        lectures: Number(lectures),
+      });
+    }
+
+    const who = `${before.form_no} — ${before.full_name}`;
+
+    if (needsApproval(req.user!.role)) {
+      const noteBad = noteProblem(b.request_note);
+      if (noteBad) return res.status(400).json({ error: noteBad, field: 'request_note' });
+      const id = await requestApproval({
+        note: String(b.request_note).trim(),
+        kind: 'student_delete',
+        studentId: Number(req.params.id),
+        payload: {
+          form_no: before.form_no, full_name: before.full_name, status: before.status,
+          student_type: before.student_type, email: before.email,
+          date_of_joining: before.date_of_joining,
+          attached: { payments: Number(payments), lectures: Number(lectures) },
+        },
+        targetType: 'student',
+        targetId: Number(req.params.id),
+        summary: `removing ${who}${Number(lectures) ? ` (${lectures} lecture rows)` : ' (nothing attached)'}`,
+        userId: req.user!.userId,
+      });
+      return res.status(202).json({
+        pending: true,
+        approval_id: id,
+        message: `Sent to the super admin for approval — removing ${who}. They stay on the list until it is approved.`,
+      });
+    }
+
+    const conn = await pool.getConnection();
+    try {
+      await conn.beginTransaction();
+      await applyStudentDelete(conn, req.params.id);
+      await conn.commit();
+    } catch (e) {
+      await conn.rollback();
+      throw e;
+    } finally {
+      conn.release();
+    }
+    await audit(req.user!.userId, 'DELETE', 'student', req.params.id, before,
+      { reason: String(b.request_note ?? '').trim() || null, lectures: Number(lectures) });
+    res.json({ ok: true, form_no: before.form_no, full_name: before.full_name });
+  })
+);
+
+/**
+ * Put a removed student back. The record was only marked, so this is the whole
+ * of it — without this the row is there and nobody can reach it, which makes a
+ * mistaken removal unrecoverable in practice even though nothing was erased.
+ */
+router.post(
+  '/:id/restore',
+  requireRole('admin'),
+  wrap(async (req, res) => {
+    const before = await queryOne<any>(
+      'SELECT * FROM students WHERE id = ? AND is_deleted = TRUE', [req.params.id]);
+    if (!before) return res.status(404).json({ error: 'No removed student with that id.' });
+    // Comes back Inactive, never straight to Active: whoever puts them back
+    // decides whether they are a current student, and that is one more click.
+    await query("UPDATE students SET is_deleted = FALSE, status = 'Inactive' WHERE id = ?", [req.params.id]);
+    await audit(req.user!.userId, 'RESTORE', 'student', req.params.id, before, null);
+    res.json({ ok: true, form_no: before.form_no, full_name: before.full_name });
   })
 );
 

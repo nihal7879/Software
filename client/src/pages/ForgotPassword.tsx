@@ -76,7 +76,7 @@ export default function ForgotPassword() {
 
       <div className="flex items-center justify-center p-6">
         <div className="w-full max-w-md">
-          <Logo height={34} className="lg:hidden mb-6" />
+          <Logo height={29} className="lg:hidden mb-6" />
 
           {/* ---- step 1: who are you ---------------------------------------- */}
           {step === 'ask' && (

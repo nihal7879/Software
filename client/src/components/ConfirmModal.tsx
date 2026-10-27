@@ -57,8 +57,14 @@ export function ConfirmModal({
 
         {note && (
           <div className="mb-5">
+            {/* min: 0 means the reason is wanted but not demanded — the super
+                admin answers to nobody for this, and a box they are forced to
+                fill gets "." typed into it, which is worse than an empty one. */}
             <label className="text-xs font-medium muted block">
-              {note.label} <span className="text-red-500">*</span>
+              {note.label}{' '}
+              {min > 0
+                ? <span className="text-red-500">*</span>
+                : <span className="opacity-60">(optional)</span>}
             </label>
             <textarea
               className="input mt-1 min-h-[64px]"

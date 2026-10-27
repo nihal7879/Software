@@ -1,12 +1,13 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
-import { api } from '../../api/client';
+import { api, apiError } from '../../api/client';
 import { Section, StatusBadge, Table, Spinner, Pagination } from '../../components/ui';
 import { ConfirmModal } from '../../components/ConfirmModal';
 import { Overlay } from '../../components/Overlay';
 import { toast } from '../../components/Toast';
 import { familyProblem, EMAIL_RE } from '../../components/StudentRegistrationForm';
+import { DuplicateStudents, DuplicateStudent } from '../../components/DuplicateStudents';
 
 export default function StudentsList() {
   const qc = useQueryClient();
@@ -27,6 +28,10 @@ export default function StudentsList() {
     defaultValues: { status: 'Active', fees_received: '0' },
   });
   const [familyError, setFamilyError] = useState('');
+  // Somebody of this name or address is already here. Held rather than shown as
+  // an error, because the next thing the office does is read the matches and
+  // say whether it is the same child.
+  const [dupes, setDupes] = useState<{ message: string; rows: DuplicateStudent[]; body: any } | null>(null);
   const create = useMutation({
     mutationFn: (body: any) =>
       api.post('/students', {
@@ -40,13 +45,28 @@ export default function StudentsList() {
       toast(`Student added — Form ${r.data.form_no}`);
       setDrawer(false);
       setFamilyError('');
+      setDupes(null);
       reset();
+    },
+    onError: (e: any, body: any) => {
+      const d = e?.response?.data;
+      if (e?.response?.status === 409 && d?.code === 'DUPLICATE_STUDENT') {
+        setFamilyError('');
+        setDupes({ message: d.error, rows: d.duplicates || [], body });
+        return;
+      }
+      setDupes(null);
+      // apiError gives the server's own wording, with a second line where it
+      // named the fields it refused; the form has one place to say it.
+      const { message, detail } = apiError(e, 'Could not add the student.');
+      setFamilyError(detail ? `${message} ${detail}` : message);
     },
   });
   // Same family rule as the profile form: at least one contact, each with a number.
   const onCreate = (b: any) => {
     const fe = familyProblem(b);
     setFamilyError(fe);
+    setDupes(null);
     if (!fe) create.mutate(b);
   };
   // Every field is required except Extra Mobile; family is checked as a set by
@@ -184,7 +204,24 @@ export default function StudentsList() {
                   <option>Inactive</option>
                 </select>
               </div>
-              {create.isError && <div className="text-sm text-red-500">{(create.error as any)?.response?.data?.error || 'Could not save the student.'}</div>}
+              {/* A possible duplicate is not an error — it is a question, and
+                  it is answered here rather than by a red line the office can
+                  only read and obey. */}
+              {dupes ? (
+                <DuplicateStudents
+                  message={dupes.message}
+                  duplicates={dupes.rows}
+                  busy={create.isPending}
+                  onCancel={() => setDupes(null)}
+                  onAddAnyway={() => create.mutate({ ...dupes.body, force: true })}
+                />
+              ) : (
+                create.isError && (
+                  <div className="text-sm text-red-500">
+                    {(create.error as any)?.response?.data?.error || 'Could not save the student.'}
+                  </div>
+                )
+              )}
               <div className="flex gap-2 pt-2">
                 <button className="btn-primary flex-1" disabled={create.isPending}>Save</button>
                 <button type="button" className="btn-ghost" onClick={() => setDrawer(false)}>Cancel</button>

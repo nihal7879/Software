@@ -28,7 +28,7 @@ export const AuthBanner = memo(function AuthBanner() {
       <div className="flex flex-col justify-between h-full pt-8 pb-14" style={{ minHeight: 'min(38vh, 320px)' }}>
         {/* onDark: the panel is a photograph, so the copy whose tagline has
             been lifted is the readable one whatever the theme. */}
-        <Logo height={40} onDark />
+        <Logo height={34} onDark />
         <p className="font-display text-[1.7rem] sm:text-3xl font-semibold leading-[1.15] max-w-sm">
           Empowering Education<br />through <span style={{ color: '#fdba74' }}>Innovation</span>
         </p>
@@ -47,7 +47,7 @@ export const AuthHero = memo(function AuthHero() {
       }}
     >
       <div className="relative z-10 max-w-md">
-        <Logo height={46} onDark className="mb-10" />
+        <Logo height={39} onDark className="mb-10" />
         <h1 className="font-display text-[2.75rem] font-semibold leading-[1.1] mb-5">
           Empowering Education<br />through <span style={{ color: '#fdba74' }}>Innovation</span>
         </h1>

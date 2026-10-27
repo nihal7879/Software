@@ -54,7 +54,7 @@ export default function ChangePasswordRequired() {
 
       <div className="flex items-center justify-center p-6">
         <div className="w-full max-w-md">
-          <Logo height={34} className="lg:hidden mb-6" />
+          <Logo height={29} className="lg:hidden mb-6" />
 
           <div className="eyebrow mb-2">One last step</div>
           <h2 className="font-display text-3xl font-semibold mb-1.5">Choose your own password</h2>

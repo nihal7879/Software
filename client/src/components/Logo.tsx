@@ -9,9 +9,11 @@
  * — both are in the markup and CSS hides one, so there is no flash of the wrong
  * logo while a script works out the theme.
  *
- * `height` is what the caller sets; the width follows the artwork's own 5:1
+ * `height` is what the caller sets; the width follows the artwork's own 6.5:1
  * proportions. Sizing by height is what keeps it in line with the text and
- * icons beside it, whatever the logo's aspect ratio turns out to be.
+ * icons beside it, whatever the logo's aspect ratio turns out to be — which is
+ * what let the final artwork replace the earlier, squarer file without a single
+ * caller changing.
  */
 export function Logo({
   height = 32,
