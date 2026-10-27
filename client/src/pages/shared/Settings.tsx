@@ -152,10 +152,14 @@ export default function Settings() {
       {/* Locking every student dashboard is the super admin's switch. */}
       {user?.role === 'superadmin' && <StudentAccessCard />}
 
-      {/* Per device, not per person — see components/NotificationsCard.tsx. */}
-      <NotificationsCard />
+      {/* Per device, not per person — see components/NotificationsCard.tsx.
+          The office has it on their Notifications page instead, beside the log
+          of what was actually sent, which is where the question "did this
+          reach anyone?" is asked. A teacher has no such page, so for them it
+          stays here. */}
+      {user?.role !== 'admin' && user?.role !== 'superadmin' && <NotificationsCard />}
 
-      <div className="grid grid-cols-1 lg:grid-cols-[300px_1fr] gap-5 items-start">
+      <div className="grid grid-cols-1 lg:grid-cols-[300px_1fr] gap-5">
         {/* Phones and tablets: who is signed in, in one row. The contact lines
             are in Personal Information just below, so they are not repeated. */}
         <div className="lg:hidden card p-4 flex items-center gap-3.5">
@@ -171,7 +175,7 @@ export default function Settings() {
         </div>
 
         {/* Left — profile summary card */}
-        <div className="card p-6 hidden lg:flex flex-col items-center text-center">
+        <div className="card p-6 hidden lg:flex flex-col items-center text-center h-full">
           <div className="w-24 h-24 rounded-full grid place-items-center text-2xl font-bold mb-3 ring-4 ring-emerald-400/60"
             style={{ background: 'var(--color-card-alt)' }}>
             {initials || <User size={28} />}
@@ -183,11 +187,36 @@ export default function Settings() {
             <div className="flex items-center gap-2 muted"><Mail size={15} /> <span className="truncate">{email || 'Not set'}</span></div>
             <div className="flex items-center gap-2 muted"><Phone size={15} /> <span>{mobile || 'Not set'}</span></div>
           </div>
+
+          {/* The two sections, in the card rather than as a rule across the
+              page beside them. They belong to the person on this card, and a
+              column of two reads as a place to go; a two-item tab bar above a
+              single panel reads as decoration. Phones keep the pill tabs — a
+              column of buttons there would push the content off the screen. */}
+          <nav className="w-full border-t mt-4 pt-4 space-y-1 text-left" style={{ borderColor: 'var(--color-border)' }}>
+            {([
+              { key: 'info', label: 'Personal Information', Icon: User },
+              { key: 'password', label: 'Change Password', Icon: Lock },
+            ] as const).map(({ key, label, Icon }) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => setTab(key)}
+                className="w-full flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-semibold transition-colors"
+                style={tab === key
+                  ? { color: 'var(--color-primary)' }
+                  : { color: 'var(--color-text)' }}
+              >
+                <Icon size={16} className="shrink-0" />
+                <span className="truncate">{label}</span>
+              </button>
+            ))}
+          </nav>
         </div>
 
         {/* Right — tabs + content */}
         <div className="space-y-4">
-          <div className="flex gap-1 p-1 rounded-2xl bg-[var(--color-card-alt)] lg:items-center lg:gap-6 lg:p-0 lg:rounded-none lg:bg-transparent lg:border-b" style={{ borderColor: 'var(--color-border)' }}>
+          <div className="flex gap-1 p-1 rounded-2xl bg-[var(--color-card-alt)] lg:hidden">
             <button
               className={`flex-1 flex items-center justify-center gap-1.5 px-2 py-2 rounded-xl text-sm font-semibold transition whitespace-nowrap lg:flex-none lg:justify-start lg:px-0 lg:pt-0 lg:pb-2 lg:rounded-none lg:whitespace-normal lg:border-b-2 lg:-mb-px ${tab === 'info' ? 'bg-[var(--color-card)] shadow-sm text-[var(--color-primary)] lg:bg-transparent lg:shadow-none lg:border-[var(--color-primary)]' : 'muted lg:border-transparent'}`}
               onClick={() => setTab('info')}
@@ -203,19 +232,28 @@ export default function Settings() {
           </div>
 
           {tab === 'info' ? (
-            <div className="card p-4 sm:p-6">
-              <div className="flex items-start justify-between mb-4">
-                <div>
-                  <h2 className="font-bold text-lg">Personal Information</h2>
-                  <p className="muted text-sm">Your account details</p>
+            <div className="card overflow-hidden">
+              {/* A banded header, so the panel has a top edge and the heading
+                  is not a line of text floating above the fields. */}
+              <div className="flex items-start justify-between gap-3 p-4 sm:px-6 sm:py-4 border-b" style={{ borderColor: 'var(--color-border)' }}>
+                <div className="flex items-center gap-3 min-w-0">
+                  <span className="shrink-0 w-9 h-9 rounded-xl grid place-items-center"
+                    style={{ background: 'var(--color-accent-soft)', color: 'var(--color-primary)' }}>
+                    <User size={17} />
+                  </span>
+                  <div className="min-w-0">
+                    <h2 className="font-bold text-lg leading-tight">Personal Information</h2>
+                    <p className="muted text-sm">Your account details</p>
+                  </div>
                 </div>
                 {isFaculty && !editing && (
-                  <button className="btn-ghost !py-1.5 !px-3 text-sm flex items-center gap-1.5" onClick={() => setEditing(true)}>
+                  <button className="btn-ghost !py-1.5 !px-3 text-sm flex items-center gap-1.5 shrink-0" onClick={() => setEditing(true)}>
                     <Pencil size={14} /> Edit
                   </button>
                 )}
               </div>
 
+              <div className="p-4 sm:p-6">
               {editing && isFaculty ? (
                 <form onSubmit={prof.handleSubmit((b) => saveProfile.mutate(b))} className="m-form space-y-3 max-w-md">
                   <div>
@@ -252,11 +290,21 @@ export default function Settings() {
                   <Field icon={<Shield size={16} />} label="Role" value={roleLabel} />
                 </div>
               )}
+              </div>
             </div>
           ) : (
-            <div className="card p-4 sm:p-6 max-w-md">
-              <h2 className="font-bold text-lg mb-1">Change Password</h2>
-              <p className="muted text-sm mb-4">Update your account password.</p>
+            <div className="card overflow-hidden max-w-md">
+              <div className="flex items-center gap-3 p-4 sm:px-6 sm:py-4 border-b" style={{ borderColor: 'var(--color-border)' }}>
+                <span className="shrink-0 w-9 h-9 rounded-xl grid place-items-center"
+                  style={{ background: 'var(--color-accent-soft)', color: 'var(--color-primary)' }}>
+                  <Lock size={17} />
+                </span>
+                <div className="min-w-0">
+                  <h2 className="font-bold text-lg leading-tight">Change Password</h2>
+                  <p className="muted text-sm">Update your account password.</p>
+                </div>
+              </div>
+              <div className="p-4 sm:p-6">
               <form onSubmit={handleSubmit(onSubmitPassword)} className="m-form space-y-3">
                 <div>
                   <label className="text-xs font-medium muted">Current Password *</label>
@@ -275,6 +323,7 @@ export default function Settings() {
                   {change.isPending ? 'Saving…' : 'Update Password'}
                 </button>
               </form>
+              </div>
             </div>
           )}
         </div>

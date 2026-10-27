@@ -6,12 +6,24 @@ import { useAuth } from '../../auth/AuthContext';
 import { Section, Table, Spinner, KpiCard, HoursValue, StatusBadge, Pagination, type Sort } from '../../components/ui';
 import { Select } from '../../components/Select';
 import { FilterMenu, FilterField } from '../../components/FilterMenu';
+import { ColumnPicker, useColumnVisibility } from '../../components/ColumnPicker';
 import { CalendarRangePicker } from '../../components/CalendarPicker';
 import { AdjustHoursModal, type AdjustmentRow } from '../../components/AdjustHoursModal';
 import { ConfirmModal } from '../../components/ConfirmModal';
 import { toast } from '../../components/Toast';
 import { downloadHoursStatement } from '../../lib/hoursStatementExcel';
 import { NotBillableChip, NOT_BILLABLE_ROW, notBillable } from '../../components/BillableToggle';
+
+/** Form and Student are always on — without them a row names nobody. */
+const HOURS_COLUMNS = [
+  { key: 'status', label: 'Status' },
+  { key: 'total', label: 'Total hours' },
+  { key: 'used', label: 'Used hours' },
+  { key: 'remaining', label: 'Remaining' },
+  { key: 'fee_status', label: 'Fee status' },
+  { key: 'last_lecture', label: 'Last lecture' },
+  { key: 'follow_up', label: 'Follow-up' },
+];
 import { EmailStatementDialog } from '../../components/EmailStatementDialog';
 import { FollowUpCell, FollowUpNotesDialog } from '../../components/FollowUpNotes';
 
@@ -47,6 +59,22 @@ export default function HoursMonthly() {
   // one pick away in Filters, and Clear all shows everybody.
   const [status, setStatus] = useState('Active');
   const [sort, setSort] = useState<Sort>({ key: 'form_no', dir: 'asc' });
+
+  /**
+   * Which columns the hours summary shows.
+   *
+   * Total and Used start hidden. The question this table is open to answer is
+   * how many hours a student has LEFT; the other two are the arithmetic behind
+   * it, and three number columns side by side is three things to read before
+   * the one that matters. Either can be switched back on from Columns, and the
+   * choice is remembered per browser.
+   */
+  const cols = useColumnVisibility(
+    'hours-summary.columns.v1',
+    HOURS_COLUMNS.map((c) => c.key),
+    ['status', 'remaining', 'fee_status', 'last_lecture', 'follow_up'],
+  );
+  const show = (k: string) => cols.visible.has(k);
   // The student whose follow-up notes are open, from the Follow-up column.
   const [notesFor, setNotesFor] = useState<any | null>(null);
 
@@ -316,6 +344,9 @@ export default function HoursMonthly() {
                 />
               </FilterField>
             </FilterMenu>
+            {/* Beside Filters, the same shape of button: the two do the same
+                sort of job — one narrows the rows, the other the columns. */}
+            <ColumnPicker columns={HOURS_COLUMNS} visible={cols.visible} onToggle={cols.toggle} />
           </div>
         }>
           {allLedger.isLoading ? <Spinner /> : (
@@ -326,13 +357,13 @@ export default function HoursMonthly() {
               head={[
                 { label: 'Form', sortKey: 'form_no' },
                 { label: 'Student', sortKey: 'student_name' },
-                'Status',
-                { label: 'Total', align: 'right', sortKey: 'total_hours_credited' },
-                { label: 'Used', align: 'right', sortKey: 'total_hours_consumed' },
-                { label: 'Remaining', align: 'right', sortKey: 'hours_left' },
-                'Fee Status',
-                { label: 'Last Lecture', sortKey: 'last_attended_lecture' },
-                'Follow-up',
+                ...(show('status') ? ['Status' as any] : []),
+                ...(show('total') ? [{ label: 'Total', align: 'right', sortKey: 'total_hours_credited' } as any] : []),
+                ...(show('used') ? [{ label: 'Used', align: 'right', sortKey: 'total_hours_consumed' } as any] : []),
+                ...(show('remaining') ? [{ label: 'Remaining', align: 'right', sortKey: 'hours_left' } as any] : []),
+                ...(show('fee_status') ? ['Fee Status' as any] : []),
+                ...(show('last_lecture') ? [{ label: 'Last Lecture', sortKey: 'last_attended_lecture' } as any] : []),
+                ...(show('follow_up') ? ['Follow-up' as any] : []),
               ]}
             >
               {(allLedger.data?.data || [])
@@ -340,17 +371,17 @@ export default function HoursMonthly() {
                   <tr key={r.student_id} className="cursor-pointer hover:bg-[var(--color-card-alt)]" onClick={() => setStudentId(String(r.student_id))}>
                     <td className="table-td font-mono">{r.form_no}</td>
                     <td className="table-td font-medium">{r.student_name}</td>
-                    <td className="table-td"><StatusBadge status={r.status} /></td>
-                    <td className="table-td text-right tabular-nums">{hrs(r.total_hours_credited)}</td>
-                    <td className="table-td text-right tabular-nums">{hrs(r.total_hours_consumed)}</td>
-                    <td className="table-td text-right tabular-nums"><HoursValue value={r.hours_left} /></td>
-                    <td className="table-td"><StatusBadge status={r.fee_status} /></td>
-                    <td className="table-td whitespace-nowrap">{r.last_attended_lecture || '—'}</td>
-                    <td className="table-td whitespace-nowrap"><FollowUpCell row={r} onOpen={() => setNotesFor(r)} /></td>
+                    {show('status') && <td className="table-td"><StatusBadge status={r.status} /></td>}
+                    {show('total') && <td className="table-td text-right tabular-nums">{hrs(r.total_hours_credited)}</td>}
+                    {show('used') && <td className="table-td text-right tabular-nums">{hrs(r.total_hours_consumed)}</td>}
+                    {show('remaining') && <td className="table-td text-right tabular-nums"><HoursValue value={r.hours_left} /></td>}
+                    {show('fee_status') && <td className="table-td"><StatusBadge status={r.fee_status} /></td>}
+                    {show('last_lecture') && <td className="table-td whitespace-nowrap">{r.last_attended_lecture || '—'}</td>}
+                    {show('follow_up') && <td className="table-td whitespace-nowrap"><FollowUpCell row={r} onOpen={() => setNotesFor(r)} /></td>}
                   </tr>
                 ))}
               {(allLedger.data?.data || []).length === 0 && (
-                <tr><td className="table-td muted" colSpan={9}>No students match this filter.</td></tr>
+                <tr><td className="table-td muted" colSpan={2 + cols.visible.size}>No students match this filter.</td></tr>
               )}
             </Table>
             {(() => { const total = allLedger.data?.total || 0; const pages = Math.ceil(total / summarySize) || 1; return (

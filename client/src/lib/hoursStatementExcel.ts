@@ -4,7 +4,7 @@ import ExcelJS from 'exceljs';
 // Excel export of the Student Hours Statement, laid out exactly like the sheet
 // the client already circulates (Sl.pdf): a month pivot of hours consumed and
 // fees received, then the per-lecture detail with the columns DATE / Month /
-// Form No / Student Name / Time In / Time Out / No of Hrs / Name of Teacher.
+// Form No / Student Name / Time In / Time Out / No of Hrs.
 //
 // The only things added to that format are two lines at the top: "Created On"
 // (when this file was made) and "Lectures recorded till" (the date of the last
@@ -154,7 +154,7 @@ export async function buildHoursStatement(input: StatementInput): Promise<{ buff
     },
   });
 
-  const DETAIL_COLS = 9; // DATE .. Charged
+  const DETAIL_COLS = 7; // DATE .. No of Hrs
   const width = Math.max(DETAIL_COLS, months.length + 3);
 
   const border = () => ({
@@ -232,7 +232,11 @@ export async function buildHoursStatement(input: StatementInput): Promise<{ buff
   r += 2;
 
   // ---- lecture detail ------------------------------------------------------
-  const HEADERS = ['DATE', 'Month', 'Form No', 'Student Name', 'Time In', 'Time Out', 'No of Hrs', 'Name of Teacher', 'Charged'];
+  // No teacher column: this goes to the family, and who taught a class is the
+  // institute's business, not an answer the statement owes them. No "Charged"
+  // column either — a line reading "Not billable" invites the question of what
+  // it was going to cost. The tint says it instead, quietly.
+  const HEADERS = ['DATE', 'Month', 'Form No', 'Student Name', 'Time In', 'Time Out', 'No of Hrs'];
   HEADERS.forEach((h, i) => {
     const cell = ws.getCell(r, i + 1);
     cell.value = h;
@@ -253,10 +257,10 @@ export async function buildHoursStatement(input: StatementInput): Promise<{ buff
       student.full_name || '',
       clockTime(l.time_in),
       clockTime(l.time_out),
+      // The real length of the class. A not-billable one is marked by the tint
+      // on its row and by nothing else — it is left out of the month totals
+      // below, which is where "not counted" is said.
       num(l.hours_consumed),
-      l.teacher_name || '',
-      // The length is the real one; this column says whether it was billed.
-      charged(l) > 0 ? 'Yes' : 'Not billable',
     ];
     const free = charged(l) === 0;
     row.forEach((v, c) => {
@@ -265,11 +269,6 @@ export async function buildHoursStatement(input: StatementInput): Promise<{ buff
       cell.font = {
         name: 'Calibri', size: 10,
         ...(free ? { color: { argb: argb(FREE_INK) } } : {}),
-        // The hours column on a not-billable line is struck through. Without
-        // it somebody adds that column up, gets more than the month totals
-        // above, and reasonably concludes the statement is wrong — the figure
-        // is the real length of the class, and it is not counted.
-        ...(free && c === 6 ? { strike: true, bold: true } : {}),
       };
       cell.border = border();
       // The amber wins over the zebra banding: one of these lines in a page of
@@ -279,7 +278,6 @@ export async function buildHoursStatement(input: StatementInput): Promise<{ buff
       if (c === 0) { cell.numFmt = 'd-mmm-yyyy'; cell.alignment = { horizontal: 'left' }; }
       if (c === 1 || c === 2 || c === 4 || c === 5) cell.alignment = { horizontal: 'center' };
       if (c === 6) { cell.numFmt = '0.0'; cell.alignment = { horizontal: 'center' }; }
-      if (c === 8) { cell.alignment = { horizontal: 'center' }; if (free) cell.font = { ...cell.font, bold: true }; }
     });
     r++;
   });
@@ -301,9 +299,7 @@ export async function buildHoursStatement(input: StatementInput): Promise<{ buff
   ws.getColumn(5).width = 13;
   ws.getColumn(6).width = 13;
   ws.getColumn(7).width = 11;
-  ws.getColumn(8).width = 22;
-  ws.getColumn(9).width = 10;
-  for (let c = 10; c <= width; c++) ws.getColumn(c).width = 11;
+  for (let c = 8; c <= width; c++) ws.getColumn(c).width = 11;
 
   ws.headerFooter.oddFooter = `&C &P of &N &R Created ${stamp}`;
 

@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { api, fmtDate } from '../../api/client';
 import { Section, Spinner } from '../../components/ui';
+import { NotificationsCard } from '../../components/NotificationsCard';
 
 /**
  * The notification log — everything the system has sent, and whether it landed.
@@ -129,6 +130,12 @@ export default function Notifications() {
 
   return (
     <div className="space-y-4">
+      {/* Turning notifications on for this device sits above the log of what
+          was sent, because the two answer the same question from either end:
+          whether anything reaches a phone at all, and whether this particular
+          notice did. It was in Settings, three screens away from the evidence. */}
+      <NotificationsCard />
+
       <Section
         title="Notifications sent"
         action={

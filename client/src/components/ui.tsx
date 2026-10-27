@@ -40,16 +40,42 @@ export function KpiCard({
   accent?: keyof typeof ACCENTS | string;
 }) {
   const color = ACCENTS[accent] || accent;
+  // Empty for a node, which is what the size step and the tooltip check for.
+  const text = typeof value === 'string' || typeof value === 'number' ? String(value) : '';
+  /**
+   * A row of these has to line up, and the longest figure decides whether it
+   * does. "HOURS CONSUMED" wrapped to two lines while "FACULTY" stayed on one,
+   * and "13,820.57 h" broke after the number and left the unit stranded below
+   * it — so every card in the row was a different height and the figures no
+   * longer sat on a line the eye could run along.
+   *
+   * So: the label is one line and is cut if it must be, the figure never wraps
+   * and steps down a size rather than breaking, and the card fills the height
+   * it is given.
+   */
   return (
-    <div className="card p-5 relative overflow-hidden transition-shadow duration-150 hover:shadow-md">
-      <div className="flex items-center gap-2 mb-2">
-        <span className="w-2 h-2 rounded-full" style={{ background: color }} />
-        <span className="text-[11px] font-semibold uppercase tracking-wide muted">{label}</span>
+    <div className="card p-5 h-full flex flex-col relative overflow-hidden transition-shadow duration-150 hover:shadow-md">
+      <div className="flex items-center gap-2 mb-2 min-w-0">
+        <span className="w-2 h-2 rounded-full shrink-0" style={{ background: color }} />
+        <span className="text-[11px] font-semibold uppercase tracking-wide muted truncate" title={label}>
+          {label}
+        </span>
       </div>
-      <div className="font-display text-2xl font-bold tnum" style={{ color: 'var(--color-text)' }}>
+      {/* A long figure steps down a size rather than being cut: six of these
+          across a wide screen leaves little room, and "1,693,810.24" with its
+          last digits missing is worse than the same number set smaller. */}
+      <div
+        className={`font-display font-bold tnum leading-tight whitespace-nowrap overflow-hidden text-ellipsis ${
+          text.length > 12 ? 'text-base sm:text-lg'
+            : text.length > 9 ? 'text-lg sm:text-xl'
+            : 'text-xl sm:text-2xl'
+        }`}
+        style={{ color: 'var(--color-text)' }}
+        title={text || undefined}
+      >
         {value}
       </div>
-      {sub && <div className="text-xs muted mt-1.5">{sub}</div>}
+      {sub && <div className="text-xs muted mt-1.5 truncate" title={typeof sub === 'string' ? sub : undefined}>{sub}</div>}
     </div>
   );
 }
@@ -68,17 +94,35 @@ export function Section({ title, action, children }: { title: string; action?: R
 }
 
 export function StatusBadge({ status }: { status: string }) {
+  /**
+   * Solid, not a 15% wash.
+   *
+   * The old badge tinted the background to 15% and coloured the text to match,
+   * which on a cream page is a pale smudge — at a glance a table of them reads
+   * as one grey column and the status has to be read word by word. A filled
+   * pill with dark ink carries its own contrast, so it is legible on the page,
+   * on a hovered row and on a dark theme without three sets of rules, and the
+   * colours separate from across the room.
+   *
+   * The dot is not decoration: it keeps the status readable when the colours
+   * themselves cannot be told apart, which is 1 man in 12.
+   */
   const map: Record<string, string> = {
-    Active: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400',
+    Active: 'bg-emerald-300 text-emerald-950',
     // Fee status: still has paid hours left. Same green as an active enrolment,
     // but a distinct word, so the two columns cannot be read as the same thing.
-    'In Credit': 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400',
-    Inactive: 'bg-slate-500/15 text-slate-500',
-    Trial: 'bg-violet-500/15 text-violet-600 dark:text-violet-400',
-    'Payment Required': 'bg-red-500/15 text-red-600 dark:text-red-400',
+    'In Credit': 'bg-emerald-300 text-emerald-950',
+    Inactive: 'bg-slate-200 text-slate-700 dark:bg-slate-300 dark:text-slate-800',
+    Trial: 'bg-violet-300 text-violet-950',
+    'Payment Required': 'bg-red-300 text-red-950',
   };
   return (
-    <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${map[status] || 'bg-slate-500/15'}`}>
+    <span
+      className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold whitespace-nowrap ${
+        map[status] || 'bg-slate-200 text-slate-700'
+      }`}
+    >
+      <span className="w-1.5 h-1.5 rounded-full bg-current opacity-80" />
       {status}
     </span>
   );

@@ -143,7 +143,10 @@ export function Layout({ children }: { children: ReactNode }) {
           </button>
         ) : (
           <button onClick={goHome} className="flex-1 min-w-0 text-left" title="Go to dashboard">
-            <Logo height={26} />
+            {/* Sized against the menu beneath it, not against the panel. The
+                final artwork is half again as wide as the old file at the same
+                height, which left it looming over the first nav item. */}
+            <Logo height={24} />
           </button>
         )}
         {!mini && (
@@ -165,15 +168,29 @@ export function Layout({ children }: { children: ReactNode }) {
               end={it.to.split('/').length <= 2}
               onClick={() => setOpen(false)}
               title={mini ? it.label : ''}
+              /**
+               * The label sits in full ink, not in muted.
+               *
+               * Every item used to be grey and only the current one had any
+               * weight, so the menu read as a list of things that were not
+               * available. The icon stays muted — it is the quiet half — and
+               * the current item is the only coloured thing in the column,
+               * which is what makes it findable.
+               */
               className={({ isActive }) =>
                 `flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition-colors ${mini ? 'justify-center' : ''} ${
-                  isActive ? '' : 'muted hover:bg-[var(--color-card-alt)]'
+                  isActive ? '' : 'hover:bg-[var(--color-card-alt)]'
                 }`
               }
-              style={({ isActive }: any) => (isActive ? { background: 'var(--color-card-alt)', color: 'var(--color-primary)' } : {})}
+              // The current item is the colour, not a filled block behind it. A
+              // peach bar the width of the menu is the loudest thing on the
+              // page and it is the one thing the eye already knows.
+              style={({ isActive }: any) =>
+                isActive ? { color: 'var(--color-primary)' } : { color: 'var(--color-text)' }
+              }
             >
               <span className="relative shrink-0">
-                <Icon size={19} />
+                <Icon size={19} strokeWidth={2} />
                 {/* Collapsed menu: a dot on the icon, since there is no room for the number. */}
                 {mini && badge > 0 && (
                   <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full" style={{ background: 'var(--color-primary)' }} />

@@ -15,10 +15,14 @@
   --color-bg: #faf9f7;           /* light warm off-white page */
   --color-card: #ffffff;
   --color-card-alt: #f6f4f1;     /* warm light fill (pills/hovers) */
-  --color-text: #2b2926;         /* warm near-black ink */
-  --color-muted: #9a958e;        /* warm gray */
-  --color-border: #eeebe6;       /* soft warm border */
-  --shadow-soft: 0 1px 2px rgba(40, 35, 30, 0.04), 0 1px 3px rgba(40, 35, 30, 0.06);
+  /* Ink and edges carry the contrast. The old values were a shade apart from
+     the page and the whole UI read as washed out: muted text at #9a958e is
+     below 4.5:1 on cream, and a #eeebe6 border is invisible at a glance, so
+     cards had no edge and tables had no rows. */
+  --color-text: #1c1a17;         /* warm near-black ink */
+  --color-muted: #6b655d;        /* warm gray, readable on cream */
+  --color-border: #e2ddd4;       /* warm border you can actually see */
+  --shadow-soft: 0 1px 2px rgba(40, 35, 30, 0.05), 0 2px 6px rgba(40, 35, 30, 0.07);
   --radius: 0.625rem;            /* 10px */
 }
 .dark {
@@ -29,9 +33,9 @@
   --color-bg: #1a1613;           /* warm dark */
   --color-card: #221e1a;
   --color-card-alt: #2b2621;
-  --color-text: #f5f0ea;
-  --color-muted: #a89f96;
-  --color-border: #38322b;
+  --color-text: #f7f3ee;
+  --color-muted: #b5aca2;
+  --color-border: #433b33;
   --shadow-soft: 0 1px 2px rgba(0, 0, 0, 0.3), 0 1px 3px rgba(0, 0, 0, 0.4);
 }
 
@@ -43,7 +47,7 @@ html, body, #root { height: 100%; }
 body {
   background: var(--color-bg);
   color: var(--color-text);
-  font-family: "Roboto", "Google Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Arial, sans-serif;
+  font-family: "Inter", "Roboto", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Arial, sans-serif;
   font-size: 0.875rem;          /* 14px base — typical for dense SaaS */
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
@@ -54,20 +58,24 @@ body {
 /* Clean Google-style headings (Roboto). Color is inherited so headings on
    dark/colored panels (e.g. the login hero) stay readable instead of being
    forced to dark ink. */
+/* Headings are set tight and heavy. At weight 500 with no tracking they read
+   as larger body text rather than as headings, which is most of why the app
+   looked flat next to anything else. */
 h1, h2, h3, h4, .font-display {
-  font-family: "Google Sans", "Roboto", ui-sans-serif, system-ui, sans-serif;
-  letter-spacing: -0.005em;
+  font-family: "Inter", "Roboto", ui-sans-serif, system-ui, sans-serif;
+  letter-spacing: -0.022em;
+  font-feature-settings: "cv05" 1, "ss01" 1;
 }
-h1 { font-size: 1.5rem; line-height: 1.25; font-weight: 500; }
-h2 { font-size: 1.2rem; line-height: 1.3; font-weight: 500; }
-h3 { font-size: 1.05rem; line-height: 1.35; font-weight: 500; }
+h1 { font-size: 1.55rem; line-height: 1.2;  font-weight: 700; }
+h2 { font-size: 1.22rem; line-height: 1.28; font-weight: 700; }
+h3 { font-size: 1.05rem; line-height: 1.35; font-weight: 650; }
 
 /* Accent word — brass colored emphasis */
 .accent-word { color: var(--color-accent); font-weight: 600; }
 
 /* Small uppercase tracked eyebrow label above headings */
 .eyebrow {
-  font-family: "Roboto", sans-serif;
+  font-family: "Inter", "Roboto", sans-serif;
   font-size: 0.6875rem;
   font-weight: 600;
   letter-spacing: 0.18em;
@@ -111,7 +119,9 @@ h3 { font-size: 1.05rem; line-height: 1.35; font-weight: 500; }
   .muted { color: var(--color-muted); }
   .table-th {
     color: var(--color-muted);
-    @apply text-left text-[11px] font-semibold uppercase tracking-wide px-3 py-2.5;
+    /* Column headings are the map of the table; they were lighter than the
+       data underneath them. */
+    @apply text-left text-[11px] font-bold uppercase tracking-[0.07em] px-3 py-2.5;
   }
   .table-td { @apply px-3 py-2.5 text-sm; border-top: 1px solid var(--color-border); }
   tbody tr:hover .table-td { background: var(--color-card-alt); }

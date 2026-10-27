@@ -15,7 +15,10 @@ export default function FacultyStudents() {
   const mine = useQuery({ queryKey: ['me-students'], queryFn: () => api.get('/teachers/me/students').then((r) => r.data.data) });
 
   const [search, setSearch] = useState('');
-  const [status, setStatus] = useState('');       // Active / Inactive
+  // Opens on the students the teacher actually teaches. A roster that includes
+  // everyone who ever left is a list they have to filter before it is useful,
+  // every time. Inactive is one click away in the same control.
+  const [status, setStatus] = useState('Active'); // Active / Inactive
   const [type, setType] = useState('');           // Trial / Enrolled
   // Form number first: it is the number the office and the teachers say out loud.
   const [sort, setSort] = useState<Sort>({ key: 'form_no', dir: 'asc' });
@@ -88,7 +91,11 @@ export default function FacultyStudents() {
                 value={status}
                 onChange={setStatus}
                 placeholder="All statuses"
-                options={[{ value: 'Active', label: `Active (${counts.active})` },
+                // Listed, not left to the placeholder: the page now opens on
+                // Active, and this control cannot be emptied once it holds a
+                // value — without this row there is no way back to everyone.
+                options={[{ value: '', label: `All statuses (${all.length})` },
+                          { value: 'Active', label: `Active (${counts.active})` },
                           { value: 'Inactive', label: `Inactive (${all.length - counts.active})` }]}
               />
             </div>
@@ -102,10 +109,11 @@ export default function FacultyStudents() {
                           { value: 'Trial', label: `Trial (${counts.trial})` }]}
               />
             </div>
-            {(search || status || type) && (
+            {(search || status !== 'Active' || type) && (
               <button
                 className="btn-ghost !py-1.5 !px-3 text-sm"
-                onClick={() => { setSearch(''); setStatus(''); setType(''); }}
+                // Back to the view the page opens on, not to no filter at all.
+                onClick={() => { setSearch(''); setStatus('Active'); setType(''); }}
               >
                 Clear
               </button>

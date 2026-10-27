@@ -73,8 +73,11 @@ export const NOT_BILLABLE_ROW = 'bg-amber-400/10';
  */
 export function NotBillableChip({ is_billable }: { is_billable?: number | boolean | null }) {
   if (!notBillable(is_billable)) return null;
+  // Filled, like every other status pill: a 20% wash disappeared against a
+  // hovered row, which is exactly where somebody is looking when they check
+  // whether a class was charged.
   return (
-    <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/20 px-2 py-0.5 text-xs font-semibold text-amber-700 dark:text-amber-400 whitespace-nowrap"
+    <span className="inline-flex items-center gap-1 rounded-full bg-amber-300 px-2.5 py-0.5 text-xs font-semibold text-amber-950 whitespace-nowrap"
       title="Taught and recorded, but not charged to the student">
       <Gift size={11} /> Not billable
     </span>
