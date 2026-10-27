@@ -366,6 +366,37 @@ async function mayChangeAttendees(req: Request, lecture: any): Promise<string | 
   return null;
 }
 
+// The students on one lecture, with whether each of them is being charged.
+//
+// The Edit Lecture window needs this when it was opened from a screen that only
+// had the lecture itself — a student's report, a teacher's log. Without it the
+// charge could only be corrected from the one screen that happened to list the
+// whole class, which is not where anybody notices it is wrong.
+router.get(
+  '/:id/attendees',
+  requireRole('admin', 'faculty'),
+  wrap(async (req, res) => {
+    const lecture = await queryOne<any>(
+      'SELECT id, teacher_id FROM lecture_sessions WHERE id = ? AND is_deleted = FALSE',
+      [req.params.id]
+    );
+    if (!lecture) return res.status(404).json({ error: 'Lecture not found' });
+    const denied = await mayChangeAttendees(req, lecture);
+    if (denied) return res.status(403).json({ error: denied });
+
+    const rows = await query<any>(
+      `SELECT a.student_id AS id, s.full_name AS name, s.form_no,
+              a.hours_consumed, a.is_billable
+         FROM lecture_attendees a
+         JOIN students s ON s.id = a.student_id
+        WHERE a.lecture_id = ? AND a.is_deleted = FALSE
+        ORDER BY s.full_name`,
+      [lecture.id]
+    );
+    res.json({ data: rows });
+  })
+);
+
 // Add a student who was in the class but never got recorded — they missed the
 // list when it was logged, or joined late. They take the lecture's own hours,
 // the same as everyone else on it.

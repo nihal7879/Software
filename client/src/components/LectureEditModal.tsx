@@ -11,14 +11,16 @@ import { TimePicker } from './TimePicker';
 import { CalendarPicker } from './CalendarPicker';
 import { toast } from './Toast';
 import { useWide } from './ui';
+import { BillableToggle, notBillable, NOT_BILLABLE_ROW } from './BillableToggle';
 
 // Corrects an already-logged lecture: the wrong date, a mistyped time, the wrong
-// teacher or topic — and who was in the room, when someone was missed off the
-// list or recorded by mistake.
+// teacher or topic — who was in the room, when someone was missed off the list
+// or recorded by mistake, and whether each of them is being charged for it.
 //
 // Changing the times re-derives the duration server-side, and every attendee's
 // consumed hours follow it, so the student's ledger stays honest. Adding or
-// removing a student takes effect immediately, since it moves their hours.
+// removing a student takes effect immediately, since it moves their hours, and
+// so does changing the charge — for the same reason.
 export function LectureEditModal({
   lecture,
   attendees,
@@ -28,8 +30,11 @@ export function LectureEditModal({
 }: {
   /** A row from the lecture log; needs lecture_id, and whatever fields it has. */
   lecture: any;
-  /** Who is on it now: [{ id, name }]. Given, the students can be changed here. */
-  attendees?: { id: number; name: string }[];
+  /**
+   * Who is on it now. Given, the students can be added and removed here; left
+   * out, they are fetched read-only so the charge can still be corrected.
+   */
+  attendees?: { id: number; name: string; is_billable?: number | boolean | null }[];
   /** Students who may be added — the teacher's own, assigned and active. */
   roster?: { id: number; full_name: string; form_no?: string | number }[];
   onClose: () => void;
@@ -38,6 +43,14 @@ export function LectureEditModal({
   const qc = useQueryClient();
   const [addSearch, setAddSearch] = useState('');
   const [attendeeError, setAttendeeError] = useState('');
+  // What the toggle has been set to in this window. The caller handed us a
+  // snapshot of the class and does not necessarily re-read it, so the screen
+  // would otherwise show the old answer until the window was closed.
+  const [charged, setCharged] = useState<Record<number, boolean>>({});
+  // Taking off the only student would leave a lecture with nobody on it, which
+  // the server refuses. Rather than a cross that does nothing, pressing it asks
+  // the question that was really being asked: should the lecture go?
+  const [lastOne, setLastOne] = useState<{ id: number; name: string; hours: number } | null>(null);
   const wide = useWide();
   const masters = useMasters();
   const teachers = useQuery({ queryKey: ['teachers'], queryFn: () => api.get('/teachers').then((r) => r.data.data) });
@@ -45,21 +58,100 @@ export function LectureEditModal({
 
   // Everything that reads hours has to be told, because a student joining or
   // leaving a lecture moves hours on their ledger straight away.
-  const refresh = () => ['ledger', 'ledger-all', 'lectures', 'teacher-lectures', 'student-report', 'workload', 'pkg']
-    .forEach((k) => qc.invalidateQueries({ queryKey: [k] }));
+  const refresh = () => {
+    ['ledger', 'ledger-all', 'lectures', 'teacher-lectures', 'student-report', 'workload', 'pkg']
+      .forEach((k) => qc.invalidateQueries({ queryKey: [k] }));
+    // The window reads the class for itself when the caller had only the
+    // lecture, so that list has to be told as well or it shows the old names.
+    qc.invalidateQueries({ queryKey: ['lecture-attendees', lecture.lecture_id] });
+  };
 
   const addStudent = useMutation({
     mutationFn: (id: number) => api.post(`/lectures/${lecture.lecture_id}/attendees`, { student_id: id }),
-    onSuccess: () => { setAddSearch(''); setAttendeeError(''); refresh(); toast('Student added to this lecture'); onSaved?.(); },
+    // The window stays open and the list below re-reads itself. It used to
+    // close on every change, which made taking one student off a class of two
+    // look as though nothing had happened.
+    onSuccess: () => { setAddSearch(''); setAttendeeError(''); refresh(); toast('Student added to this lecture'); },
     onError: (e: any) => setAttendeeError(e?.response?.data?.error || 'Could not add the student.'),
   });
   const removeStudent = useMutation({
     mutationFn: (id: number) => api.delete(`/lectures/${lecture.lecture_id}/attendees/${id}`),
-    onSuccess: (r: any) => { setAttendeeError(''); refresh(); toast(`Removed — ${r.data.hours_returned}h back to the student`); onSaved?.(); },
+    onSuccess: (r: any) => { setAttendeeError(''); refresh(); toast(`Removed — ${r.data.hours_returned}h back to the student`); },
     onError: (e: any) => setAttendeeError(e?.response?.data?.error || 'Could not remove the student.'),
   });
 
-  const onNow = attendees || [];
+  // Taking the last student off. The server refuses to leave a lecture with
+  // nobody on it — and it is right to: such a lecture vanishes from the lecture
+  // list, which joins its attendees, while still counting towards the teacher's
+  // hours. So the lecture goes with them. Both are soft deletes, and the hours
+  // come back because every hours query skips a deleted lecture.
+  const deleteLecture = useMutation({
+    mutationFn: () => api.delete(`/lectures/${lecture.lecture_id}`),
+    onSuccess: () => {
+      const who = lastOne;
+      setLastOne(null);
+      refresh();
+      toast(who
+        ? `${who.name} removed — ${who.hours}h back, and the empty lecture went with them`
+        : 'Lecture deleted');
+      onSaved?.();
+      onClose();
+    },
+    onError: (e: any) => {
+      setLastOne(null);
+      // 403 here means a teacher: they may correct their own class, but taking
+      // the last student off removes the lecture, and that is the office's.
+      setAttendeeError(
+        e?.response?.status === 403
+          ? 'Removing the last student removes the lecture, and only the office can do that. Ask them, or add the student who is missing first.'
+          : e?.response?.data?.error || 'Could not remove the student.'
+      );
+    },
+  });
+
+  // Charge for this class, or stop charging for it. Saved on the spot, like
+  // adding and removing a student, because it moves the student's balance by
+  // the length of the lecture the moment it is pressed.
+  const setBillable = useMutation({
+    mutationFn: (v: { studentId: number; is_billable: boolean }) =>
+      api
+        .patch(`/lectures/${lecture.lecture_id}/attendees/${v.studentId}/billable`, { is_billable: v.is_billable })
+        .then((r) => ({ ...r.data, studentId: v.studentId })),
+    onSuccess: (d: any) => {
+      setCharged((c) => ({ ...c, [d.studentId]: !!d.is_billable }));
+      setAttendeeError('');
+      refresh();
+      // What moved is said out loud: the balance is the thing people check
+      // afterwards, and this is the only moment it can be explained.
+      const moved = Math.abs(Number(d.hours_moved) || 0);
+      toast(
+        d.is_billable
+          ? `Now charged${moved ? ` — ${moved}h off the student's balance` : ''}`
+          : `Not billable${moved ? ` — ${moved}h back to the student` : ''}`
+      );
+    },
+    onError: (e: any) => setAttendeeError(e?.response?.data?.error || 'Could not change the charge.'),
+  });
+
+  // The class is always read for itself, and that reading is what the list
+  // shows. The caller hands us a snapshot taken before the window opened, which
+  // is good enough to paint immediately but goes stale the moment a student is
+  // added or taken off — so it is only the fallback while the read is in
+  // flight, or where the read is not allowed.
+  const fetched = useQuery({
+    queryKey: ['lecture-attendees', lecture.lecture_id],
+    queryFn: () => api.get(`/lectures/${lecture.lecture_id}/attendees`).then((r) => r.data.data as any[]),
+    enabled: !!lecture.lecture_id,
+  });
+
+  const people = fetched.data ?? attendees ?? [];
+  const mayChangeStudents = !!attendees;
+  const isCharged = (a: { id: number; is_billable?: number | boolean | null }) =>
+    charged[a.id] ?? !notBillable(a.is_billable);
+
+  // Whoever is on the class now — read from the list, not the caller's
+  // snapshot, or a student just added is offered for adding again.
+  const onNow = people;
   const term = addSearch.trim().toLowerCase();
   const canAdd = (roster || [])
     .filter((st) => !onNow.some((a) => a.id === st.id))
@@ -188,29 +280,54 @@ export function LectureEditModal({
             <input className="input mt-1" {...register('meeting_link')} placeholder="Google Meet / Zoom URL" />
           </div>
 
-          {/* Who was in the room. Kept apart from the fields above because it
-              saves on the spot: a student added or taken off moves their hours
-              immediately, without waiting for Save changes. */}
-          {attendees && (
+          {/* Who was in the room, and who is being charged for it. Kept apart
+              from the fields above because it saves on the spot: a student
+              added, taken off, or stopped being charged moves their hours
+              immediately, without waiting for Save changes.
+
+              A row per student rather than a line of chips — the charge is a
+              decision about one person, so it has to sit beside the name it
+              belongs to and be readable there. */}
+          {(mayChangeStudents || people.length > 0) && (
             <div className="border-t pt-3" style={{ borderColor: 'var(--color-border)' }}>
               <label className="text-xs font-medium muted block mb-1.5">Students on this lecture</label>
-              <div className="flex flex-wrap items-center gap-1.5">
-                {attendees.length === 0 && <span className="muted text-sm">Nobody is on this lecture.</span>}
-                {attendees.map((a) => (
-                  <span key={a.id} className="inline-flex items-center gap-1 text-sm rounded-md px-2 py-0.5 max-lg:rounded-full max-lg:pl-2.5 max-lg:pr-1 max-lg:py-1" style={{ background: 'var(--color-card-alt)' }}>
-                    {a.name}
-                    <button
-                      type="button"
-                      className="muted hover:text-red-500 disabled:opacity-40 max-lg:grid max-lg:place-items-center max-lg:w-6 max-lg:h-6"
-                      title="Take off this lecture — the hours go back"
-                      aria-label={`Remove ${a.name}`}
-                      disabled={removeStudent.isPending || attendees.length === 1}
-                      onClick={() => removeStudent.mutate(a.id)}
+              <div className="space-y-1.5">
+                {people.length === 0 && <span className="muted text-sm">Nobody is on this lecture.</span>}
+                {people.map((a) => {
+                  const billable = isCharged(a);
+                  return (
+                    <div
+                      key={a.id}
+                      className={`flex items-center gap-2 rounded-md px-2 py-1.5 ${billable ? '' : NOT_BILLABLE_ROW}`}
+                      style={billable ? { background: 'var(--color-card-alt)' } : undefined}
                     >
-                      <X size={12} />
-                    </button>
-                  </span>
-                ))}
+                      <span className="text-sm flex-1 min-w-0 truncate">{a.name}</span>
+                      <BillableToggle
+                        compact
+                        value={billable}
+                        disabled={setBillable.isPending}
+                        onChange={(next) => setBillable.mutate({ studentId: a.id, is_billable: next })}
+                      />
+                      {/* Always live. On the last student it does not remove
+                          them — it asks whether the lecture itself should go,
+                          which is the only thing that can be meant. */}
+                      <button
+                        type="button"
+                        className="grid place-items-center w-6 h-6 shrink-0 rounded-full text-red-500 hover:bg-red-500/15 transition disabled:opacity-40"
+                        title="Take off this lecture — the hours go back"
+                        aria-label={`Remove ${a.name}`}
+                        disabled={removeStudent.isPending || deleteLecture.isPending}
+                        onClick={() =>
+                          people.length === 1
+                            ? setLastOne({ id: a.id, name: a.name, hours: Number(a.hours_consumed ?? lecture.total_hours) || 0 })
+                            : removeStudent.mutate(a.id)
+                        }
+                      >
+                        <X size={12} strokeWidth={2.5} />
+                      </button>
+                    </div>
+                  );
+                })}
               </div>
 
               {roster && (
@@ -241,8 +358,39 @@ export function LectureEditModal({
                   )}
                 </div>
               )}
-              {attendees.length === 1 && (
-                <p className="muted text-xs mt-1.5">The last student cannot be removed — delete the lecture instead.</p>
+              {/* Asked here rather than in a dialog of its own: the row it is
+                  about is directly above, and this is a bigger thing than the
+                  cross looks like. */}
+              {lastOne && (
+                <div className="mt-2 rounded-md p-2.5 text-sm" style={{ background: 'var(--color-card-alt)' }}>
+                  <p>
+                    Remove <span className="font-semibold">{lastOne.name}</span> from this lecture?
+                  </p>
+                  <p className="muted text-xs mt-1">
+                    They are the only student on it, so the lecture is taken off the list with them —
+                    a lecture with nobody on it would otherwise sit there counting towards the
+                    teacher's hours. {lastOne.hours}h go back to the student, and both stay on the
+                    record: nothing is erased.
+                  </p>
+                  {/* Offered to everyone who can open this window. Whether it is
+                      allowed is the server's to say — guessing from the role
+                      held in the browser got it wrong and left people with
+                      nothing but a Close button. If it refuses, it says so
+                      below in its own words. */}
+                  <div className="flex gap-2 mt-2">
+                    <button
+                      type="button"
+                      className="btn-primary !py-1 !px-2.5 text-xs !bg-red-600 hover:!bg-red-700"
+                      disabled={deleteLecture.isPending}
+                      onClick={() => deleteLecture.mutate()}
+                    >
+                      {deleteLecture.isPending ? 'Removing…' : 'Remove the student'}
+                    </button>
+                    <button type="button" className="btn-ghost !py-1 !px-2.5 text-xs" onClick={() => setLastOne(null)}>
+                      Cancel
+                    </button>
+                  </div>
+                </div>
               )}
               {attendeeError && <p className="text-sm text-red-500 mt-1.5">{attendeeError}</p>}
             </div>

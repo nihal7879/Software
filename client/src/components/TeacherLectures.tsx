@@ -181,20 +181,21 @@ export function TeacherLectures({ teacherId, teacherName }: { teacherId: number;
                         >
                           <Gift size={12} strokeWidth={2.5} />
                         </button>
-                        {l.students.length > 1 ? (
-                          <button
-                            type="button"
-                            className="grid place-items-center w-5 h-5 rounded-full text-red-500 hover:bg-red-500/15 transition"
-                            title={`Remove ${s.full_name} from this lecture`}
-                            aria-label={`Remove ${s.full_name} from this lecture`}
-                            onClick={() => setRemoving({ lecture: l, student: s })}
-                          >
-                            <X size={12} strokeWidth={2.5} />
-                          </button>
-                        ) : (
-                          // The only student: removing them would leave an empty lecture.
-                          <span className="w-1" />
-                        )}
+                        {/* Every student carries one, the last of them included.
+                            Taking the only student off removes the lecture with
+                            them — one with nobody on it drops out of the lecture
+                            list, which is joined to its attendees, while still
+                            counting towards the teacher's hours. The dialog says
+                            so before anything happens. */}
+                        <button
+                          type="button"
+                          className="grid place-items-center w-5 h-5 rounded-full text-red-500 hover:bg-red-500/15 transition"
+                          title={`Remove ${s.full_name} from this lecture`}
+                          aria-label={`Remove ${s.full_name} from this lecture`}
+                          onClick={() => setRemoving({ lecture: l, student: s })}
+                        >
+                          <X size={12} strokeWidth={2.5} />
+                        </button>
                       </span>
                     ))}
                   </div>
@@ -251,11 +252,19 @@ export function TeacherLectures({ teacherId, teacherName }: { teacherId: number;
       {removing && (
         <ConfirmModal
           title="Remove student from lecture"
-          message={`Remove ${removing.student.full_name} (Form ${removing.student.form_no}) from ${teacherName}'s lecture on ${fmtDate(String(removing.lecture.session_date).slice(0, 10))}? Their ${hrs(removing.student.hours_consumed)} for this lecture will be returned.`}
+          message={
+            removing.lecture.students.length === 1
+              ? `Remove ${removing.student.full_name} (Form ${removing.student.form_no}) from ${teacherName}'s lecture on ${fmtDate(String(removing.lecture.session_date).slice(0, 10))}? They are the only student on it, so the lecture is removed with them. Their ${hrs(removing.student.hours_consumed)} will be returned, and both stay on the record.`
+              : `Remove ${removing.student.full_name} (Form ${removing.student.form_no}) from ${teacherName}'s lecture on ${fmtDate(String(removing.lecture.session_date).slice(0, 10))}? Their ${hrs(removing.student.hours_consumed)} for this lecture will be returned.`
+          }
           confirmLabel="Remove"
           danger
-          busy={remove.isPending}
-          onConfirm={() => remove.mutate({ lectureId: removing.lecture.id, studentId: removing.student.student_id })}
+          busy={remove.isPending || del.isPending}
+          onConfirm={() =>
+            removing.lecture.students.length === 1
+              ? del.mutate(removing.lecture.id)
+              : remove.mutate({ lectureId: removing.lecture.id, studentId: removing.student.student_id })
+          }
           onClose={() => setRemoving(null)}
         />
       )}
