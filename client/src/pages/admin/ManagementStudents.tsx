@@ -6,13 +6,11 @@ import { FilterMenu, FilterField } from '../../components/FilterMenu';
 import { Select } from '../../components/Select';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
-import { api, apiError } from '../../api/client';
+import { api } from '../../api/client';
 import { Section, StatusBadge, Table, Spinner, Pagination } from '../../components/ui';
 import { StudentRegistrationForm, EMAIL_RE } from '../../components/StudentRegistrationForm';
 import { ConfirmModal } from '../../components/ConfirmModal';
 import { Overlay } from '../../components/Overlay';
-import { toast } from '../../components/Toast';
-import { useAuth } from '../../auth/AuthContext';
 import { UsernameField } from '../../components/RegisterLayout';
 import { DuplicateStudents, DuplicateStudent } from '../../components/DuplicateStudents';
 import { passwordTip } from '../../lib/passwordTip';
@@ -142,10 +140,6 @@ export default function ManagementStudents() {
   const show = (k: string) => cols.visible.has(k);
   // After step 1 (create) we keep the new student id to fill the full profile form (step 2).
   const [newStudentId, setNewStudentId] = useState<number | null>(null);
-  // The super admin is the approver, so their own removals take effect at once
-  // and they are not asked to explain anything to themselves.
-  const { user } = useAuth();
-  const mustExplain = user?.role !== 'superadmin';
 
   const { data, isLoading } = useQuery({
     queryKey: ['mgmt-master', search, page, pageSize, typeFilter, statusFilter],
@@ -192,35 +186,6 @@ export default function ManagementStudents() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['mgmt-master'] }),
   });
   const [confirm, setConfirm] = useState<{ id: number; name: string; next: 'Active' | 'Inactive' } | null>(null);
-
-  /**
-   * Removing a record, as opposed to deactivating a student.
-   *
-   * Deactivate is for a child who has left — they stay on the list and come
-   * back in one click. Remove is for a record that should not exist: the same
-   * child entered twice, a test row, a registration typed into the wrong name.
-   * It goes to the super admin, like a payment does, because the person who
-   * would spot the mistake is the one who can no longer find the record.
-   */
-  const [removing, setRemoving] = useState<{ id: number; name: string; form_no: string } | null>(null);
-  const remove = useMutation({
-    // The reason travels in the body, not the URL, so it is not copied into
-    // every server log on the way.
-    mutationFn: (v: { id: number; note?: string }) =>
-      api.delete(`/students/${v.id}`, { data: { request_note: v.note } }),
-    onSuccess: (r: any) => {
-      qc.invalidateQueries({ queryKey: ['mgmt-master'] });
-      if (r?.status === 202) toast(r.data?.message || 'Sent to the super admin for approval', 'info');
-      else toast(`Removed — Form ${r.data?.form_no} ${r.data?.full_name}`);
-      setRemoving(null);
-    },
-    onError: (e: any) => {
-      // A student with payments is refused outright, with the reason. Shown as
-      // it was said rather than as "could not remove".
-      toast(apiError(e, 'Could not remove this student.').message, 'error');
-      setRemoving(null);
-    },
-  });
 
   // Converting a trial keeps the same student record, so their trial lectures,
   // login and parent stay attached. One-way.
@@ -409,16 +374,6 @@ export default function ManagementStudents() {
                         Deactivate
                       </button>
                     )}
-                    {/* Quieter than Deactivate on purpose: this is the rarer
-                        act and the heavier one, and it should not be the
-                        button the hand reaches for first. */}
-                    <button
-                      className="!py-1 !px-2.5 text-xs rounded-lg border border-[var(--color-border)] muted hover:text-red-600 hover:border-red-500/30 hover:bg-red-500/10 transition-colors"
-                      title="Remove this record — for a duplicate or a mistake, not for a student who has left"
-                      onClick={() => setRemoving({ id: r.id, name: r.full_name, form_no: r.form_no })}
-                    >
-                      Remove
-                    </button>
                   </div>
                 </td>
               </tr>
@@ -649,38 +604,6 @@ export default function ManagementStudents() {
         />
       )}
 
-      {removing && (
-        <ConfirmModal
-          title="Remove this record?"
-          message={
-            mustExplain
-              ? `Form ${removing.form_no} — ${removing.name}. The super admin has to agree before it comes off the list. Nothing is erased: their lectures stay where they are and the record can be put back. If this is a student who has left, deactivate them instead.`
-              : `Form ${removing.form_no} — ${removing.name} comes off every list. Nothing is erased: their lectures stay where they are and the record can be put back. If this is a student who has left, deactivate them instead.`
-          }
-          confirmLabel={mustExplain ? 'Send for approval' : 'Remove'}
-          danger
-          busy={remove.isPending}
-          // Asked of the super admin too, but not demanded: nobody is waiting
-          // on their answer, and what they write is the only record of why a
-          // student stopped being on the list.
-          note={
-            mustExplain
-              ? {
-                  label: 'Why is this record being removed?',
-                  placeholder: 'e.g. entered twice — the same child is already on form 148',
-                  help: 'Only the super admin sees this. It is not shown to the family.',
-                }
-              : {
-                  label: 'Why is this record being removed?',
-                  placeholder: 'e.g. entered twice — the same child is already on form 148',
-                  help: 'Kept on the record with the removal. Not shown to the family.',
-                  min: 0,
-                }
-          }
-          onConfirm={(note?: string) => remove.mutate({ id: removing.id, note })}
-          onClose={() => setRemoving(null)}
-        />
-      )}
     </div>
   );
 }

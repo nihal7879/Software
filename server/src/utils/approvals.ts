@@ -21,8 +21,7 @@ import { deriveMonth } from './hours';
 
 export type ApprovalKind =
   | 'hours_add' | 'hours_deduct' | 'hours_edit' | 'hours_delete'
-  | 'fee_entry' | 'fee_edit' | 'fee_delete'
-  | 'student_delete';
+  | 'fee_entry' | 'fee_edit' | 'fee_delete';
 
 /** What each kind is called on screen and in a message to the office. */
 export const KIND_LABEL: Record<ApprovalKind, string> = {
@@ -33,7 +32,6 @@ export const KIND_LABEL: Record<ApprovalKind, string> = {
   fee_entry: 'a fee entry with a discount',
   fee_edit: 'a payment changed',
   fee_delete: 'a payment removed',
-  student_delete: 'a student removed',
 };
 
 export function needsApproval(role?: string) {
@@ -285,35 +283,6 @@ export async function applyFeeDelete(conn: any, txId: number | string) {
   return { type: 'fee_transaction', id: Number(txId) };
 }
 
-/**
- * Remove a student record.
- *
- * Soft, like everything here: the row stays and can be put back. What it is
- * not is a cascade — their lectures, their payments and their attendance rows
- * are left exactly as they are. A removal says "this record should not be on
- * the list", not "none of this happened", and a delete that quietly took a
- * term of paid lectures with it would be unrecoverable in practice.
- *
- * All four switches go together. Marking the student removed while leaving
- * either `is_active` on reads as a live student to half the screens, and
- * leaving the login on means the account still opens — the same split that has
- * cost this project hours before: a record showing Active whose sign-in says
- * the credentials are invalid.
- */
-export async function applyStudentDelete(conn: any, studentId: number | string) {
-  const [[live]]: any = await conn.query(
-    'SELECT id, user_id FROM students WHERE id = ? AND is_deleted = FALSE', [studentId]);
-  if (!live) throw new Error('gone');
-  await conn.query(
-    "UPDATE students SET is_deleted = TRUE, is_active = FALSE, status = 'Inactive' WHERE id = ?",
-    [studentId]
-  );
-  if (live.user_id) {
-    await conn.query('UPDATE users SET is_active = FALSE WHERE id = ?', [live.user_id]);
-  }
-  return { type: 'student', id: Number(studentId) };
-}
-
 /** Approve one request and carry it out, in a single transaction. */
 export async function approve(id: number, userId: number) {
   const row = await queryOne<any>(
@@ -356,12 +325,6 @@ export async function approve(id: number, userId: number) {
         break;
       case 'fee_delete':
         result = await applyFeeDelete(conn, row.target_id);
-        break;
-      // Throws 'gone' if the student was removed while the request waited,
-      // which rolls back and tells the super admin rather than reporting a
-      // second removal that did nothing.
-      case 'student_delete':
-        result = await applyStudentDelete(conn, row.target_id ?? row.student_id);
         break;
       default:
         throw new Error(`Unknown approval kind ${row.kind}`);
