@@ -16,6 +16,7 @@ import { pool, query, queryOne } from '../db';
 import { signToken } from '../utils/jwt';
 import { requireAuth } from '../middleware/auth';
 import { wrap } from '../middleware/error';
+import { loginBlocked, noteFailedLogin, clearFailedLogins } from '../utils/loginLimit';
 import { audit } from '../utils/audit';
 import { clientIp, deviceInfo } from '../utils/reqContext';
 
@@ -168,6 +169,18 @@ router.post(
   wrap(async (req, res) => {
     const { email, password } = loginSchema.parse(req.body);
     const identifier = email.trim();
+
+    // Checked before the password is, so a blocked caller costs us a lookup
+    // and not a bcrypt comparison. The machine is what is counted, never the
+    // account — see utils/loginLimit.ts.
+    const wait = await loginBlocked(clientIp(req), deviceInfo(req));
+    if (wait > 0) {
+      return res.status(429).json({
+        error: `Too many failed sign-in attempts. Please wait ${Math.ceil(wait / 60)} minute${Math.ceil(wait / 60) === 1 ? '' : 's'} and try again, or contact the institute admin.`,
+        retry_after_seconds: wait,
+      });
+    }
+
     let open = await accountsFor(identifier, password);
 
     // A student's email is optional as a way to sign in, and it only works while
@@ -238,9 +251,13 @@ router.post(
           });
         }
       }
+      await noteFailedLogin(identifier, clientIp(req), deviceInfo(req));
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
+    // Got in: this machine's count goes, so a run of typos never follows
+    // someone around. Other machines keep theirs.
+    await clearFailedLogins(clientIp(req), deviceInfo(req));
     const options = await optionsFor(open);
     if (options.length === 1) return completeLogin(req, res, options[0].userId, options[0].studentId);
 

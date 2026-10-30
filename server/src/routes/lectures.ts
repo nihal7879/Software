@@ -76,6 +76,11 @@ router.get(
     const rows = await query(
       `SELECT l.id, l.session_date, l.month, l.time_in, l.time_out, l.total_hours,
               l.hours_rounded, l.topic, l.subtopic, l.remark, l.venue, l.meeting_link,
+              -- The IDS, not only the names. Edit Lecture is filled from this
+              -- row, and a teacher_id it never received came back as "no
+              -- teacher chosen" on save, which set the column to NULL and took
+              -- the lecture off its own teacher's list.
+              l.teacher_id, l.subject_id, l.branch_id,
               t.name AS teacher_name, sub.name AS subject_name,
               a.student_id, s.form_no, s.full_name AS student_name, a.hours_consumed,
               a.is_billable, a.attendance_status, a.homework, a.notes, a.performance_rating
@@ -247,6 +252,17 @@ router.put(
     }
 
     const merged = { ...before, ...b };
+    /**
+     * A lecture always belongs to somebody.
+     *
+     * An edit may move it to another teacher, but it may not leave it with
+     * none: a lecture with no teacher_id drops off every teacher's list and
+     * out of their taught hours, and the only sign is that it is gone. A form
+     * that sends null here has failed to load the value, not been asked to
+     * clear it. The same for the subject, which is what the reports group by.
+     */
+    if (merged.teacher_id == null) merged.teacher_id = before.teacher_id;
+    if (merged.subject_id == null) merged.subject_id = before.subject_id;
     const timeIn = merged.time_in || null;
     const timeOut = merged.time_out || null;
     const totalHours = b.total_hours ?? (timeIn && timeOut ? timeToDecimalHours(timeIn, timeOut) : Number(before.total_hours) || 0);

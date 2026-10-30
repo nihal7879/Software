@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { LogOut } from 'lucide-react';
-import { AuthHero } from '../components/AuthHero';
+import { AuthShell } from '../components/AuthHero';
 import { Logo } from '../components/Logo';
 import { api } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
@@ -49,12 +49,7 @@ export default function ChangePasswordRequired() {
   };
 
   return (
-    <div className="min-h-screen grid lg:grid-cols-2">
-      <AuthHero />
-
-      <div className="flex items-center justify-center p-6">
-        <div className="w-full max-w-md">
-          <Logo height={29} className="lg:hidden mb-6" />
+    <AuthShell>
 
           <div className="eyebrow mb-2">One last step</div>
           <h2 className="font-display text-3xl font-semibold mb-1.5">Choose your own password</h2>
@@ -88,8 +83,6 @@ export default function ChangePasswordRequired() {
           <button type="button" className="btn-ghost w-full mt-4" onClick={logout}>
             <LogOut size={15} /> Sign out instead
           </button>
-        </div>
-      </div>
-    </div>
+    </AuthShell>
   );
 }

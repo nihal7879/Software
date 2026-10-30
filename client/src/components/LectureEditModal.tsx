@@ -12,6 +12,7 @@ import { CalendarPicker } from './CalendarPicker';
 import { toast } from './Toast';
 import { useWide } from './ui';
 import { BillableToggle, notBillable, NOT_BILLABLE_ROW } from './BillableToggle';
+import { useAuth } from '../auth/AuthContext';
 
 // Corrects an already-logged lecture: the wrong date, a mistyped time, the wrong
 // teacher or topic — who was in the room, when someone was missed off the list
@@ -41,6 +42,20 @@ export function LectureEditModal({
   onSaved?: () => void;
 }) {
   const qc = useQueryClient();
+  /**
+   * A teacher does not choose the teacher.
+   *
+   * Whose lecture this is was settled when it was recorded — by the QR code on
+   * their own desk, or by them logging it. Offering a teacher a list of every
+   * teacher in the institute asks a question with one possible answer, and a
+   * list that long is also how a lecture ended up belonging to nobody: the box
+   * showed blank, and saving wrote the blank down.
+   *
+   * The office keeps the list, because correcting a class logged against the
+   * wrong teacher is a real job and theirs to do.
+   */
+  const { user } = useAuth();
+  const mayChangeTeacher = user?.role === 'admin' || user?.role === 'superadmin';
   const [addSearch, setAddSearch] = useState('');
   const [attendeeError, setAttendeeError] = useState('');
   // What the toggle has been set to in this window. The caller handed us a
@@ -157,6 +172,14 @@ export function LectureEditModal({
     .filter((st) => !onNow.some((a) => a.id === st.id))
     .filter((st) => !term || st.full_name?.toLowerCase().includes(term) || String(st.form_no).includes(term));
 
+  // From the lecture row where the screen had it, otherwise from the teachers
+  // list by id — the list now returns teacher_id, which is what made the box
+  // blank before.
+  const teacherName =
+    lecture.teacher_name ||
+    (teachers.data || []).find((t: any) => String(t.id) === String(lecture.teacher_id))?.name ||
+    '';
+
   const { register, handleSubmit, watch, setValue } = useForm<any>({
     defaultValues: {
       session_date: String(lecture.session_date || '').slice(0, 10),
@@ -235,12 +258,24 @@ export function LectureEditModal({
             <div className="col-span-2 sm:col-span-1">
               <label className="text-xs font-medium muted block mb-1">Teacher</label>
               <input type="hidden" {...register('teacher_id')} />
-              <Select
-                value={watch('teacher_id') || ''}
-                onChange={(v) => setValue('teacher_id', v)}
-                options={(teachers.data || []).map((t: any) => ({ value: String(t.id), label: t.name }))}
-                placeholder="Select teacher…"
-              />
+              {mayChangeTeacher ? (
+                <Select
+                  value={watch('teacher_id') || ''}
+                  onChange={(v) => setValue('teacher_id', v)}
+                  options={(teachers.data || []).map((t: any) => ({ value: String(t.id), label: t.name }))}
+                  placeholder="Select teacher…"
+                />
+              ) : (
+                /* Shown, not offered. It still goes back with the form, since
+                   the hidden field above carries it. */
+                <div
+                  className="input flex items-center cursor-default select-none"
+                  style={{ background: 'var(--color-card-alt)' }}
+                  title="A lecture stays with the teacher who gave it. The office can move it."
+                >
+                  {teacherName || '—'}
+                </div>
+              )}
             </div>
             <div className="col-span-2 sm:col-span-1">
               <label className="text-xs font-medium muted block mb-1">Subject</label>

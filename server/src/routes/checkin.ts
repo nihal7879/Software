@@ -123,6 +123,30 @@ router.post(
       });
     }
 
+    /**
+     * Only a teacher this student is assigned to.
+     *
+     * Checked HERE and not above, so that a student who is already checked in
+     * can always check out. Otherwise removing an assignment mid-class, or
+     * turning this rule on while someone is sitting in a room, would leave an
+     * open row they cannot close and a teacher with a scan that never ends.
+     *
+     * It is the scan being refused, not the attendance: a child who really did
+     * sit in on another teacher's class is still added by hand from the
+     * teacher's own screen, which is a deliberate act by a member of staff
+     * rather than a code on a desk anyone can point a phone at.
+     */
+    const assigned = await queryOne<any>(
+      `SELECT 1 AS ok FROM student_teacher_mapping
+        WHERE student_id = ? AND teacher_id = ? LIMIT 1`,
+      [studentId, teacher.id]
+    );
+    if (!assigned) {
+      return res.status(403).json({
+        error: `This teacher has not been assigned to you.`,
+      });
+    }
+
     // ---- first scan: they are arriving -------------------------------------
     const r: any = await query(
       `INSERT INTO lecture_checkins

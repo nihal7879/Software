@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowLeft, Copy, Check, Phone } from 'lucide-react';
-import { AuthHero } from '../components/AuthHero';
+import { ArrowLeft, Copy, Check, Phone, AlertCircle } from 'lucide-react';
+import { AuthShell } from '../components/AuthHero';
 import { Logo } from '../components/Logo';
 import { api } from '../api/client';
 
@@ -71,12 +71,7 @@ export default function ForgotPassword() {
   };
 
   return (
-    <div className="min-h-screen grid lg:grid-cols-2">
-      <AuthHero />
-
-      <div className="flex items-center justify-center p-6">
-        <div className="w-full max-w-md">
-          <Logo height={29} className="lg:hidden mb-6" />
+    <AuthShell>
 
           {/* ---- step 1: who are you ---------------------------------------- */}
           {step === 'ask' && (
@@ -89,16 +84,18 @@ export default function ForgotPassword() {
 
               <form onSubmit={sendCode} className="space-y-4">
                 <div>
-                  <label className="text-sm font-semibold">Username</label>
-                  <input
-                    className="input mt-1.5"
-                    type="text"
-                    placeholder="e.g. aarav.shah"
-                    autoComplete="username"
-                    autoFocus
-                    value={username}
-                    onChange={(e) => setUsername(e.target.value)}
-                  />
+                  <div className="field">
+                    <input
+                      className="input !py-3.5"
+                      type="text"
+                      placeholder="e.g. aarav.shah"
+                      autoComplete="username"
+                      autoFocus
+                      value={username}
+                      onChange={(e) => { setUsername(e.target.value); if (error) setError(''); }}
+                    />
+                    <label>Username</label>
+                  </div>
                   {/* Said before they get it wrong, not after. */}
                   <p className="muted text-xs mt-1.5">
                     Your username, not your email — one email can belong to a whole family.
@@ -110,10 +107,16 @@ export default function ForgotPassword() {
                     <span>{notice}</span>
                   </div>
                 )}
-                {error && <div className="text-sm text-red-500 font-medium">{error}</div>}
+                {error ? (
+                  <div className="auth-alert auth-alert-error !py-3" role="alert" aria-live="assertive">
+                    <AlertCircle size={16} className="shrink-0" />
+                    <span>{error}</span>
+                  </div>
+                ) : (
                 <button className="btn-primary w-full !py-3" disabled={busy || !username.trim()}>
                   {busy ? 'Sending…' : 'Send me a code'}
                 </button>
+                )}
               </form>
             </>
           )}
@@ -130,10 +133,9 @@ export default function ForgotPassword() {
               </p>
 
               <form onSubmit={useCode} className="space-y-4">
-                <div>
-                  <label className="text-sm font-semibold">Six-digit code</label>
+                <div className="field">
                   <input
-                    className="input mt-1.5 text-center text-2xl tracking-[0.4em] font-semibold"
+                    className="input !py-3.5 text-center text-2xl tracking-[0.4em] font-semibold"
                     type="text"
                     inputMode="numeric"
                     autoComplete="one-time-code"
@@ -141,13 +143,20 @@ export default function ForgotPassword() {
                     autoFocus
                     placeholder="------"
                     value={otp}
-                    onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                    onChange={(e) => { setOtp(e.target.value.replace(/\D/g, '').slice(0, 6)); if (error) setError(''); }}
                   />
+                  <label>Six-digit code</label>
                 </div>
-                {error && <div className="text-sm text-red-500 font-medium">{error}</div>}
+                {error ? (
+                  <div className="auth-alert auth-alert-error !py-3" role="alert" aria-live="assertive">
+                    <AlertCircle size={16} className="shrink-0" />
+                    <span>{error}</span>
+                  </div>
+                ) : (
                 <button className="btn-primary w-full !py-3" disabled={busy || otp.length < 6}>
                   {busy ? 'Checking…' : 'Set a new password'}
                 </button>
+                )}
                 <button
                   type="button"
                   className="btn-ghost w-full"
@@ -193,8 +202,6 @@ export default function ForgotPassword() {
               <Link to="/login" className="text-sm muted hover:text-[var(--color-primary)]">← Back to sign in</Link>
             </div>
           )}
-        </div>
-      </div>
-    </div>
+    </AuthShell>
   );
 }

@@ -112,9 +112,11 @@ h3 { font-size: 1.05rem; line-height: 1.35; font-weight: 650; }
   }
   .input {
     background: var(--color-card);
-    border: 1px solid var(--color-border);
+    /* 1.5px at rest: a 1px warm border on a warm card was barely an edge, and
+       a field you cannot see the shape of reads as not ready for typing. */
+    border: 1.5px solid var(--color-border);
     color: var(--color-text);
-    @apply rounded-lg px-3 py-2 text-sm w-full outline-none transition focus:ring-2 focus:ring-[var(--color-primary)] focus:ring-opacity-30 focus:border-[var(--color-primary)];
+    @apply rounded-lg px-3 py-2 text-sm w-full outline-none transition;
   }
   .muted { color: var(--color-muted); }
   .table-th {
@@ -164,6 +166,115 @@ aside ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.2); }
    themes, so the orange ring and the big number carry the screen. */
 :root { --color-ink: #2b2926; --color-ink-2: #3a3530; }
 .dark { --color-ink: #2e2823; --color-ink-2: #3d352e; }
+/* The lit points in the sign-in panel's mesh, breathing slowly. Off entirely
+   for anyone who has asked their system for less movement — this sits behind
+   the one screen nobody can avoid, so it must never be the reason somebody
+   cannot use it. */
+@keyframes mesh-node {
+  0%, 100% { opacity: 0.95; }
+  50%      { opacity: 0.35; }
+}
+.mesh-node { animation: mesh-node 6s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .mesh-node { animation: none; }
+}
+
+/* The sign-in background: the app's own warm ink with the brand orange
+   warming the top corner - the same surface the dashboards use, carried
+   across the whole window instead of half of it. Fixed in both themes, so a
+   sign-in page does not change colour with the system setting. */
+/* The answer-sheet backdrop. The ruling is a repeating gradient rather than
+   an image, so it costs nothing and stays crisp at any zoom. 32px apart,
+   which is close to the line spacing of the paper the institute actually
+   uses. */
+.auth-paper {
+  background-color: #fbf8f3;
+  background-image:
+    repeating-linear-gradient(to bottom, transparent 0 31px, rgba(43, 41, 38, 0.055) 31px 32px),
+    radial-gradient(58% 48% at 14% 6%, rgba(249, 115, 22, 0.10), transparent 62%),
+    radial-gradient(50% 45% at 92% 94%, rgba(47, 79, 158, 0.07), transparent 62%);
+  color: var(--color-text);
+}
+
+.auth-brand {
+  /* Deep and warm, so the lit points of the wave have somewhere to sit. The
+     same in both themes: a sign-in page that changes colour with the system
+     setting looks unfinished rather than considered. */
+  background:
+    radial-gradient(70% 55% at 10% 0%, rgba(249, 115, 22, 0.30), transparent 60%),
+    radial-gradient(60% 50% at 95% 100%, rgba(47, 79, 158, 0.28), transparent 62%),
+    linear-gradient(165deg, #241c15 0%, #171210 52%, #0d0b0a 100%);
+  color: #f5f0ea;
+}
+
+/* Focus. Drawn with a shadow rather than a thicker border, so nothing on the
+   form shifts by a pixel when a field is entered. */
+.input:focus {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 2.5px rgba(249, 115, 22, 0.22);
+}
+
+/* An outlined field with its label sitting ON the border line.
+   The notch is not drawn: the label simply carries the card's own background
+   and covers the line behind it, which is why this needs no SVG and survives
+   the label being any length. */
+.field { position: relative; }
+.field > label {
+  position: absolute;
+  top: -0.46rem;
+  left: 0.7rem;
+  padding: 0 0.35rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.015em;
+  line-height: 1;
+  background: var(--color-card);
+  color: var(--color-muted);
+  pointer-events: none;
+  transition: color 140ms ease;
+}
+.field:focus-within > label { color: var(--color-primary); }
+
+/* The answer to pressing Sign in, said as a band across the form rather than
+   a line of small red text under it. A wrong password is the single most
+   common thing that happens on this screen and it was the quietest thing on
+   it. */
+.auth-alert {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border-radius: 0.75rem;
+  padding: 0.7rem 1rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #ffffff;
+}
+.auth-alert-error { background: #ef4444; }
+.auth-alert-info  { background: #d97706; }
+.auth-alert-ok    { background: #15803d; }
+
+/* Success fills from the left: the bar arriving is the thing that says it
+   worked, before anybody has read the word. */
+.auth-alert-ok::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: #22c55e;
+  transform-origin: left;
+  animation: auth-fill 700ms cubic-bezier(0.22, 0.8, 0.3, 1) forwards;
+}
+.auth-alert > * { position: relative; z-index: 1; }
+@keyframes auth-fill {
+  from { transform: scaleX(0); }
+  to   { transform: scaleX(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .auth-alert-ok::before { animation: none; transform: scaleX(1); }
+}
+
 .hero-ink {
   background:
     radial-gradient(120% 90% at 100% 0%, rgba(249, 115, 22, 0.28), transparent 55%),
