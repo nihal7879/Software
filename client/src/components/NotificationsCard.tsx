@@ -77,8 +77,11 @@ export function NotificationsCard() {
       >
         {icon}
       </span>
-      <div className="min-w-0 flex-1">
-        <div className="font-bold flex items-center gap-2">
+      {/* The basis is what makes the button wrap. Without it the text shrank to a
+          word a line beside the button on a phone, rather than the button
+          dropping underneath. */}
+      <div className="min-w-0 flex-1 basis-56">
+        <div className="font-bold flex flex-wrap items-center gap-x-2 gap-y-1">
           Notifications on this device
           <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${
             on ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400' : 'bg-[var(--color-card-alt)] muted'
@@ -90,12 +93,12 @@ export function NotificationsCard() {
         {/* Said once, plainly: it is the question everyone asks second. */}
         {(state === 'on' || state === 'off') && (
           <p className="muted text-xs mt-1 flex items-center gap-1.5">
-            <Smartphone size={12} /> Each phone and computer is turned on separately.
+            <Smartphone size={12} className="shrink-0" /> Each phone and computer is turned on separately.
           </p>
         )}
       </div>
       {here?.action && (
-        <button className="btn-ghost !py-1.5 !px-3 text-sm whitespace-nowrap" disabled={busy} onClick={flip}>
+        <button className="btn-ghost !py-1.5 !px-3 text-sm whitespace-nowrap max-sm:w-full max-sm:justify-center" disabled={busy} onClick={flip}>
           {busy ? 'Working…' : here.action}
         </button>
       )}

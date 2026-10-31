@@ -14,6 +14,7 @@ import { roleLabel } from './MonthSelector';
 import { Toaster } from './Toast';
 import { NotificationBell } from './NotificationBell';
 import { Logo } from './Logo';
+import { CheckInNudge } from './CheckInNudge';
 
 // `short` is the label under the icon in the phone tab bar, where there is room
 // for one word. `primary` is the role's main action, raised in the middle.
@@ -305,7 +306,10 @@ export function Layout({ children }: { children: ReactNode }) {
         )}
 
         {/* The extra bottom padding keeps the last row clear of the tab bar. */}
-        <main className={`flex-1 p-4 sm:p-6 lg:p-8 max-w-[1440px] w-full ${app ? 'pb-28 sm:pb-28 lg:pb-8' : ''}`}>{children}</main>
+        <main className={`flex-1 p-4 sm:p-6 lg:p-8 max-w-[1440px] w-full ${app ? 'pb-28 sm:pb-28 lg:pb-8' : ''}`}>
+          {user.role === 'student' && pathname !== '/student/checkin' && <CheckInNudge />}
+          {children}
+        </main>
       </div>
 
       {app && (

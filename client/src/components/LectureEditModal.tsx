@@ -212,9 +212,12 @@ export function LectureEditModal({
       toast(`Lecture updated — ${r.data.total_hours}h`);
       // The edit can move hours between months and students, so everything that
       // reads a lecture or an hours balance is refetched, not just this log.
-      for (const k of ['student-report', 'lectures', 'ledger', 'ledger-all', 'workload', 'me-lectures', 'overview', 'trend', 'pivot']) {
+      // 'teacher-lectures' is the admin entry sheet's list: left out, reopening
+      // the lecture there showed the old date and times until a page refresh.
+      for (const k of ['student-report', 'lectures', 'teacher-lectures', 'ledger', 'ledger-all', 'workload', 'me-lectures', 'overview', 'trend', 'pivot']) {
         qc.invalidateQueries({ queryKey: [k] });
       }
+      qc.invalidateQueries({ queryKey: ['lecture-attendees', lecture.lecture_id] });
       onSaved?.();
       onClose();
     },
