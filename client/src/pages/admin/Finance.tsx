@@ -227,7 +227,7 @@ export default function Finance() {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-bold">Finance Tracker</h1>
+        <h1 className="hidden md:block text-2xl font-bold">Finance Tracker</h1>
         <div className="flex flex-wrap items-center gap-2">
           <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={onFile} />
           <button className="btn-ghost" onClick={() => fileRef.current?.click()} disabled={importMut.isPending}>

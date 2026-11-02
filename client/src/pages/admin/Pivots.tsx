@@ -55,7 +55,7 @@ export default function Pivots() {
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-bold">Pivots</h1>
+        <h1 className="hidden md:block text-2xl font-bold">Pivots</h1>
 
         <div className="flex flex-wrap items-center gap-3">
           {/* View toggle */}

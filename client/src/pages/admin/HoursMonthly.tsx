@@ -286,7 +286,7 @@ export default function HoursMonthly() {
           {studentId && (
             <button className="btn-ghost !py-1.5 !px-3 text-sm whitespace-nowrap" onClick={() => setStudentId('')}>← All students</button>
           )}
-          <div>
+          <div className="hidden md:block">
             <h1 className="text-2xl font-bold">Student Hours Statement</h1>
             <p className="muted text-sm">{studentId ? 'Hours credited, hours used per lecture, and the running balance.' : 'All students at a glance — click one to see their full statement.'}</p>
           </div>

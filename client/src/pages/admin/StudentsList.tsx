@@ -94,7 +94,7 @@ export default function StudentsList() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Students</h1>
+        <h1 className="hidden md:block text-2xl font-bold">Students</h1>
         <button className="btn-primary" onClick={() => setDrawer(true)}>+ Add Student</button>
       </div>
 

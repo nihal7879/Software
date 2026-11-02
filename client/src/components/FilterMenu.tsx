@@ -16,6 +16,7 @@ export function FilterMenu({
   width = 260,
   align = 'right',
   label = 'Filters',
+  stretch = false,
 }: {
   /** How many filters are currently set — shown as a badge, drives "Clear all". */
   count: number;
@@ -24,17 +25,19 @@ export function FilterMenu({
   width?: number;
   align?: 'left' | 'right';
   label?: string;
+  /** On phones, fill the space it is given — half a row beside Columns. */
+  stretch?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const btnRef = useRef<HTMLButtonElement>(null);
   const pos = useAnchoredMenu(open, btnRef, width, align);
 
   return (
-    <div className="relative inline-block">
+    <div className={`relative ${stretch ? 'block w-full md:inline-block md:w-auto' : 'inline-block'}`}>
       <button
         ref={btnRef}
         type="button"
-        className="btn-ghost flex items-center gap-2 whitespace-nowrap"
+        className={`btn-ghost flex items-center gap-2 whitespace-nowrap ${stretch ? 'w-full justify-center md:w-auto' : ''}`}
         onClick={() => setOpen((o) => !o)}
         title={count > 0 ? `${count} filter${count === 1 ? '' : 's'} applied` : 'Filter this list'}
       >

@@ -1,8 +1,8 @@
-import { ReactNode, useState } from 'react';
+import { ReactNode, useEffect, useState } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, Users, Clock, Wallet, GraduationCap, BarChart3,
-  BookOpen, User, LogOut, Moon, Sun, ChevronLeft, Menu, Settings, Lock, QrCode, KeyRound, Plus, BellRing, UserPlus, ClipboardList,
+  BookOpen, User, LogOut, Moon, Sun, ChevronLeft, Menu, Settings, Lock, QrCode, KeyRound, Plus, BellRing, UserPlus, ClipboardList, X,
 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '../auth/AuthContext';
@@ -90,7 +90,17 @@ export function Layout({ children }: { children: ReactNode }) {
   const { user, logout } = useAuth();
   const { dark, toggle } = useTheme();
   const nav = useNavigate();
-  const [open, setOpen] = useState(false);        // mobile drawer
+  const [open, setOpen] = useState(false);        // office phone menu (full screen)
+  // While the full-screen menu is open the page underneath must not scroll
+  // with the finger. Escape closes it, for a keyboard on a tablet.
+  useEffect(() => {
+    if (!open) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
+    window.addEventListener('keydown', onKey);
+    return () => { document.body.style.overflow = prev; window.removeEventListener('keydown', onKey); };
+  }, [open]);
   const [collapsed, setCollapsed] = useState(false); // desktop collapse
   const [sheet, setSheet] = useState(false);       // phone account sheet
   const { pathname } = useLocation();
@@ -145,6 +155,9 @@ export function Layout({ children }: { children: ReactNode }) {
   const name = user.displayName || user.email;
   const initials = String(name).split(/[\s@._]+/).map((w) => w[0]).filter(Boolean).slice(0, 2).join('').toUpperCase();
   const signOut = () => { setSheet(false); logout(); nav('/login'); };
+  // Anything waiting anywhere in the office menu, for the dot on the phone's
+  // menu button.
+  const menuWaiting = items.reduce((n, it) => n + badgeFor(it.to), 0);
   // The phone tab bar: the raised action in the middle, the rest either side of
   // it, whatever order the menu lists them in.
   const tabItems = (() => {
@@ -278,12 +291,82 @@ export function Layout({ children }: { children: ReactNode }) {
         <Sidebar mini={collapsed} />
       </aside>
 
-      {/* Mobile drawer — slides in from left (office roles only) */}
+      {/* Phone menu for the office roles: the whole screen, like an app's menu,
+          not the desktop sidebar squeezed into a 256px drawer. Rows are
+          finger-sized, the current page is the one coloured row, and the
+          waiting counts ride on the rows they belong to. */}
       {open && !app && (
-        <div className="fixed inset-0 z-50 md:hidden" onClick={() => setOpen(false)}>
-          <div className="absolute inset-0 bg-black/40 animate-fade-in" />
-          <div className="absolute left-0 top-0 h-full w-64 animate-slide-in" onClick={(e) => e.stopPropagation()}>
-            <Sidebar mini={false} />
+        <div className="fixed inset-0 z-50 md:hidden flex flex-col animate-fade-in"
+          style={{ background: 'var(--color-bg)' }} role="dialog" aria-label="Menu">
+          <div className="flex items-center justify-between px-4 h-14 border-b shrink-0 pt-safe"
+            style={{ borderColor: 'var(--color-border)', background: 'var(--color-card)' }}>
+            <Logo height={20} />
+            <button onClick={() => setOpen(false)} aria-label="Close menu"
+              className="tap grid place-items-center w-10 h-10 rounded-xl" style={{ background: 'var(--color-card-alt)' }}>
+              <X size={20} />
+            </button>
+          </div>
+
+          <div className="flex-1 overflow-y-auto px-4 py-4">
+            {/* Who is signed in. */}
+            <div className="flex items-center gap-3 rounded-2xl p-3.5 mb-4" style={{ background: 'var(--color-card)' }}>
+              <span className="grid place-items-center w-12 h-12 rounded-full text-sm font-bold shrink-0"
+                style={{ background: 'var(--color-accent-soft)', color: 'var(--color-primary)' }}>
+                {initials || <User size={18} />}
+              </span>
+              <div className="min-w-0">
+                <div className="font-display font-bold truncate">{name}</div>
+                <div className="text-xs muted">{roleLabel(user.role)}</div>
+              </div>
+            </div>
+
+            <nav className="space-y-1.5" aria-label="Main">
+              {items.map((it) => {
+                const Icon = it.icon;
+                const badge = badgeFor(it.to);
+                return (
+                  <NavLink
+                    key={it.to}
+                    to={it.to}
+                    end={it.to.split('/').length <= 2}
+                    onClick={() => setOpen(false)}
+                    className="tap flex items-center gap-3.5 rounded-2xl px-3.5 py-3 font-semibold transition-colors"
+                    style={({ isActive }: any) => isActive
+                      ? { background: 'var(--color-accent-soft)', color: 'var(--color-primary)' }
+                      : { background: 'var(--color-card)', color: 'var(--color-text)' }}
+                  >
+                    {({ isActive }) => (
+                      <>
+                        <span className="grid place-items-center w-10 h-10 rounded-xl shrink-0"
+                          style={{ background: isActive ? 'var(--color-card)' : 'var(--color-card-alt)', color: isActive ? 'var(--color-primary)' : 'var(--color-muted)' }}>
+                          <Icon size={20} strokeWidth={isActive ? 2.3 : 2} />
+                        </span>
+                        <span className="flex-1 min-w-0 truncate text-[15px]">{it.label}</span>
+                        {badge > 0 && (
+                          <span className="inline-flex items-center justify-center h-[22px] min-w-[22px] px-1.5 text-xs font-bold leading-none text-white rounded-full tabular-nums"
+                            style={{ background: 'var(--color-primary)' }} title={badgeTitle(it.to, badge)}>
+                            {badge}
+                          </span>
+                        )}
+                      </>
+                    )}
+                  </NavLink>
+                );
+              })}
+            </nav>
+          </div>
+
+          <div className="shrink-0 px-4 pt-3 border-t space-y-2"
+            style={{ borderColor: 'var(--color-border)', background: 'var(--color-card)', paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom))' }}>
+            <button className="tap w-full flex items-center gap-3 rounded-2xl px-4 py-3 text-left font-medium"
+              style={{ background: 'var(--color-card-alt)' }} onClick={toggle}>
+              {dark ? <Sun size={18} /> : <Moon size={18} />}
+              <span className="flex-1">{dark ? 'Light theme' : 'Dark theme'}</span>
+            </button>
+            <button className="tap w-full flex items-center gap-3 rounded-2xl px-4 py-3 text-left font-medium text-red-600 dark:text-red-400"
+              style={{ background: 'var(--color-card-alt)' }} onClick={() => { setOpen(false); logout(); nav('/login'); }}>
+              <LogOut size={18} /> <span className="flex-1">Sign out</span>
+            </button>
           </div>
         </div>
       )}
@@ -324,14 +407,36 @@ export function Layout({ children }: { children: ReactNode }) {
             </div>
           </header>
         ) : (
-          /* Mobile top bar */
-          <header className="md:hidden flex items-center justify-between p-4 border-b sticky top-0 z-30" style={{ background: 'var(--color-card)', borderColor: 'var(--color-border)' }}>
-            <button onClick={() => setOpen(true)} aria-label="Open menu"><Menu /></button>
-            <Logo height={22} />
-            <span className="flex items-center gap-1">
+          /* Office phone bar — the same shape as the teacher's and parent's:
+             menu, the page you are on, the bell, and who you are. The total of
+             everything waiting sits on the menu button, so it is seen without
+             opening anything. */
+          <header className="md:hidden sticky top-0 z-30 glass-bar border-b pt-safe" style={{ borderColor: 'var(--color-border)' }}>
+            <div className="flex items-center gap-3 px-4 h-14">
+              <button onClick={() => setOpen(true)} aria-label="Open menu"
+                className="tap relative grid place-items-center w-10 h-10 rounded-xl shrink-0" style={{ background: 'var(--color-card-alt)' }}>
+                <Menu size={20} />
+                {menuWaiting > 0 && (
+                  <span className="absolute -top-1 -right-1 w-3 h-3 rounded-full border-2" style={{ background: 'var(--color-primary)', borderColor: 'var(--color-bg)' }} />
+                )}
+              </button>
+              <div className="min-w-0 flex-1">
+                {pathname === home ? (
+                  <Logo height={19} />
+                ) : (
+                  <div className="font-display font-bold text-[1.05rem] leading-tight truncate">
+                    {current?.label || 'STEM Vision'}
+                  </div>
+                )}
+                <div className="text-[11px] muted truncate leading-tight">{roleLabel(user.role)}</div>
+              </div>
               <NotificationBell />
-              <button onClick={toggle}>{dark ? <Sun size={20} /> : <Moon size={20} />}</button>
-            </span>
+              <button onClick={() => setOpen(true)} aria-label="Account and menu"
+                className="tap grid place-items-center w-9 h-9 rounded-full text-xs font-bold shrink-0"
+                style={{ background: 'var(--color-accent-soft)', color: 'var(--color-primary)' }}>
+                {initials || <User size={16} />}
+              </button>
+            </div>
           </header>
         )}
 

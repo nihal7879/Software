@@ -125,7 +125,7 @@ export default function Registrations() {
 
   return (
     <div className="space-y-4">
-      <div>
+      <div className="hidden md:block">
         <h1 className="text-2xl font-bold">Registrations</h1>
         <p className="muted text-sm">Students, teachers and parents who registered themselves. Nobody can sign in until you approve them.</p>
       </div>

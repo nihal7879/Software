@@ -12,10 +12,13 @@ export function ColumnPicker({
   columns,
   visible,
   onToggle,
+  stretch = false,
 }: {
   columns: PickableColumn[];
   visible: Set<string>;
   onToggle: (key: string) => void;
+  /** On phones, fill the space it is given — half a row beside Filters. */
+  stretch?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const btnRef = useRef<HTMLButtonElement>(null);
@@ -23,18 +26,20 @@ export function ColumnPicker({
   const hidden = columns.filter((c) => !visible.has(c.key)).length;
 
   return (
-    <div className="relative inline-block">
+    <div className={`relative ${stretch ? 'block w-full md:inline-block md:w-auto' : 'inline-block'}`}>
       <button
         ref={btnRef}
         type="button"
         // Same button as the Filters menu beside it, so the two line up.
-        className="btn-ghost flex items-center gap-2 whitespace-nowrap"
+        className={`btn-ghost flex items-center gap-2 whitespace-nowrap ${stretch ? 'w-full justify-center md:w-auto' : ''}`}
         onClick={() => setOpen((o) => !o)}
         title="Show or hide columns"
       >
         <Columns3 size={16} className="muted" />
         <span className="font-medium">Columns</span>
-        {hidden > 0 && <span className="text-xs muted">({hidden} hidden)</span>}
+        {/* The count of hidden columns is left off the narrowest phones, where
+            it pushed the button past the edge of the screen. */}
+        {hidden > 0 && <span className="text-xs muted hidden min-[400px]:inline">({hidden} hidden)</span>}
         <ChevronDown size={15} className="muted shrink-0" />
       </button>
       {open && (

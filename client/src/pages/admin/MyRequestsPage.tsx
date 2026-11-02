@@ -6,7 +6,7 @@ import { MyRequests } from '../../components/MyRequests';
 export default function MyRequestsPage() {
   return (
     <div className="space-y-4">
-      <div>
+      <div className="hidden md:block">
         <h1 className="text-2xl font-bold">My requests</h1>
         <p className="muted text-sm">Changes you sent to the super admin, and what was decided.</p>
       </div>

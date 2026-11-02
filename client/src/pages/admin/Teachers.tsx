@@ -202,7 +202,7 @@ export default function Teachers() {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-bold">Teachers</h1>
+        <h1 className="hidden md:block text-2xl font-bold">Teachers</h1>
         <div className="flex flex-wrap gap-2">
           {/* btn-ghost, not btn-outline: outline is only styled below lg, and on
               a laptop it fell to bare text with the icon stacked above it. */}

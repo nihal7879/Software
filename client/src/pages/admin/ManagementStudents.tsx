@@ -203,27 +203,33 @@ export default function ManagementStudents() {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="hidden md:flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold">Students — Master</h1>
           <p className="muted text-sm">Parents &amp; guardians, profile, status and teachers</p>
         </div>
         {/* Registrations were a button here; they are a menu item of their own
-            now, with the waiting count on it, so the button went. */}
-        <div className="flex items-center gap-2">
+            now, with the waiting count on it, so the button went. On a phone
+            the add button moves beside the search box, below. */}
+        <div className="hidden md:flex items-center gap-2">
           <button className="btn-primary" onClick={() => setDrawer(true)}>+ Add Student</button>
         </div>
       </div>
 
+      {/* Phones: search and add on one row, the three types across the width,
+          then Filters and Columns half each — they used to run off the edge. */}
       <div className="flex flex-wrap gap-2 items-center">
-        <input className="input max-w-xs" placeholder="Search name / form no…" value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} />
-        <div className="flex gap-1 rounded-lg p-0.5" style={{ background: 'var(--color-card-alt)' }}>
+        <div className="flex gap-2 w-full md:w-auto">
+          <input className="input flex-1 min-w-0 md:flex-none md:w-80" placeholder="Search name / form no…" value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} />
+          <button className="md:hidden btn-primary shrink-0 whitespace-nowrap" onClick={() => setDrawer(true)}>+ Add</button>
+        </div>
+        <div className="flex gap-1 rounded-lg p-0.5 w-full sm:w-auto" style={{ background: 'var(--color-card-alt)' }}>
           {([['', 'All'], ['Trial', 'Trial'], ['Enrolled', 'Enrolled']] as const).map(([v, label]) => (
             <button
               key={v}
               type="button"
               onClick={() => { setTypeFilter(v); setPage(1); }}
-              className={`text-xs px-3 py-1.5 rounded-md transition-colors ${
+              className={`flex-1 sm:flex-none text-xs px-3 py-1.5 rounded-md transition-colors ${
                 typeFilter === v ? 'bg-[var(--color-card)] font-semibold shadow-sm' : 'muted hover:text-[var(--color-primary)]'
               }`}
             >
@@ -231,8 +237,8 @@ export default function ManagementStudents() {
             </button>
           ))}
         </div>
-        <div className="ml-auto flex items-center gap-2">
-          <FilterMenu count={statusFilter ? 1 : 0} onClear={() => { setStatusFilter(''); setPage(1); }}>
+        <div className="grid grid-cols-2 gap-2 w-full md:w-auto md:flex md:items-center md:ml-auto">
+          <FilterMenu stretch count={statusFilter ? 1 : 0} onClear={() => { setStatusFilter(''); setPage(1); }}>
             <FilterField label="Status">
               <Select
                 searchable={false}
@@ -246,7 +252,7 @@ export default function ManagementStudents() {
               />
             </FilterField>
           </FilterMenu>
-          <ColumnPicker columns={OPTIONAL_COLUMNS} visible={cols.visible} onToggle={cols.toggle} />
+          <ColumnPicker stretch columns={OPTIONAL_COLUMNS} visible={cols.visible} onToggle={cols.toggle} />
         </div>
       </div>
 
