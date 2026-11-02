@@ -28,7 +28,7 @@ export const BrandPaper = memo(function BrandPaper() {
       {/* Watermarked, the way a school crest is printed on a paper — large,
           cornered, and almost not there. */}
       <img
-        src="/stemvision-mark.png"
+        src="/stemvision-mark.png?v=4"
         alt=""
         aria-hidden="true"
         draggable={false}

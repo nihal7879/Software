@@ -170,7 +170,7 @@ export function Layout({ children }: { children: ReactNode }) {
         {mini ? (
           <button onClick={goHome} title="Go to dashboard" aria-label="Go to dashboard"
             className="grid place-items-center w-9 h-9 shrink-0 hover:opacity-80 transition">
-            <img src="/stemvision-mark.png" alt="" className="w-8 h-8 object-contain" draggable={false} />
+            <img src="/stemvision-mark.png?v=4" alt="" className="w-8 h-8 object-contain" draggable={false} />
           </button>
         ) : (
           <button onClick={goHome} className="flex-1 min-w-0 text-left" title="Go to dashboard">
@@ -296,7 +296,7 @@ export function Layout({ children }: { children: ReactNode }) {
               {isTab ? (
                 <button onClick={goHome} aria-label="Home"
                   className="tap grid place-items-center w-9 h-9 shrink-0">
-                  <img src="/stemvision-mark.png" alt="" className="w-8 h-8 object-contain" draggable={false} />
+                  <img src="/stemvision-mark.png?v=4" alt="" className="w-8 h-8 object-contain" draggable={false} />
                 </button>
               ) : (
                 <button onClick={() => nav(-1)} aria-label="Back"
