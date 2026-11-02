@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Bell, BellOff, Share, Smartphone } from 'lucide-react';
+import { Bell, BellOff, Share } from 'lucide-react';
 import { disablePush, enablePush, pushState, PUSH_ON_EVENT, type PushState } from '../lib/push';
 import { toast } from './Toast';
 
@@ -51,8 +51,10 @@ export function NotificationsCard() {
 
   // What each situation means, and what the person can do about it. Kept here
   // rather than in lib/push.ts so the wording sits beside the design.
-  const copy: Record<PushState, { text: string; action?: string }> = {
-    on: { text: 'This device will be notified about registrations, approvals, statements and check-ins.', action: 'Turn off for this device' },
+  // "On" carries no line of its own: the green badge already says it, and the
+  // institute asked for the card to be shorter.
+  const copy: Record<PushState, { text?: string; action?: string }> = {
+    on: { action: 'Turn off for this device' },
     off: { text: 'Get a notification on this device when something happens — even with the app closed.', action: 'Turn on for this device' },
     blocked: { text: 'Notifications are blocked for this site. Allow them in your browser settings, then reload this page.' },
     'ios-needs-install': { text: 'On an iPhone or iPad, open the Share menu and choose "Add to Home Screen". Open STEM Vision from there, and this button will work.' },
@@ -70,7 +72,7 @@ export function NotificationsCard() {
     : <BellOff size={20} />;
 
   return (
-    <div className="card p-5 flex flex-wrap items-center gap-4">
+    <div className="card p-4 sm:p-5 flex flex-wrap items-center gap-x-4 gap-y-3">
       <span
         className="grid place-items-center w-11 h-11 rounded-full shrink-0"
         style={{ background: 'var(--color-card-alt)', color: on ? '#10b981' : 'var(--color-primary)' }}
@@ -80,7 +82,7 @@ export function NotificationsCard() {
       {/* The basis is what makes the button wrap. Without it the text shrank to a
           word a line beside the button on a phone, rather than the button
           dropping underneath. */}
-      <div className="min-w-0 flex-1 basis-56">
+      <div className="min-w-0 flex-1 basis-48">
         <div className="font-bold flex flex-wrap items-center gap-x-2 gap-y-1">
           Notifications on this device
           <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${
@@ -89,13 +91,9 @@ export function NotificationsCard() {
             {state === null ? '…' : on ? 'On' : 'Off'}
           </span>
         </div>
-        <p className="muted text-sm">{here?.text ?? 'Checking…'}</p>
-        {/* Said once, plainly: it is the question everyone asks second. */}
-        {(state === 'on' || state === 'off') && (
-          <p className="muted text-xs mt-1 flex items-center gap-1.5">
-            <Smartphone size={12} className="shrink-0" /> Each phone and computer is turned on separately.
-          </p>
-        )}
+        {state === null
+          ? <p className="muted text-sm mt-0.5">Checking…</p>
+          : here?.text && <p className="muted text-sm mt-0.5">{here.text}</p>}
       </div>
       {here?.action && (
         <button className="btn-ghost !py-1.5 !px-3 text-sm whitespace-nowrap max-sm:w-full max-sm:justify-center" disabled={busy} onClick={flip}>

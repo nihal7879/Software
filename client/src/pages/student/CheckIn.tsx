@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Camera, CheckCircle2, LogIn, LogOut, X } from 'lucide-react';
 import { api, todayIso } from '../../api/client';
-import { Section, Spinner } from '../../components/ui';
+import { Pagination, Section, Spinner } from '../../components/ui';
 import { toast } from '../../components/Toast';
 import { codeFromScan, PENDING_SCAN } from '../../lib/qr';
 
@@ -50,15 +50,23 @@ export default function CheckIn() {
   const scannerRef = useRef<any>(null);
   const busyRef = useRef(false); // one at a time: the camera fires on every frame
 
+  // Ten to a page. The class they are in right now comes back on its own, so
+  // the button is right whichever page is open.
+  const [page, setPage] = useState(1);
+  const PAGE_SIZE = 10;
   const mine = useQuery({
-    queryKey: ['my-checkins'],
-    queryFn: () => api.get('/checkin/mine').then((r) => r.data.data as any[]),
+    queryKey: ['my-checkins', page],
+    queryFn: () => api.get('/checkin/mine', { params: { page, limit: PAGE_SIZE } })
+      .then((r) => r.data as { data: any[]; total: number; open: any | null }),
+    placeholderData: (prev) => prev, // keep the current page on screen while the next one loads
   });
 
   const send = useMutation({
     mutationFn: (code: string) => api.post('/checkin', { code }).then((r) => r.data as ScanResult),
     onSuccess: (data) => {
       setResult(data);
+      // Back to the first page, where the scan just made is.
+      setPage(1);
       qc.invalidateQueries({ queryKey: ['my-checkins'] });
     },
     onError: (e: any) => {
@@ -139,16 +147,13 @@ export default function CheckIn() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const rows = mine.data || [];
-  const openRow = rows.find((r: any) => !r.out_at && r.status === 'Pending');
+  const rows = mine.data?.data || [];
+  const total = mine.data?.total || 0;
+  const openRow = mine.data?.open || null;
 
   return (
     <div className="space-y-4 max-w-2xl mx-auto">
       <Section title="Check in">
-        <p className="muted text-sm mb-4">
-          Scan the QR code on your teacher&apos;s desk when the class starts, and scan it
-          again when the class ends. You are charged only for the time between the two.
-        </p>
 
         {openRow && !scanning && (
           <div className="mb-4 rounded-xl border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
@@ -278,6 +283,16 @@ export default function CheckIn() {
               </div>
             ))}
           </div>
+        )}
+        {total > PAGE_SIZE && (
+          <Pagination
+            page={page}
+            pages={Math.ceil(total / PAGE_SIZE)}
+            total={total}
+            noun="scans"
+            pageSize={PAGE_SIZE}
+            onPage={setPage}
+          />
         )}
       </Section>
     </div>

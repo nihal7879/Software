@@ -137,11 +137,17 @@ export function AttendanceInbox({
   teacherId,
   teacherName,
   specialization,
+  status: fixedStatus,
 }: {
   admin?: boolean;
   teacherId?: number;
   teacherName?: string;
   specialization?: string | null;
+  /**
+   * Which list, when the page around this chooses it with tabs of its own (the
+   * teacher's Lecture Entry). Left out, the inbox has its own switch.
+   */
+  status?: 'Pending' | 'Confirmed';
 }) {
   const qc = useQueryClient();
   const forAdmin = admin;
@@ -150,7 +156,9 @@ export function AttendanceInbox({
   const oneTeacher = !forAdmin || teacherId != null;
 
   const masters = useMasters();
-  const [status, setStatus] = useState<'Pending' | 'Confirmed'>('Pending');
+  const [ownStatus, setStatus] = useState<'Pending' | 'Confirmed'>('Pending');
+  const status = fixedStatus ?? ownStatus;
+  const ownSwitch = fixedStatus == null;
   const [dateFilter, setDateFilter] = useState('');
   const [edits, setEdits] = useState<Record<number, Edit>>({});
   const [picked, setPicked] = useState<Set<number>>(new Set());
@@ -239,6 +247,8 @@ export function AttendanceInbox({
 
   const refresh = () => {
     qc.invalidateQueries({ queryKey: ['checkin-inbox'] });
+    // The office's Teachers list counts each teacher's waiting scans.
+    qc.invalidateQueries({ queryKey: ['workload'] });
     setPicked(new Set());
   };
   const refreshLectures = () =>
@@ -262,6 +272,7 @@ export function AttendanceInbox({
       setAddStudents([]); setSearch(''); setAddError('');
       if (!skipped?.length) setAddOpen(false);
       qc.invalidateQueries({ queryKey: ['checkin-inbox'] });
+      qc.invalidateQueries({ queryKey: ['workload'] });
     },
     onError: (e: any) => setAddError(e?.response?.data?.error || 'Could not add them.'),
   });
@@ -477,28 +488,32 @@ export function AttendanceInbox({
             {dateFilter && (
               <button className="btn-ghost !py-1 !px-2.5 text-xs" onClick={() => setDateFilter('')}>Clear</button>
             )}
-            <button
-              className="btn-ghost !py-1 !px-2.5 text-xs"
-              onClick={() => { setStatus(status === 'Pending' ? 'Confirmed' : 'Pending'); setPicked(new Set()); }}
-            >
-              {status === 'Pending' ? 'Show confirmed' : 'Show pending'}
-            </button>
+            {ownSwitch && (
+              <button
+                className="btn-ghost !py-1 !px-2.5 text-xs"
+                onClick={() => { setStatus(status === 'Pending' ? 'Confirmed' : 'Pending'); setPicked(new Set()); }}
+              >
+                {status === 'Pending' ? 'Show confirmed' : 'Show pending'}
+              </button>
+            )}
           </>
         }
       >
         {/* Phone / tablet toolbar: which list, which day, and the two extras. */}
         {!wide && (
           <div className="space-y-2 mb-4">
-            <div className="flex p-1 rounded-xl" style={{ background: 'var(--color-card-alt)' }} role="tablist">
-              {(['Pending', 'Confirmed'] as const).map((s) => (
-                <button key={s} role="tab" aria-selected={status === s}
-                  className={`flex-1 py-2 rounded-lg text-sm font-semibold transition ${status === s ? 'shadow-sm' : 'muted'}`}
-                  style={status === s ? { background: 'var(--color-card)', color: 'var(--color-primary)' } : {}}
-                  onClick={() => { setStatus(s); setPicked(new Set()); }}>
-                  {s === 'Pending' ? 'Waiting' : 'Confirmed'}
-                </button>
-              ))}
-            </div>
+            {ownSwitch && (
+              <div className="flex p-1 rounded-xl" style={{ background: 'var(--color-card-alt)' }} role="tablist">
+                {(['Pending', 'Confirmed'] as const).map((s) => (
+                  <button key={s} role="tab" aria-selected={status === s}
+                    className={`flex-1 py-2 rounded-lg text-sm font-semibold transition ${status === s ? 'shadow-sm' : 'muted'}`}
+                    style={status === s ? { background: 'var(--color-card)', color: 'var(--color-primary)' } : {}}
+                    onClick={() => { setStatus(s); setPicked(new Set()); }}>
+                    {s === 'Pending' ? 'Waiting' : 'Confirmed'}
+                  </button>
+                ))}
+              </div>
+            )}
             <div className="m-form flex gap-2">
               <div className="flex-1 min-w-0">
                 <CalendarPicker stretch value={dateFilter} onChange={setDateFilter} placeholder="Any date" />
@@ -524,13 +539,12 @@ export function AttendanceInbox({
           </div>
         )}
 
-        {status === 'Pending' && (
+        {/* Wide screens only. On a phone the institute wanted the room for the
+            cards, and the Confirm button on each one says the same thing. */}
+        {status === 'Pending' && wide && (
           <p className="muted text-sm mb-3">
-            {wide
-              ? <>Each line is one student. Fill in the subject and topic and press Confirm —
-                that is when it becomes a lecture and counts against their hours.</>
-              : <>Each card is one student. Add the subject and topic, then Confirm — that is
-                when it becomes a lecture and counts against their hours.</>}
+            Each line is one student. Fill in the subject and topic and press Confirm —
+            that is when it becomes a lecture and counts against their hours.
           </p>
         )}
 
@@ -641,18 +655,21 @@ export function AttendanceInbox({
               <input className="input !py-1.5" placeholder="Meet link" value={bulk.meeting_link}
                 onChange={(e) => setBulk({ ...bulk, meeting_link: e.target.value })} />
             </div>
-            <div className="flex flex-wrap items-center gap-2 mt-3 max-lg:grid max-lg:grid-cols-3">
-              <button className="btn-ghost !py-1 !px-2.5 text-xs max-lg:!py-2.5 max-lg:text-sm" onClick={() => setPicked(new Set())}>
+            {/* Phones: Clear takes only what its word needs and the two real
+                actions share the rest. Three equal columns squeezed Confirm
+                onto two lines. */}
+            <div className="flex flex-wrap items-center gap-2 mt-3 max-lg:grid max-lg:grid-cols-[auto_1fr_1fr] [&>button]:whitespace-nowrap max-lg:[&>button]:justify-center">
+              <button className="btn-ghost !py-1 !px-2.5 text-xs max-lg:!py-2.5 max-lg:!px-3.5 max-lg:text-sm" onClick={() => setPicked(new Set())}>
                 {wide ? 'Clear selection' : 'Clear'}
               </button>
               <button
-                className="btn-outline !py-1 !px-2.5 text-xs ml-auto max-lg:!py-2.5 max-lg:ml-0 max-lg:text-sm"
+                className="btn-outline !py-1 !px-2.5 text-xs ml-auto max-lg:!py-2.5 max-lg:!px-2 max-lg:ml-0 max-lg:text-sm"
                 disabled={busy || (!bulk.subject_id && !bulk.topic && !bulk.subtopic && !bulk.venue && !bulk.meeting_link)}
                 onClick={() => applyBulk.mutate(pickedIds)}
               >
                 Apply to {pickedIds.length}
               </button>
-              <button className="btn-primary !py-1 !px-2.5 text-xs max-lg:!py-2.5 max-lg:text-sm" disabled={busy}
+              <button className="btn-primary !py-1 !px-2.5 text-xs max-lg:!py-2.5 max-lg:!px-2 max-lg:text-sm" disabled={busy}
                 onClick={() => askConfirmMany(pickedIds)}>
                 <Check className="w-3.5 h-3.5" /> Confirm {pickedIds.length}
               </button>

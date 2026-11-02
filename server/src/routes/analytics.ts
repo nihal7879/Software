@@ -95,7 +95,11 @@ router.get(
                           WHERE l.teacher_id = t.id AND l.is_deleted = FALSE),0) AS total_hours_taught,
               COALESCE((SELECT SUM(l.total_hours) FROM lecture_sessions l
                           WHERE l.teacher_id = t.id AND l.is_deleted = FALSE
-                            AND l.month = DATE_FORMAT(CURDATE(),'%Y-%m')),0) AS month_hours
+                            AND l.month = DATE_FORMAT(CURDATE(),'%Y-%m')),0) AS month_hours,
+              -- Scans still to be confirmed. With the Attendance page gone, this
+              -- is how the office sees whose inbox has work waiting.
+              (SELECT COUNT(*) FROM lecture_checkins c
+                WHERE c.teacher_id = t.id AND c.status = 'Pending' AND c.is_deleted = FALSE) AS pending_checkins
        FROM teachers t
        ORDER BY total_hours_taught DESC`
     );

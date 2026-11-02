@@ -52,10 +52,8 @@ export default function StudentProfile() {
 
   return (
     <div className="space-y-5">
-      <div>
-        <h1 className="text-2xl font-bold">Profile</h1>
-        <p className="muted text-sm">Your personal information and account security.</p>
-      </div>
+      {/* Wide screens only: on a phone the app bar already names the page. */}
+      <h1 className="text-2xl font-bold hidden lg:block">Profile</h1>
 
       {/* A student's menu has no Settings entry - their password and details
           live here - so the notifications switch has to be here too, or they

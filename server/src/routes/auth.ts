@@ -216,11 +216,15 @@ router.post(
       // so the message never confirms to a stranger that an email is on file.
       // Found by the username they chose, or by their email — which siblings can
       // share, so every candidate is tried and the password picks the right one.
+      // Teachers and parents wait for approval the same way now.
       const regs = await query<any>(
-        `SELECT status, password_hash FROM student_registrations
-          WHERE (username = ? OR email = ?) AND status <> 'Approved'
-          ORDER BY id DESC LIMIT 10`,
-        [identifier, identifier]
+        `(SELECT status, password_hash, id FROM student_registrations
+           WHERE (username = ? OR email = ?) AND status <> 'Approved')
+         UNION ALL
+         (SELECT status, password_hash, id FROM account_registrations
+           WHERE (username = ? OR email = ?) AND status <> 'Approved')
+         ORDER BY id DESC LIMIT 10`,
+        [identifier, identifier, identifier, identifier]
       );
       let reg: any = null;
       for (const r of regs) {
@@ -336,6 +340,19 @@ const registerSchema = z.object({
   if (p) ctx.addIssue({ code: 'custom', path: ['password'], message: p });
 });
 
+/**
+ * A username is taken by a live login, or by any registration still waiting
+ * for approval — a student's, or a teacher's or parent's — since approving it
+ * will create that login.
+ */
+async function usernameTaken(username: string) {
+  return (
+    (await queryOne<any>('SELECT id FROM users WHERE email = ?', [username])) ||
+    (await queryOne<any>("SELECT id FROM student_registrations WHERE username = ? AND status = 'Pending'", [username])) ||
+    (await queryOne<any>("SELECT id FROM account_registrations WHERE username = ? AND status = 'Pending'", [username]))
+  );
+}
+
 // Public: is this username free? The registration pages ask while the person
 // types, so a taken name is flagged at once rather than after the whole form is
 // filled in. "Taken" means a live login, or a request still waiting for approval
@@ -347,9 +364,7 @@ router.get(
     const username = String(req.query.username || '').trim().toLowerCase();
     const problem = usernameProblem(username);
     if (problem) return res.json({ username, available: false, reason: 'invalid', message: problem });
-    const taken =
-      (await queryOne<any>('SELECT id FROM users WHERE email = ?', [username])) ||
-      (await queryOne<any>("SELECT id FROM student_registrations WHERE username = ? AND status = 'Pending'", [username]));
+    const taken = await usernameTaken(username);
     res.json({ username, available: !taken, reason: taken ? 'taken' : null });
   })
 );
@@ -361,9 +376,7 @@ router.post(
 
     // The username is the login, so it is what must be unique — across live
     // accounts and requests still waiting for approval alike.
-    const taken =
-      (await queryOne<any>('SELECT id FROM users WHERE email = ?', [b.username])) ||
-      (await queryOne<any>("SELECT id FROM student_registrations WHERE username = ? AND status = 'Pending'", [b.username]));
+    const taken = await usernameTaken(b.username);
     if (taken) {
       return res.status(409).json({ error: `The username "${b.username}" is already taken. Please choose another.`, code: 'USERNAME_TAKEN' });
     }
@@ -428,67 +441,53 @@ router.post(
       return res.status(201).json({ pending: true, id: r.insertId });
     }
 
-    const conn = await pool.getConnection();
-    try {
-      await conn.beginTransaction();
-
-      // ---------------- PARENT (link by child Form No) ----------------
-      if (b.role === 'parent') {
-        if (!b.child_form_no) { await conn.rollback(); return res.status(400).json({ error: "Child's Form No is required to link your account" }); }
-        const [[child]]: any = await conn.query('SELECT * FROM students WHERE form_no = ?', [b.child_form_no.trim()]);
-        if (!child) { await conn.rollback(); return res.status(404).json({ error: `No student found with Form No ${b.child_form_no}` }); }
-        // verification: if the student record has a DOB, it must match
-        if (child.dob && b.child_dob && String(child.dob).slice(0, 10) !== b.child_dob.slice(0, 10)) {
-          await conn.rollback();
-          return res.status(403).json({ error: "Child's date of birth does not match our records" });
-        }
-        const parentName = b.name || [b.first_name, b.last_name].filter(Boolean).join(' ').trim() || 'Parent';
-        // users.email is the login column; it holds the username.
-        const [u]: any = await conn.query(
-          `INSERT INTO users (role, email, password_hash, display_name, registration_ip, registration_gps, registration_device)
-           VALUES ('parent', ?, ?, ?, ?, ?, ?)`,
-          [b.username, hash, parentName, ip, gps, ua]
-        );
-        await conn.query(
-          `INSERT INTO parents (student_id, user_id, name, email, mobile, relationship) VALUES (?,?,?,?,?,?)`,
-          // Null when the parent didn't pick one — better unknown than assumed father.
-          [child.id, u.insertId, parentName, b.email, b.mobile || null, b.relationship || null]
-        );
-        await conn.commit();
-        await audit(u.insertId, 'REGISTER', 'user', u.insertId, null, { role: 'parent', username: b.username, email: b.email, child_id: child.id });
-        const token = signToken({ userId: u.insertId, role: 'parent', email: b.username, studentId: child.id });
-        return res.status(201).json({
-          token,
-          user: { id: u.insertId, role: 'parent', email: b.username, displayName: parentName, studentId: child.id },
-          child: { form_no: child.form_no, name: child.full_name },
-        });
+    // ---------------- TEACHER / PARENT → a request for the administrator ----------------
+    // Both used to be signed in on the spot. The institute asked for them to
+    // wait for approval the way students do, so they too are only a request
+    // now (account_registrations); approving it creates the login and the
+    // teacher or parent record (see routes/registrations.ts). Until then they
+    // cannot sign in, and the login route tells them why.
+    let childId: number | null = null;
+    let name: string;
+    if (b.role === 'parent') {
+      // The child is checked now, so a wrong Form No is said while the parent is
+      // still on the form — not discovered by the office days later.
+      if (!b.child_form_no) return res.status(400).json({ error: "Child's Form No is required to link your account" });
+      const child = await queryOne<any>('SELECT * FROM students WHERE form_no = ? AND is_deleted = FALSE', [b.child_form_no.trim()]);
+      if (!child) return res.status(404).json({ error: `No student found with Form No ${b.child_form_no}` });
+      // verification: if the student record has a DOB, it must match
+      if (child.dob && b.child_dob && String(child.dob).slice(0, 10) !== b.child_dob.slice(0, 10)) {
+        return res.status(403).json({ error: "Child's date of birth does not match our records" });
       }
-
-      // ---------------- TEACHER ----------------
-      const teacherName = b.name || [b.first_name, b.last_name].filter(Boolean).join(' ').trim();
-      if (!teacherName) { await conn.rollback(); return res.status(400).json({ error: 'Name is required' }); }
-      const [u]: any = await conn.query(
-        `INSERT INTO users (role, email, password_hash, display_name, registration_ip, registration_gps, registration_device)
-         VALUES ('faculty', ?, ?, ?, ?, ?, ?)`,
-        [b.username, hash, teacherName, ip, gps, ua]
-      );
-      const [t]: any = await conn.query(
-        `INSERT INTO teachers (name, email, mobile, specialization, user_id) VALUES (?,?,?,?,?)`,
-        [teacherName, b.email, b.mobile || null, b.specialization || null, u.insertId]
-      );
-      await conn.commit();
-      await audit(u.insertId, 'REGISTER', 'user', u.insertId, null, { role: 'faculty', username: b.username, email: b.email });
-      const token = signToken({ userId: u.insertId, role: 'faculty', email: b.username, teacherId: t.insertId });
-      return res.status(201).json({
-        token,
-        user: { id: u.insertId, role: 'faculty', email: b.username, displayName: teacherName, teacherId: t.insertId },
-      });
-    } catch (e) {
-      await conn.rollback();
-      throw e;
-    } finally {
-      conn.release();
+      childId = child.id;
+      name = b.name || [b.first_name, b.last_name].filter(Boolean).join(' ').trim() || 'Parent';
+    } else {
+      name = (b.name || [b.first_name, b.last_name].filter(Boolean).join(' ')).trim();
+      if (!name) return res.status(400).json({ error: 'Name is required' });
     }
+
+    const role = b.role === 'teacher' ? 'faculty' : 'parent';
+    const r: any = await query(
+      `INSERT INTO account_registrations
+        (role, username, email, password_hash, name, mobile, specialization, child_student_id, relationship,
+         registration_ip, registration_gps, registration_device)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
+      [role, b.username, b.email, hash, name, b.mobile?.trim() || null,
+        role === 'faculty' ? b.specialization || null : null,
+        childId, role === 'parent' ? b.relationship || null : null,
+        ip, gps, ua]
+    );
+    await audit(undefined, 'REGISTER_REQUEST', 'account_registration', r.insertId, null,
+      { role, username: b.username, email: b.email, child_id: childId });
+    // A request waiting unseen is someone who cannot sign in, and nobody sits
+    // watching the Registrations page.
+    await notify(await adminUserIds(), {
+      kind: 'registration_new',
+      title: role === 'faculty' ? 'New teacher registration' : 'New parent registration',
+      body: `${name} is waiting to be approved.`,
+      url: '/admin/registrations',
+    });
+    return res.status(201).json({ pending: true, id: r.insertId });
   })
 );
 

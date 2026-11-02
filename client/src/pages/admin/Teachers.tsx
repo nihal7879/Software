@@ -14,6 +14,17 @@ import { EMAIL_RE } from '../../components/StudentRegistrationForm';
 import { passwordProblem } from '../../lib/credentials';
 import { TeacherLectures } from '../../components/TeacherLectures';
 import { MultiSelect } from '../../components/MultiSelect';
+import { BookOpen, Eye, EyeOff, Pencil, Printer, UserCheck, UserX } from 'lucide-react';
+
+/** A square icon button for the Workload row actions. */
+const ICON_BTN = 'grid place-items-center w-8 h-8 rounded-lg border transition-colors';
+/**
+ * Lecture Entry is one width on every row, with or without a waiting count
+ * beside its icon — otherwise the icons either side of it stop lining up
+ * down the table.
+ */
+const LECTURE_BTN = 'inline-flex items-center justify-center w-14 h-8 rounded-lg border transition-colors';
+import { printQrCards } from '../../lib/qr';
 
 // Chips with a clickable "+N" that expands/collapses the rest (touch-friendly).
 function ChipList({ value }: { value?: string }) {
@@ -162,17 +173,44 @@ export default function Teachers() {
   const [confirm, setConfirm] = useState<{ title: string; message: string; confirmLabel: string; danger?: boolean; onConfirm: () => void } | null>(null);
   // Admin logs a lecture on behalf of a (busy) teacher.
   const [workloadSearch, setWorkloadSearch] = useState('');
+  // Active by default: a teacher who has left is history, not someone the
+  // office is looking for. Inactive and All are one pick away.
+  const [workloadStatus, setWorkloadStatus] = useState<'active' | 'inactive' | 'all'>('active');
   const visibleWorkload = (workload.data || []).filter((t: any) => {
+    const active = Number(t.is_active) === 1;
+    if (workloadStatus === 'active' && !active) return false;
+    if (workloadStatus === 'inactive' && active) return false;
     if (!workloadSearch) return true;
     const q = workloadSearch.toLowerCase();
     return t.name?.toLowerCase().includes(q) || String(t.specialization || '').toLowerCase().includes(q);
   });
 
+  // Every desk card in one print run. Moved here from the Attendance page when
+  // that page went: the cards belong to the teachers listed below.
+  async function printAllQr() {
+    try {
+      const r = await api.get('/teachers/qr-codes');
+      const cards = (r.data.data as any[]).filter((c) => c.code).map((c) => ({ name: c.name, code: c.code }));
+      if (!cards.length) return toast('No teachers to print.', 'error');
+      const opened = await printQrCards(cards);
+      if (!opened) toast('The print window was blocked. Allow pop-ups for this site.', 'error');
+    } catch (e: any) {
+      toast(e?.response?.data?.error || 'Could not load the QR codes.', 'error');
+    }
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-bold">Teachers</h1>
-        <button className="btn-primary" onClick={() => setDrawer(true)}>+ Add Teacher</button>
+        <div className="flex flex-wrap gap-2">
+          {/* btn-ghost, not btn-outline: outline is only styled below lg, and on
+              a laptop it fell to bare text with the icon stacked above it. */}
+          <button className="btn-ghost whitespace-nowrap" onClick={printAllQr}>
+            <Printer className="w-4 h-4" /> Print all QR codes
+          </button>
+          <button className="btn-primary" onClick={() => setDrawer(true)}>+ Add Teacher</button>
+        </div>
       </div>
 
       <Section title="Subjects">
@@ -218,11 +256,28 @@ export default function Teachers() {
       </Section>
 
       <Section title="Workload" action={
-        <input className="input max-w-[220px]" placeholder="Search teacher…" value={workloadSearch} onChange={(e) => setWorkloadSearch(e.target.value)} />
+        <>
+          <Select
+            searchable={false}
+            className="w-32 shrink-0"
+            value={workloadStatus}
+            onChange={(v) => setWorkloadStatus(v as 'active' | 'inactive' | 'all')}
+            options={[
+              { value: 'active', label: 'Active' },
+              { value: 'inactive', label: 'Inactive' },
+              { value: 'all', label: 'All' },
+            ]}
+          />
+          <input className="input flex-1 min-w-0 sm:flex-none sm:w-[220px]" placeholder="Search teacher…" value={workloadSearch} onChange={(e) => setWorkloadSearch(e.target.value)} />
+        </>
       }>
         <p className="muted text-sm mb-3">Click a teacher to see their students and lectures. Assign teachers from a student's Report.</p>
         {workload.isLoading ? <Spinner /> : visibleWorkload.length === 0 ? (
-          <p className="muted text-sm">No teachers match “{workloadSearch}”.</p>
+          <p className="muted text-sm">
+            {workloadSearch
+              ? <>No {workloadStatus === 'all' ? '' : `${workloadStatus} `}teachers match “{workloadSearch}”.</>
+              : workloadStatus === 'inactive' ? 'No inactive teachers.' : 'No active teachers.'}
+          </p>
         ) : (
           <Table head={['Teacher', 'Specialization', { label: 'Students', align: 'right' }, { label: 'Total Hours Taught', align: 'right' }, { label: 'This Month', align: 'right' }, 'Status', '']}>
             {visibleWorkload.map((t: any) => {
@@ -251,38 +306,66 @@ export default function Teachers() {
                   </span>
                 </td>
                 <td className="table-td">
-                  <div className="flex gap-1.5 whitespace-nowrap">
+                  {/* Icons, not words: four labelled buttons took a third of the
+                      row. Each says what it does on hover. */}
+                  <div className="flex gap-1.5 justify-end whitespace-nowrap">
                     <button
-                      className="btn-ghost !py-1 !px-2.5 text-xs"
+                      className={`${ICON_BTN} border-[var(--color-border)] hover:bg-[var(--color-card-alt)]`}
+                      style={openTeacher?.id === t.id ? { color: 'var(--color-primary)', borderColor: 'var(--color-primary)' } : undefined}
                       onClick={() => { setPanelTab('students'); setOpenTeacher(openTeacher?.id === t.id ? null : { id: t.id, name: t.name, spec: t.specialization }); }}
+                      title={openTeacher?.id === t.id ? 'Hide students and lectures' : 'View students and lectures'}
+                      aria-label={openTeacher?.id === t.id ? `Hide ${t.name}` : `View ${t.name}`}
                     >
-                      {openTeacher?.id === t.id ? 'Hide' : 'View'}
+                      {openTeacher?.id === t.id ? <EyeOff size={15} /> : <Eye size={15} />}
                     </button>
                     <button
-                      className="!py-1 !px-2.5 text-xs rounded-lg border border-slate-500/30 text-slate-600 hover:bg-slate-500/10 transition-colors"
+                      className={`${ICON_BTN} border-slate-500/30 text-slate-600 dark:text-slate-300 hover:bg-slate-500/10`}
                       onClick={() => openEdit(t)}
+                      title="Edit teacher"
+                      aria-label={`Edit ${t.name}`}
                     >
-                      Edit
+                      <Pencil size={14} />
                     </button>
-                    <Link
-                      to={`/admin/lecture/${t.id}`}
-                      className="!py-1 !px-2.5 text-xs rounded-lg border border-blue-500/30 text-blue-600 hover:bg-blue-500/10 transition-colors whitespace-nowrap"
-                    >
-                      + Lecture
-                    </Link>
+                    {/* The waiting scans ride on this button, since it is where
+                        they are confirmed — inside it, as a number beside the
+                        icon. A badge pinned to the corner covered the icon. */}
+                    {Number(t.pending_checkins) > 0 ? (
+                      <Link
+                        to={`/admin/lecture/${t.id}`}
+                        className={`${LECTURE_BTN} gap-1 border-orange-500/40 bg-orange-500/10 text-orange-600 dark:text-orange-400 hover:bg-orange-500/20 text-xs font-bold tabular-nums`}
+                        title={`Lecture Entry — ${t.pending_checkins} scanned check-in${Number(t.pending_checkins) === 1 ? '' : 's'} waiting`}
+                        aria-label={`Lecture Entry for ${t.name}, ${t.pending_checkins} waiting`}
+                      >
+                        <BookOpen size={15} />
+                        {t.pending_checkins}
+                      </Link>
+                    ) : (
+                      <Link
+                        to={`/admin/lecture/${t.id}`}
+                        className={`${LECTURE_BTN} border-blue-500/30 text-blue-600 hover:bg-blue-500/10`}
+                        title="Lecture Entry"
+                        aria-label={`Lecture Entry for ${t.name}`}
+                      >
+                        <BookOpen size={15} />
+                      </Link>
+                    )}
                     {active ? (
                       <button
-                        className="!py-1 !px-2.5 text-xs rounded-lg border border-red-500/30 text-red-600 hover:bg-red-500/10 transition-colors"
+                        className={`${ICON_BTN} border-red-500/30 text-red-600 hover:bg-red-500/10`}
                         onClick={() => setConfirm({ title: 'Deactivate teacher', message: `Deactivate ${t.name}? They won't be able to log in.`, confirmLabel: 'Deactivate', danger: true, onConfirm: () => setTeacherStatus.mutate({ id: t.id, is_active: false }) })}
+                        title="Deactivate teacher"
+                        aria-label={`Deactivate ${t.name}`}
                       >
-                        Deactivate
+                        <UserX size={15} />
                       </button>
                     ) : (
                       <button
-                        className="!py-1 !px-2.5 text-xs rounded-lg border border-emerald-500/30 text-emerald-600 hover:bg-emerald-500/10 transition-colors"
+                        className={`${ICON_BTN} border-emerald-500/30 text-emerald-600 hover:bg-emerald-500/10`}
                         onClick={() => setConfirm({ title: 'Activate teacher', message: `Activate ${t.name}?`, confirmLabel: 'Activate', onConfirm: () => setTeacherStatus.mutate({ id: t.id, is_active: true }) })}
+                        title="Activate teacher"
+                        aria-label={`Activate ${t.name}`}
                       >
-                        Activate
+                        <UserCheck size={15} />
                       </button>
                     )}
                   </div>

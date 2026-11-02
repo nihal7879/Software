@@ -66,7 +66,8 @@ export default function FacultyStudents() {
 
   return (
     <div className="space-y-4">
-      <div>
+      {/* Wide screens only: on a phone the app bar already names the page. */}
+      <div className="hidden lg:block">
         <h1 className="text-2xl font-bold">My Students</h1>
         <p className="muted text-sm">Students assigned to you by the institute.</p>
       </div>

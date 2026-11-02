@@ -29,7 +29,19 @@ router.get(
          FROM student_registrations WHERE status = 'Pending'`,
       [since]
     );
-    res.json({ pending: Number(r?.pending || 0), unseen: Number(r?.unseen || 0) });
+    // Teachers and parents wait too now; their counts ride alongside, and
+    // `total` is the one number the menu shows.
+    const acc = await queryOne<any>(
+      `SELECT COALESCE(SUM(role = 'faculty'), 0) AS teachers, COALESCE(SUM(role = 'parent'), 0) AS parents
+         FROM account_registrations WHERE status = 'Pending'`
+    );
+    const students = Number(r?.pending || 0);
+    const teachers = Number(acc?.teachers || 0);
+    const parents = Number(acc?.parents || 0);
+    res.json({
+      pending: students, unseen: Number(r?.unseen || 0),
+      students, teachers, parents, total: students + teachers + parents,
+    });
   })
 );
 
@@ -147,6 +159,122 @@ router.post(
     } finally {
       conn.release();
     }
+  })
+);
+
+// ---------------------------------------------------------------------------
+// Teachers and parents. Registered as requests in account_registrations (see
+// POST /auth/register); approving one creates the login and the teacher or
+// parent record, exactly what registering used to do on the spot.
+// ---------------------------------------------------------------------------
+
+router.get(
+  '/accounts',
+  wrap(async (req, res) => {
+    const q = z.object({
+      role: z.enum(['faculty', 'parent']),
+      status: z.enum(['Pending', 'Approved', 'Rejected']).catch('Pending'),
+    }).parse(req.query);
+    // The password hash never leaves the server.
+    const rows = await query(
+      `SELECT r.id, r.role, r.username, r.email, r.name, r.mobile, r.specialization, r.relationship,
+              r.status, r.reject_reason, r.created_at, r.reviewed_at, r.user_id,
+              r.child_student_id, s.full_name AS child_name, s.form_no AS child_form_no
+         FROM account_registrations r
+         LEFT JOIN students s ON s.id = r.child_student_id
+        WHERE r.role = ? AND r.status = ?
+        ORDER BY r.created_at ${q.status === 'Pending' ? 'ASC' : 'DESC'}
+        LIMIT 500`,
+      [q.role, q.status]
+    );
+    res.json({ data: rows });
+  })
+);
+
+router.post(
+  '/accounts/:id/approve',
+  wrap(async (req, res) => {
+    const conn = await pool.getConnection();
+    try {
+      await conn.beginTransaction();
+      // Locked, so two admins approving the same request cannot create it twice.
+      const [[reg]]: any = await conn.query(
+        "SELECT * FROM account_registrations WHERE id = ? AND status = 'Pending' FOR UPDATE",
+        [req.params.id]
+      );
+      if (!reg) {
+        await conn.rollback();
+        return res.status(404).json({ error: 'This registration is no longer waiting — it may already have been handled.' });
+      }
+      const [[taken]]: any = await conn.query('SELECT id FROM users WHERE email = ?', [reg.username]);
+      if (taken) {
+        await conn.rollback();
+        return res.status(409).json({ error: `The login "${reg.username}" already exists. Reject this request, or remove the other account first.` });
+      }
+      let child: any = null;
+      if (reg.role === 'parent') {
+        // The child may have been removed while the request waited.
+        const [found]: any = await conn.query('SELECT id, full_name, form_no FROM students WHERE id = ? AND is_deleted = FALSE', [reg.child_student_id]);
+        child = found[0] ?? null;
+        if (!child) {
+          await conn.rollback();
+          return res.status(409).json({ error: 'The child this parent registered for is no longer on the system. Reject this request.' });
+        }
+      }
+
+      // users.email is the login column; it holds the username.
+      const [u]: any = await conn.query(
+        `INSERT INTO users (role, email, password_hash, display_name, registration_ip, registration_gps, registration_device)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [reg.role, reg.username, reg.password_hash, reg.name,
+          reg.registration_ip?.slice(0, 45) ?? null, reg.registration_gps?.slice(0, 60) ?? null, reg.registration_device?.slice(0, 120) ?? null]
+      );
+      let recordId: number;
+      if (reg.role === 'faculty') {
+        const [t]: any = await conn.query(
+          `INSERT INTO teachers (name, email, mobile, specialization, user_id) VALUES (?,?,?,?,?)`,
+          [reg.name, reg.email, reg.mobile, reg.specialization, u.insertId]
+        );
+        recordId = t.insertId;
+      } else {
+        const [p]: any = await conn.query(
+          `INSERT INTO parents (student_id, user_id, name, email, mobile, relationship) VALUES (?,?,?,?,?,?)`,
+          // Null when the parent didn't pick one — better unknown than assumed father.
+          [child.id, u.insertId, reg.name, reg.email, reg.mobile, reg.relationship]
+        );
+        recordId = p.insertId;
+      }
+      await conn.query(
+        `UPDATE account_registrations SET status = 'Approved', user_id = ?, reviewed_by = ?, reviewed_at = NOW() WHERE id = ?`,
+        [u.insertId, req.user!.userId, reg.id]
+      );
+      await conn.commit();
+      await audit(req.user!.userId, 'APPROVE_REGISTRATION', 'account_registration', reg.id,
+        { role: reg.role, username: reg.username, email: reg.email },
+        { user_id: u.insertId, [reg.role === 'faculty' ? 'teacher_id' : 'parent_id']: recordId, child_id: child?.id ?? null });
+      res.json({ ok: true, user_id: u.insertId, username: reg.username });
+    } catch (e) {
+      await conn.rollback();
+      throw e;
+    } finally {
+      conn.release();
+    }
+  })
+);
+
+router.post(
+  '/accounts/:id/reject',
+  wrap(async (req, res) => {
+    const b = z.object({ reason: z.string().max(255).optional().nullable() }).parse(req.body);
+    const reg = await queryOne<any>("SELECT id, role, username, email FROM account_registrations WHERE id = ? AND status = 'Pending'", [req.params.id]);
+    if (!reg) return res.status(404).json({ error: 'This registration is no longer waiting — it may already have been handled.' });
+    await query(
+      `UPDATE account_registrations SET status = 'Rejected', reject_reason = ?, reviewed_by = ?, reviewed_at = NOW() WHERE id = ?`,
+      [b.reason?.trim() || null, req.user!.userId, reg.id]
+    );
+    await audit(req.user!.userId, 'REJECT_REGISTRATION', 'account_registration', reg.id,
+      { role: reg.role, username: reg.username, email: reg.email }, { reason: b.reason ?? null });
+    res.json({ ok: true });
   })
 );
 

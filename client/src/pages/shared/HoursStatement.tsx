@@ -90,10 +90,8 @@ export default function HoursStatement() {
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold">Fees Info</h1>
-          <p className="muted text-sm">Fees paid, hours credited, hours used per lecture, and your running balance.</p>
-        </div>
+        {/* Wide screens only: on a phone the app bar already says Fees Info. */}
+        <h1 className="text-2xl font-bold hidden lg:block">Fees Info</h1>
         {/* View toggle: concise summary vs detailed statement */}
         <div className="flex w-full sm:w-auto rounded-lg p-0.5" style={{ background: 'var(--color-card-alt)' }}>
           <button

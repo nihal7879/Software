@@ -1,19 +1,18 @@
-import { dubaiNow } from '../api/client';
+import { api, dubaiNow } from '../api/client';
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
-import { useAuth } from '../auth/AuthContext';
 import { Select } from '../components/Select';
 import { CalendarPicker } from '../components/CalendarPicker';
 import { RegisterLayout, makeField, PasswordFields, UsernameField } from '../components/RegisterLayout';
+import { RegistrationReceived } from '../components/RegistrationReceived';
 
 // Parent self-registration, on its own link (/register/parent). The parent is
 // linked to their child by the child's Form No (and date of birth, when the
-// institute has one on file). The account is live straight away — parent
-// registrations are not yet held for an administrator the way students' are.
+// institute has one on file) — checked as they submit, so a wrong number is
+// said at once. It used to sign the parent in on the spot; it is now a request
+// the administrator approves, as a student's is.
 export default function ParentRegister() {
-  const { register: doRegister } = useAuth();
-  const nav = useNavigate();
+  const [done, setDone] = useState<{ name: string; username: string } | null>(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const { register, handleSubmit, getValues, watch, setValue, formState: { errors } } = useForm<any>();
@@ -22,18 +21,20 @@ export default function ParentRegister() {
   const submit = async ({ confirm_password: _confirm, ...b }: any) => {
     setError(''); setBusy(true);
     try {
-      await doRegister({ role: 'parent', ...b, email: b.email.trim() });
-      nav('/parent');
+      await api.post('/auth/register', { role: 'parent', ...b, email: b.email.trim() });
+      setDone({ name: String(b.name || '').trim().split(/\s+/)[0] || 'you', username: String(b.username).trim().toLowerCase() });
     } catch (e: any) {
       setError(e.response?.data?.error || 'Registration failed. Please try again.');
     } finally { setBusy(false); }
   };
 
+  if (done) return <RegistrationReceived name={done.name} username={done.username} />;
+
   return (
     <RegisterLayout
       eyebrow="Parent Registration"
       title={<>Follow your child on <span className="accent-word">STEM Vision</span></>}
-      subtitle="Create a parent account linked to your child's record."
+      subtitle="Register as a parent, linked to your child's record. The administrator will confirm it before you can sign in."
     >
       <form onSubmit={handleSubmit(submit)} className="space-y-4" autoComplete="off">
         <div className="card p-3" style={{ background: 'var(--color-card-alt)' }}>

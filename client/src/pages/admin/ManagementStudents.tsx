@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { UserPlus } from 'lucide-react';
 import { ColumnPicker, useColumnVisibility } from '../../components/ColumnPicker';
 import { FilterMenu, FilterField } from '../../components/FilterMenu';
 import { Select } from '../../components/Select';
@@ -198,13 +197,6 @@ export default function ManagementStudents() {
   // letting the row quietly renumber itself behind the closed dialog.
   const [enrolled, setEnrolled] = useState<{ name: string; form_no: string; previous_form_no: string } | null>(null);
 
-  const regCount = useQuery({
-    queryKey: ['registrations-count'],
-    queryFn: () => api.get('/registrations/count').then((r) => Number(r.data.pending) || 0),
-    refetchInterval: 60_000,
-  });
-  const pendingRegs = regCount.data || 0;
-
   const rows = data?.data || [];
   const total = data?.total || 0;
   const pages = Math.ceil(total / pageSize) || 1;
@@ -216,21 +208,9 @@ export default function ManagementStudents() {
           <h1 className="text-2xl font-bold">Students — Master</h1>
           <p className="muted text-sm">Parents &amp; guardians, profile, status and teachers</p>
         </div>
+        {/* Registrations were a button here; they are a menu item of their own
+            now, with the waiting count on it, so the button went. */}
         <div className="flex items-center gap-2">
-          {/* Self-registrations live on their own page; the badge says when
-              someone is waiting, so nobody has to go and check. */}
-          <Link to="/admin/registrations" className="btn-ghost flex items-center gap-2 whitespace-nowrap" title="Students who registered themselves">
-            <UserPlus size={16} />
-            <span className="font-medium">Registrations</span>
-            {pendingRegs > 0 && (
-              <span
-                className="inline-flex items-center justify-center h-[18px] min-w-[18px] px-1 text-[11px] font-bold leading-none text-white rounded-full tabular-nums"
-                style={{ background: 'var(--color-primary)' }}
-              >
-                {pendingRegs}
-              </span>
-            )}
-          </Link>
           <button className="btn-primary" onClick={() => setDrawer(true)}>+ Add Student</button>
         </div>
       </div>

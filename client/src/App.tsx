@@ -20,13 +20,12 @@ import Finance from './pages/admin/Finance';
 import Teachers from './pages/admin/Teachers';
 import Pivots from './pages/admin/Pivots';
 import Approvals from './pages/admin/Approvals';
+import MyRequestsPage from './pages/admin/MyRequestsPage';
 import Notifications from './pages/admin/Notifications';
 import FacultyDashboard from './pages/faculty/FacultyDashboard';
 import FacultyStudents from './pages/faculty/FacultyStudents';
 import FacultyStudentDetail from './pages/faculty/FacultyStudentDetail';
 import LectureEntry from './pages/faculty/LectureEntry';
-import AdminAttendance from './pages/admin/Attendance';
-import FacultyAttendance from './pages/faculty/Attendance';
 import StudentDashboard from './pages/student/StudentDashboard';
 import CheckIn from './pages/student/CheckIn';
 import Scan from './pages/Scan';
@@ -109,8 +108,12 @@ export default function App() {
       {/* The approval queue is the super admin's alone. The office is told
           their change was sent when they save it. */}
       <Route path="/admin/approvals" element={<Protected roles={['superadmin']}><Approvals /></Protected>} />
-      {/* Scanned check-ins for any teacher, and the printed desk codes. */}
-      <Route path="/admin/attendance" element={<Protected roles={['admin']}><AdminAttendance /></Protected>} />
+      {/* What the office sent for approval. Read-only; the server returns only
+          the signed-in admin's own requests. */}
+      <Route path="/admin/requests" element={<Protected roles={['admin']}><MyRequestsPage /></Protected>} />
+      {/* Scanned check-ins moved into each teacher's Lecture Entry, and the
+          desk codes are printed from Teachers. Kept as a redirect for old links. */}
+      <Route path="/admin/attendance" element={<Navigate to="/admin/teachers" replace />} />
       <Route path="/admin/notifications" element={<Protected roles={['admin']}><Notifications /></Protected>} />
       <Route path="/admin/settings" element={<Protected roles={['admin']}><Settings /></Protected>} />
 
@@ -119,14 +122,18 @@ export default function App() {
       <Route path="/faculty/students" element={<Protected roles={['faculty', 'admin']}><FacultyStudents /></Protected>} />
       <Route path="/faculty/student/:id" element={<Protected roles={['faculty', 'admin']}><FacultyStudentDetail /></Protected>} />
       <Route path="/faculty/lecture" element={<Protected roles={['faculty', 'admin']}><LectureEntry /></Protected>} />
-      <Route path="/faculty/attendance" element={<Protected roles={['faculty', 'admin']}><FacultyAttendance /></Protected>} />
+      {/* Attendance moved into Lecture Entry. Kept as a redirect because
+          check-in notifications already sent still point here. */}
+      <Route path="/faculty/attendance" element={<Navigate to="/faculty/lecture" replace />} />
       <Route path="/faculty/settings" element={<Protected roles={['faculty', 'admin']}><Settings /></Protected>} />
 
       {/* Student */}
       {/* Data pages sit behind the student lock (admin Settings → Student access).
           Profile and settings stay open so a locked student can still finish
           their profile and change their password. */}
-      <Route path="/student" element={<Protected roles={['student']}><StudentGate><StudentDashboard /></StudentGate></Protected>} />
+      {/* The dashboard leaves the menu while locked, so it sends the student on
+          to Check in rather than showing the locked screen. */}
+      <Route path="/student" element={<Protected roles={['student']}><StudentGate lockedTo="/student/checkin"><StudentDashboard /></StudentGate></Protected>} />
       <Route path="/student/tracker" element={<Protected roles={['student']}><StudentGate><Tracker /></StudentGate></Protected>} />
       <Route path="/student/lectures" element={<Protected roles={['student']}><StudentGate><LectureHistory /></StudentGate></Protected>} />
       <Route path="/student/hours" element={<Protected roles={['student']}><StudentGate><HoursStatement /></StudentGate></Protected>} />

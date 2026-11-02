@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { query, queryOne } from '../db';
-import { requireAuth, requireSuperAdmin } from '../middleware/auth';
+import { requireAuth, requireRole, requireSuperAdmin } from '../middleware/auth';
 import { wrap } from '../middleware/error';
 import { approve, reject, KIND_LABEL } from '../utils/approvals';
 import { CREDITED_EXPR, CONSUMED_EXPR } from '../utils/hoursSummary';
@@ -189,6 +189,52 @@ router.get(
           hours_after: Math.round((left + change) * 100) / 100,
         };
       }),
+    });
+  })
+);
+
+/**
+ * The admin's own requests, read-only — what they sent, and what became of it.
+ *
+ * The queue above is the super admin's alone. Before this, the office's only
+ * record of a removal they had asked for was a notice in their bell, so "did
+ * that payment come off?" meant asking. Strictly their own: requested_by is
+ * the signed-in user, never a parameter.
+ */
+router.get(
+  '/mine',
+  requireRole('admin'),
+  wrap(async (req, res) => {
+    const status = z.enum(['Pending', 'Approved', 'Rejected']).catch('Pending').parse(req.query.status);
+    const me = req.user!.userId;
+
+    const rows = await query<any>(
+      `SELECT ${LIST_COLUMNS}
+         ${LIST_FROM}
+        WHERE a.is_deleted = FALSE AND a.requested_by = ? AND a.status = ?
+        ORDER BY COALESCE(a.decided_at, a.requested_at) DESC
+        LIMIT 200`,
+      [me, status]
+    );
+    const counts = await query<any>(
+      `SELECT status, COUNT(*) AS n FROM approvals
+        WHERE is_deleted = FALSE AND requested_by = ? GROUP BY status`,
+      [me]
+    );
+
+    res.json({
+      data: rows.map((r) => {
+        const payload = typeof r.payload === 'string' ? JSON.parse(r.payload) : r.payload;
+        return {
+          id: r.id, kind: r.kind, status: r.status, summary: r.summary,
+          label: KIND_LABEL[r.kind as keyof typeof KIND_LABEL],
+          request_note: r.request_note, decision_note: r.decision_note,
+          requested_at: r.requested_at, decided_at: r.decided_at, decided_by_name: r.decided_by_name,
+          student_id: r.student_id, student_name: r.student_name, form_no: r.form_no,
+          changes: changesFor(r.kind, payload),
+        };
+      }),
+      counts: Object.fromEntries(counts.map((c: any) => [c.status, Number(c.n)])),
     });
   })
 );

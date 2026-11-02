@@ -1,17 +1,15 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
-import { useAuth } from '../auth/AuthContext';
 import { api } from '../api/client';
 import { MultiSelect } from '../components/MultiSelect';
 import { RegisterLayout, makeField, PasswordFields, UsernameField } from '../components/RegisterLayout';
+import { RegistrationReceived } from '../components/RegistrationReceived';
 
-// Teacher self-registration, on its own link (/register/teacher). The account is
-// live straight away — teacher registrations are not yet held for an
-// administrator the way students' are.
+// Teacher self-registration, on its own link (/register/teacher). It used to
+// sign the teacher in on the spot; it is now a request the administrator
+// approves, as a student's is, and nobody is signed in until then.
 export default function TeacherRegister() {
-  const { register: doRegister } = useAuth();
-  const nav = useNavigate();
+  const [done, setDone] = useState<{ name: string; username: string } | null>(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [subjects, setSubjects] = useState<{ id: number; name: string }[]>([]);
@@ -23,18 +21,20 @@ export default function TeacherRegister() {
   const submit = async ({ confirm_password: _confirm, ...b }: any) => {
     setError(''); setBusy(true);
     try {
-      await doRegister({ role: 'teacher', ...b, email: b.email.trim() });
-      nav('/faculty');
+      await api.post('/auth/register', { role: 'teacher', ...b, email: b.email.trim() });
+      setDone({ name: String(b.name || '').trim().split(/\s+/)[0] || 'you', username: String(b.username).trim().toLowerCase() });
     } catch (e: any) {
       setError(e.response?.data?.error || 'Registration failed. Please try again.');
     } finally { setBusy(false); }
   };
 
+  if (done) return <RegistrationReceived name={done.name} username={done.username} />;
+
   return (
     <RegisterLayout
       eyebrow="Teacher Registration"
       title={<>Teach with <span className="accent-word">STEM Vision</span></>}
-      subtitle="Create a teacher account to log lectures and follow your students."
+      subtitle="Register as a teacher. The administrator will confirm your registration before you can sign in."
     >
       <form onSubmit={handleSubmit(submit)} className="space-y-4" autoComplete="off">
         {field('name', 'Full Name')}

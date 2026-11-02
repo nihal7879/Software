@@ -144,10 +144,8 @@ export default function Settings() {
 
   return (
     <div className="space-y-5">
-      <div>
-        <h1 className="text-2xl font-bold">Profile Settings</h1>
-        <p className="muted text-sm">Your personal information and account security.</p>
-      </div>
+      {/* Wide screens only: on a phone the app bar already names the page. */}
+      <h1 className="text-2xl font-bold hidden lg:block">Profile Settings</h1>
 
       {/* Locking every student dashboard is the super admin's switch. */}
       {user?.role === 'superadmin' && <StudentAccessCard />}

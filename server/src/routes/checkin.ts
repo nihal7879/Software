@@ -163,7 +163,7 @@ router.post(
       kind: 'check_in',
       title: `${student.full_name} has arrived`,
       body: `Checked in at ${atTime(made?.in_at)}. Fill in the subject and topic when the class ends.`,
-      url: '/faculty/attendance',
+      url: '/faculty/lecture',
       studentId,
     });
     // And the parents. The student is deliberately NOT notified: they are looking
@@ -191,14 +191,33 @@ router.get(
   '/mine',
   requireRole('student'),
   wrap(async (req, res) => {
+    // Paged, so a student can look back past the last twenty scans.
+    const q = z.object({
+      page: z.coerce.number().int().min(1).catch(1),
+      limit: z.coerce.number().int().min(1).max(50).catch(10),
+    }).parse(req.query);
+    const sid = req.user!.studentId ?? -1;
     const rows = await query(
       `SELECT c.id, c.session_date, c.in_at, c.out_at, c.hours, c.status, t.name AS teacher_name
          FROM lecture_checkins c JOIN teachers t ON t.id = c.teacher_id
         WHERE c.student_id = ? AND c.is_deleted = FALSE
-        ORDER BY c.id DESC LIMIT 20`,
-      [req.user!.studentId ?? -1]
+        ORDER BY c.id DESC LIMIT ? OFFSET ?`,
+      [sid, q.limit, (q.page - 1) * q.limit]
     );
-    res.json({ data: rows });
+    const [{ total }] = await query<any>(
+      'SELECT COUNT(*) AS total FROM lecture_checkins WHERE student_id = ? AND is_deleted = FALSE',
+      [sid]
+    );
+    // The class they are in right now, apart from the page: it decides whether
+    // the button says check in or check out, whichever page is on screen.
+    const open = await queryOne<any>(
+      `SELECT c.id, c.in_at, t.name AS teacher_name
+         FROM lecture_checkins c JOIN teachers t ON t.id = c.teacher_id
+        WHERE c.student_id = ? AND c.is_deleted = FALSE AND c.out_at IS NULL AND c.status = 'Pending'
+        ORDER BY c.id DESC LIMIT 1`,
+      [sid]
+    );
+    res.json({ data: rows, total: Number(total), page: q.page, limit: q.limit, open: open ?? null });
   })
 );
 

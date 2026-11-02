@@ -1,6 +1,6 @@
-import { cloneElement, useEffect, useMemo, useState } from 'react';
+import { cloneElement, ReactNode, useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { X, CalendarClock, Users, BookOpen, MapPin, Pencil, Trash2 } from 'lucide-react';
+import { X, CalendarClock, Users, BookOpen, MapPin, Pencil, Trash2, Search } from 'lucide-react';
 import { api, fmtDate, hrs, todayIso, dubaiNow} from '../api/client';
 import { useMasters } from '../api/masters';
 import { Pagination, Section, Spinner, Table, DateTile } from './ui';
@@ -64,11 +64,26 @@ export function LectureSheet({
   teacherId,
   teacherName,
   specialization,
+  formOpen,
+  onCloseForm,
+  between,
+  showList = true,
 }: {
   /** Set by an admin logging for a teacher; left out when a teacher logs their own. */
   teacherId?: number;
   teacherName?: string;
   specialization?: string;
+  /**
+   * Whether the new-lecture form shows. Left out, it always does (the admin's
+   * page). The teacher's page opens it from an "Add lecture" button instead,
+   * because most of their classes now arrive as scans to confirm.
+   */
+  formOpen?: boolean;
+  onCloseForm?: () => void;
+  /** Shown between the form and the list — the teacher's tabs and scans. */
+  between?: ReactNode;
+  /** False while the teacher's page is on another tab. */
+  showList?: boolean;
 }) {
   const forAdmin = teacherId != null;
   const qc = useQueryClient();
@@ -102,6 +117,19 @@ export function LectureSheet({
   // The log grows a line per class, so it is paged rather than run on forever.
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(15);
+  // Looking back over the log: newest or oldest first, and a range of dates.
+  // The range goes to the server, so a class older than the rows already
+  // fetched can still be found.
+  const [newestFirst, setNewestFirst] = useState(true);
+  const [from, setFrom] = useState('');
+  const [to, setTo] = useState('');
+  // One dropdown for both, as the institute asked: the two sort orders, then
+  // the usual date ranges, then "Choose dates" for anything else.
+  const [view, setView] = useState('new');
+  // Behind an icon until wanted, so the bar stays one line. Matches a student,
+  // the subject, or what was taught.
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [find, setFind] = useState('');
   // Charged unless the teacher says otherwise. It resets to charged after every
   // save, below: a class nobody is charged for is the exception, and one
   // entered at four o'clock must not quietly do the same to the next three.
@@ -119,9 +147,9 @@ export function LectureSheet({
   // A teacher is limited to their own lectures by the server; an admin asks for
   // the one teacher they are logging for.
   const lectures = useQuery({
-    queryKey: forAdmin ? ['teacher-lectures', teacherId] : ['lectures', 'mine'],
+    queryKey: forAdmin ? ['teacher-lectures', teacherId, from, to] : ['lectures', 'mine', from, to],
     queryFn: () => (forAdmin
-      ? api.get(`/lectures/by-teacher/${teacherId}`, { params: { limit: 100 } }).then((r) =>
+      ? api.get(`/lectures/by-teacher/${teacherId}`, { params: { limit: 100, from: from || undefined, to: to || undefined } }).then((r) =>
           (r.data.data || []).map((l: any) => ({
             ...l,
             id: l.lecture_id,
@@ -129,7 +157,7 @@ export function LectureSheet({
             // Kept with their ids too, so the Edit dialog can change who is on it.
             attendees: (l.students || []).map((s: any) => ({ id: s.student_id, name: s.full_name, form_no: s.form_no, is_billable: s.is_billable })),
           })))
-      : api.get('/lectures', { params: { limit: 300 } }).then((r) => r.data.data as any[])
+      : api.get('/lectures', { params: { limit: 300, from: from || undefined, to: to || undefined } }).then((r) => r.data.data as any[])
     ),
   });
 
@@ -149,18 +177,51 @@ export function LectureSheet({
 
   // One row per attendee comes back; a class is one line with its students.
   const classes = useMemo(() => {
-    if (forAdmin) return (lectures.data as any[]) || [];
-    const by = new Map<number, any>();
-    for (const r of lectures.data || []) {
-      const at = by.get(r.id) || { ...r, students: [] as string[], attendees: [] as { id: number; name: string; form_no?: string }[] };
-      at.students.push(r.student_name);
-      at.attendees.push({ id: r.student_id, name: r.student_name, form_no: r.form_no, is_billable: r.is_billable });
-      by.set(r.id, at);
+    let list: any[];
+    if (forAdmin) list = [...((lectures.data as any[]) || [])];
+    else {
+      const by = new Map<number, any>();
+      for (const r of lectures.data || []) {
+        const at = by.get(r.id) || { ...r, students: [] as string[], attendees: [] as { id: number; name: string; form_no?: string }[] };
+        at.students.push(r.student_name);
+        at.attendees.push({ id: r.student_id, name: r.student_name, form_no: r.form_no, is_billable: r.is_billable });
+        by.set(r.id, at);
+      }
+      list = [...by.values()];
     }
-    return [...by.values()].sort((a, b) =>
-      String(b.session_date).localeCompare(String(a.session_date)) || String(b.time_in).localeCompare(String(a.time_in))
+    const needle = find.trim().toLowerCase();
+    if (needle) {
+      list = list.filter((c) =>
+        [c.subject_name, c.topic, c.subtopic, c.remark,
+          ...(c.attendees || []).flatMap((a: any) => [a.name, a.form_no])]
+          .some((v) => v != null && String(v).toLowerCase().includes(needle))
+      );
+    }
+    const dir = newestFirst ? -1 : 1;
+    return list.sort((a, b) =>
+      dir * (String(a.session_date).localeCompare(String(b.session_date)) || String(a.time_in).localeCompare(String(b.time_in)))
     );
-  }, [lectures.data, forAdmin]);
+  }, [lectures.data, forAdmin, newestFirst, find]);
+
+  // Ranges are worked out on Dubai's calendar, never the phone's, and formatted
+  // by hand — toISOString would give the UTC date.
+  const pickView = (v: string) => {
+    setView(v);
+    setPage(1);
+    const iso = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+    const today = dubaiNow();
+    const y = today.getFullYear(), m = today.getMonth();
+    const range: Record<string, [string, string]> = {
+      today: [iso(today), iso(today)],
+      // The week starts on Monday.
+      week: [iso(new Date(y, m, today.getDate() - ((today.getDay() + 6) % 7))), iso(today)],
+      month: [iso(new Date(y, m, 1)), iso(today)],
+      lastmonth: [iso(new Date(y, m - 1, 1)), iso(new Date(y, m, 0))],
+    };
+    if (v === 'new' || v === 'old') { setNewestFirst(v === 'new'); setFrom(''); setTo(''); }
+    else if (range[v]) { setNewestFirst(true); setFrom(range[v][0]); setTo(range[v][1]); }
+    // 'custom' keeps whatever range is set and shows the two date boxes.
+  };
 
   const pageCount = Math.max(1, Math.ceil(classes.length / pageSize));
   const shown = classes.slice((Math.min(page, pageCount) - 1) * pageSize, Math.min(page, pageCount) * pageSize);
@@ -312,7 +373,15 @@ export function LectureSheet({
 
   return (
     <div className="space-y-4">
-      <Section title="New lecture">
+      {formOpen !== false && (
+      <Section
+        title="New lecture"
+        action={onCloseForm && (
+          <button className="btn-ghost !py-1 !px-2.5 text-xs ml-auto" onClick={onCloseForm}>
+            <X size={13} /> Close
+          </button>
+        )}
+      >
         {roster.isLoading ? <Spinner /> : (roster.data || []).length === 0 ? (
           <p className="muted text-sm">
             {forAdmin
@@ -465,11 +534,84 @@ export function LectureSheet({
           </>
         )}
       </Section>
+      )}
+
+      {between}
 
       {/* The same columns, already filled in — what has been logged. */}
-      <Section title={forAdmin ? 'Lectures by this teacher' : 'My lectures'}>
+      {showList && (
+      <Section
+        title={forAdmin ? 'Lectures by this teacher' : 'My lectures'}
+        action={
+          <div className="m-form flex flex-wrap items-center gap-2 w-full sm:w-auto">
+            {searchOpen ? (
+              <div className="relative flex-1 sm:flex-none sm:w-56 min-w-0">
+                <Search size={14} className="muted absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <input
+                  autoFocus
+                  className="input !py-1 !pl-8 !pr-8 w-full text-sm"
+                  placeholder="Student, subject or topic"
+                  value={find}
+                  onChange={(e) => { setFind(e.target.value); setPage(1); }}
+                  onKeyDown={(e) => { if (e.key === 'Escape') { setFind(''); setSearchOpen(false); } }}
+                />
+                <button
+                  type="button"
+                  className="muted hover:text-red-500 absolute right-2 top-1/2 -translate-y-1/2"
+                  onClick={() => { setFind(''); setSearchOpen(false); setPage(1); }}
+                  aria-label="Close search"
+                >
+                  <X size={14} />
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                className="btn-ghost grid place-items-center !p-0 w-8 h-8 shrink-0"
+                onClick={() => setSearchOpen(true)}
+                title="Search student, subject or topic"
+                aria-label="Search"
+              >
+                <Search size={15} />
+              </button>
+            )}
+            {/* A width of its own: a compact menu is as wide as its button, and
+                squeezed beside the dates every option was cut to "New…". */}
+            <Select
+              compact
+              searchable={false}
+              className="w-40 shrink-0"
+              value={view}
+              onChange={pickView}
+              options={[
+                { value: 'new', label: 'Newest first' },
+                { value: 'old', label: 'Oldest first' },
+                { value: 'today', label: 'Today' },
+                { value: 'week', label: 'This week' },
+                { value: 'month', label: 'This month' },
+                { value: 'lastmonth', label: 'Last month' },
+                { value: 'custom', label: 'Choose dates…' },
+              ]}
+            />
+            {view === 'custom' && (
+              <div className="flex items-center gap-1.5 flex-1 sm:flex-none min-w-0">
+                <CalendarPicker value={from} onChange={(v) => { setFrom(v); setPage(1); }} placeholder="From" align="right" />
+                <span className="muted text-xs">–</span>
+                <CalendarPicker value={to} onChange={(v) => { setTo(v); setPage(1); }} placeholder="To" align="right" />
+              </div>
+            )}
+            {view !== 'new' && (
+              <button className="btn-ghost !py-1 !px-2.5 text-xs" onClick={() => pickView('new')}>Clear</button>
+            )}
+          </div>
+        }
+      >
         {lectures.isLoading ? <Spinner /> : classes.length === 0 ? (
-          <p className="muted text-sm">Nothing logged yet — the line above saves into here.</p>
+          <p className="muted text-sm">
+            {find.trim() ? `No lectures match “${find.trim()}”.`
+              : from || to ? 'No lectures between those dates.'
+              : 'Nothing logged yet — the line above saves into here.'}
+          </p>
         ) : (
           <>
           {/* Phones and tablets: one card per class, nothing scrolls sideways. */}
@@ -477,31 +619,31 @@ export function LectureSheet({
             {shown.map((c) => (
               <li key={c.id} className={`rounded-2xl p-3.5 ${hasUnbilled(c) ? NOT_BILLABLE_ROW : ''}`}
                 style={hasUnbilled(c) ? undefined : { background: 'var(--color-card-alt)' }}>
+                {/* Read in the order the institute asked for: date, student,
+                    time, hours, then subject and topic. */}
                 <div className="flex gap-3">
                   <DateTile iso={String(c.session_date).slice(0, 10)} />
                   <div className="min-w-0 flex-1">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="font-semibold leading-snug">{c.subject_name || 'Lecture'}</div>
-                      <span className="shrink-0 text-sm font-bold tnum" style={{ color: 'var(--color-primary)' }}>{hrs(c.total_hours)}</span>
+                    <div className="flex flex-wrap gap-1.5">
+                      {(c.attendees || []).map((a: any) => (
+                        <span key={a.id} className="inline-flex items-center gap-1 text-sm font-semibold max-w-full">
+                          <span className="truncate">{a.name}</span>
+                          <NotBillableChip is_billable={a.is_billable} />
+                        </span>
+                      ))}
                     </div>
-                    <div className="text-xs muted tnum mt-0.5">{clock(c.time_in)} – {clock(c.time_out)}</div>
-                    {c.topic && <div className="text-sm mt-1.5 leading-snug">{c.topic}</div>}
+                    <div className="text-xs muted tnum mt-0.5">
+                      {clock(c.time_in)} – {clock(c.time_out)}
+                      <span className="font-bold ml-1.5" style={{ color: 'var(--color-primary)' }}>{hrs(c.total_hours)}</span>
+                    </div>
+                    <div className="text-sm mt-1.5 leading-snug">
+                      <span className="font-medium">{c.subject_name || 'No subject'}</span>
+                      {c.topic && <span className="muted"> · {c.topic}</span>}
+                    </div>
                     {c.remark && <div className="text-xs muted mt-0.5 italic">{c.remark}</div>}
                   </div>
                 </div>
-                <div className="flex items-end gap-2 mt-3">
-                  <div className="flex flex-wrap gap-1.5 flex-1 min-w-0">
-                    {(c.attendees || []).map((a: any) => (
-                      <span key={a.id} className="inline-flex items-center gap-1 text-xs rounded-full pl-1 pr-2 py-0.5 max-w-full" style={{ background: 'var(--color-card)' }}>
-                        <span className="grid place-items-center w-5 h-5 rounded-full text-[9px] font-bold shrink-0"
-                          style={{ background: 'var(--color-accent-soft)', color: 'var(--color-primary)' }}>
-                          {String(a.name || '?').split(/\s+/).map((w: string) => w[0]).slice(0, 2).join('').toUpperCase()}
-                        </span>
-                        <span className="truncate">{a.name}</span>
-                        <NotBillableChip is_billable={a.is_billable} />
-                      </span>
-                    ))}
-                  </div>
+                <div className="flex items-end justify-end gap-2 mt-3">
                   <div className="flex gap-1.5 shrink-0">
                     {/* A teacher sees only their own lectures in this list,
                         and the server checks that again, so there is nobody
@@ -510,27 +652,21 @@ export function LectureSheet({
                       onClick={() => setDeleting(c)} aria-label="Delete lecture">
                       <Trash2 size={15} />
                     </button>
-                    <button className="btn-ghost !h-9 !py-0 !px-3 text-xs" onClick={() => setEditing(c)}><Pencil size={13} /> Edit</button>
+                    <button className="btn-ghost grid place-items-center !p-0 w-9 h-9" onClick={() => setEditing(c)} aria-label="Edit lecture">
+                      <Pencil size={15} />
+                    </button>
                   </div>
                 </div>
               </li>
             ))}
           </ul>
           <div className="hidden lg:block">
-          <Table head={['Date', 'Time', 'Subject / Topic', { label: 'Hours', align: 'right' }, 'Students on this lecture', '']}>
+          {/* Date, student, time, hours, then subject and topic — the order the
+              institute reads its register in. */}
+          <Table head={['Date', 'Students on this lecture', 'Time', { label: 'Hours', align: 'right' }, 'Subject / Topic', '']}>
             {shown.map((c) => (
               <tr key={c.id} className={hasUnbilled(c) ? NOT_BILLABLE_ROW : undefined}>
                 <td className="table-td whitespace-nowrap">{fmtDate(String(c.session_date).slice(0, 10))}</td>
-                <td className="table-td whitespace-nowrap">{clock(c.time_in)} – {clock(c.time_out)}</td>
-                <td className="table-td">
-                  <span className="font-semibold">{c.subject_name || '—'}</span>
-                  {(c.topic || c.remark) && (
-                    <span className="block text-xs muted break-words">
-                      {[c.topic, c.remark].filter(Boolean).join(' — ')}
-                    </span>
-                  )}
-                </td>
-                <td className="table-td text-right tabular-nums whitespace-nowrap">{hrs(c.total_hours)}</td>
                 <td className="table-td">
                   <div className="flex flex-wrap gap-1">
                     {(c.attendees || []).map((a: any) => (
@@ -542,14 +678,30 @@ export function LectureSheet({
                     ))}
                   </div>
                 </td>
+                <td className="table-td whitespace-nowrap">{clock(c.time_in)} – {clock(c.time_out)}</td>
+                <td className="table-td text-right tabular-nums whitespace-nowrap">{hrs(c.total_hours)}</td>
                 <td className="table-td">
+                  <span className="font-semibold">{c.subject_name || '—'}</span>
+                  {(c.topic || c.remark) && (
+                    <span className="block text-xs muted break-words">
+                      {[c.topic, c.remark].filter(Boolean).join(' — ')}
+                    </span>
+                  )}
+                </td>
+                <td className="table-td">
+                  {/* Icons, not words: the two buttons were taking a column's
+                      worth of room on every line. The title says what each does. */}
                   <div className="flex items-center gap-1.5 justify-end">
-                    <button className="btn-ghost !py-1 !px-2.5 text-xs" onClick={() => setEditing(c)}>Edit</button>
+                    <button className="btn-ghost grid place-items-center !p-0 w-8 h-8" onClick={() => setEditing(c)}
+                      title="Edit lecture" aria-label="Edit lecture">
+                      <Pencil size={14} />
+                    </button>
                     <button
-                      className="!py-1 !px-2.5 text-xs rounded-lg border border-red-500/30 text-red-600 hover:bg-red-500/10 transition-colors"
+                      className="grid place-items-center w-8 h-8 rounded-lg border border-red-500/30 text-red-600 hover:bg-red-500/10 transition-colors"
                       onClick={() => setDeleting(c)}
+                      title="Delete lecture" aria-label="Delete lecture"
                     >
-                      Delete
+                      <Trash2 size={14} />
                     </button>
                   </div>
                 </td>
@@ -571,6 +723,7 @@ export function LectureSheet({
           />
         )}
       </Section>
+      )}
 
       {deleting && (
         <ConfirmModal

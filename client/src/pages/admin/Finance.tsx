@@ -76,7 +76,7 @@ export default function Finance() {
   // stale the moment one is added, edited or deleted — most of all when the
   // payment is moved to a different student, which changes two students' totals.
   const invalidateFeeViews = () => {
-    for (const k of ['transactions', 'tx', 'ledger', 'ledger-all', 'pkg', 'adjustments', 'student-report', 'overview', 'breakdown', 'trend']) {
+    for (const k of ['transactions', 'tx', 'ledger', 'ledger-all', 'pkg', 'adjustments', 'student-report', 'overview', 'breakdown', 'trend', 'my-requests']) {
       qc.invalidateQueries({ queryKey: [k] });
     }
   };
@@ -228,7 +228,7 @@ export default function Finance() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-bold">Finance Tracker</h1>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={onFile} />
           <button className="btn-ghost" onClick={() => fileRef.current?.click()} disabled={importMut.isPending}>
             {importMut.isPending ? 'Importing…' : '⬆ Import Excel'}
@@ -236,6 +236,7 @@ export default function Finance() {
           <button className="btn-primary" onClick={openAdd}>+ Record Payment</button>
         </div>
       </div>
+
 
       {importMsg && (
         <div className="card p-3 text-sm flex items-center justify-between gap-3">

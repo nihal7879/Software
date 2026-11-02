@@ -2,25 +2,26 @@ import { ReactNode, useState } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, Users, Clock, Wallet, GraduationCap, BarChart3,
-  BookOpen, User, LogOut, Moon, Sun, ChevronLeft, Menu, Settings, Lock, QrCode, KeyRound, Plus, BellRing,
+  BookOpen, User, LogOut, Moon, Sun, ChevronLeft, Menu, Settings, Lock, QrCode, KeyRound, Plus, BellRing, UserPlus, ClipboardList,
 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '../auth/AuthContext';
 import { api } from '../api/client';
-import { getLastSeenRegistration } from '../lib/registrationsSeen';
 import { useStudentAccess } from './StudentLock';
 import { useTheme } from '../theme/ThemeContext';
 import { roleLabel } from './MonthSelector';
 import { Toaster } from './Toast';
 import { NotificationBell } from './NotificationBell';
 import { Logo } from './Logo';
-import { CheckInNudge } from './CheckInNudge';
+import { useMyPendingCount } from './MyRequests';
 
 // `short` is the label under the icon in the phone tab bar, where there is room
 // for one word. `primary` is the role's main action, raised in the middle.
 // `also` is a path prefix for pages that belong to the tab without being it —
 // one student's details sit under My Students, though the path is /student/.
-type Item = { to: string; label: string; icon: any; short?: string; primary?: boolean; also?: string };
+// `sheet` keeps an item out of the phone tab bar and puts it in the account
+// sheet instead, so the raised button can sit in the middle.
+type Item = { to: string; label: string; icon: any; short?: string; primary?: boolean; also?: string; sheet?: boolean };
 
 const NAV: Record<string, Item[]> = {
   // The admin runs students, hours, fees and teachers. Pivots report on money,
@@ -28,21 +29,29 @@ const NAV: Record<string, Item[]> = {
   admin: [
     { to: '/admin', label: 'Dashboard', icon: LayoutDashboard },
     { to: '/admin/students', label: 'Students', icon: Users },
+    // Everyone who registered themselves — students, teachers and parents —
+    // waiting to be let in. It was reached only from the dashboard while it
+    // held students alone.
+    { to: '/admin/registrations', label: 'Registrations', icon: UserPlus },
     { to: '/admin/hours', label: 'Student Hours', icon: Clock },
     { to: '/admin/finance', label: 'Finance', icon: Wallet },
+    // Attendance lives inside each teacher's Lecture Entry now, reached from
+    // Teachers — the same screen the teacher has.
     { to: '/admin/teachers', label: 'Teachers', icon: GraduationCap },
-    { to: '/admin/attendance', label: 'Attendance', icon: QrCode },
+    // What this admin sent to the super admin, and what became of it. The
+    // super admin has none — their own changes apply at once.
+    { to: '/admin/requests', label: 'My requests', icon: ClipboardList, short: 'Requests' },
     { to: '/admin/notifications', label: 'Notifications', icon: BellRing, short: 'Alerts' },
     { to: '/admin/settings', label: 'Settings', icon: Settings },
   ],
   superadmin: [
     { to: '/admin', label: 'Dashboard', icon: LayoutDashboard },
     { to: '/admin/students', label: 'Students', icon: Users },
+    { to: '/admin/registrations', label: 'Registrations', icon: UserPlus },
     { to: '/admin/hours', label: 'Student Hours', icon: Clock },
     { to: '/admin/finance', label: 'Finance', icon: Wallet },
     { to: '/admin/teachers', label: 'Teachers', icon: GraduationCap },
     { to: '/admin/pivots', label: 'Pivots', icon: BarChart3 },
-    { to: '/admin/attendance', label: 'Attendance', icon: QrCode },
     { to: '/admin/approvals', label: 'Approvals', icon: KeyRound },
     { to: '/admin/notifications', label: 'Notifications', icon: BellRing, short: 'Alerts' },
     { to: '/admin/settings', label: 'Settings', icon: Settings },
@@ -50,10 +59,13 @@ const NAV: Record<string, Item[]> = {
   faculty: [
     { to: '/faculty', label: 'Dashboard', icon: LayoutDashboard, short: 'Home' },
     { to: '/faculty/students', label: 'My Students', icon: Users, short: 'Students', also: '/faculty/student/' },
+    // Also where the desk-QR scans are confirmed. That used to be a menu item of
+    // its own; the institute asked for one place, since confirming a scan is
+    // just another way of entering a lecture.
     { to: '/faculty/lecture', label: 'Lecture Entry', icon: BookOpen, short: 'Lecture', primary: true },
-    // Scans from the desk QR, waiting to be confirmed into lectures.
-    { to: '/faculty/attendance', label: 'Attendance', icon: QrCode },
-    { to: '/faculty/settings', label: 'Settings', icon: Settings },
+    // In the account sheet on a phone: with Attendance gone the bar had four
+    // tabs, and the raised button could not sit in the middle of four.
+    { to: '/faculty/settings', label: 'Settings', icon: Settings, sheet: true },
   ],
   student: [
     { to: '/student', label: 'Dashboard', icon: LayoutDashboard, short: 'Home' },
@@ -82,14 +94,12 @@ export function Layout({ children }: { children: ReactNode }) {
   const [collapsed, setCollapsed] = useState(false); // desktop collapse
   const [sheet, setSheet] = useState(false);       // phone account sheet
   const { pathname } = useLocation();
-  // New student registrations, as a badge on Students — only ones this admin has
-  // not seen yet, so it clears once they open Registrations and comes back only
-  // for a fresh one. Above the early return below, as hooks must run every render.
+  // Everyone waiting to be approved — students, teachers and parents — as the
+  // badge on Registrations. A to-do count: it stays until each one is decided.
+  // Above the early return below, as hooks must run every render.
   const pendingRegs = useQuery({
-    queryKey: ['registrations-count', 'unseen'],
-    queryFn: () =>
-      api.get('/registrations/count', { params: { since: getLastSeenRegistration(user?.id) } })
-        .then((r) => Number(r.data.unseen) || 0),
+    queryKey: ['registrations-count', 'total'],
+    queryFn: () => api.get('/registrations/count').then((r) => Number(r.data.total) || 0),
     enabled: user?.role === 'admin' || user?.role === 'superadmin',
     refetchInterval: 60_000,
   });
@@ -99,21 +109,30 @@ export function Layout({ children }: { children: ReactNode }) {
     enabled: user?.role === 'superadmin',
     refetchInterval: 60_000,
   });
-  // Registrations has no menu entry of its own — they are reached from the
-  // dashboard — so the waiting count rides on Students, as it did before.
+  // The admin's own requests still waiting for the super admin.
+  const myPending = useMyPendingCount(user?.role === 'admin').data?.counts?.Pending || 0;
   const badgeFor = (to: string) =>
-    to === '/admin/students' ? pendingRegs.data || 0
+    to === '/admin/registrations' ? pendingRegs.data || 0
+    : to === '/admin/requests' ? myPending
     : to === '/admin/approvals' ? pendingApprovals.data || 0
     : 0;
   const badgeTitle = (to: string, n: number) =>
     to === '/admin/approvals'
       ? `${n} waiting for approval`
-      : `${n} new registration${n === 1 ? '' : 's'}`;
+      : to === '/admin/requests'
+        ? `${n} of your request${n === 1 ? '' : 's'} waiting for the super admin`
+        : `${n} registration${n === 1 ? '' : 's'} waiting for approval`;
   // Students see a lock on Dashboard while an admin has student dashboards locked.
   const studentAccess = useStudentAccess(user?.role === 'student');
   const lockedFor = (to: string) => user?.role === 'student' && to === '/student' && studentAccess.data !== false;
   if (!user) return null;
-  const items = NAV[user.role] || [];
+  // While the admin has student dashboards locked, Dashboard is off the
+  // student's menu altogether rather than sitting there with a padlock: a
+  // tab that only says "not yet" is a tab nobody needs. Only once the lock is
+  // known to be on, so an unlocked dashboard never blinks out while loading.
+  const items = (NAV[user.role] || []).filter(
+    (it) => !(user.role === 'student' && it.to === '/student' && studentAccess.data === true)
+  );
   const home = items[0]?.to || '/';
   const goHome = () => { setOpen(false); setCollapsed(false); nav(home); };
   const app = APP_ROLES.includes(user.role);
@@ -126,6 +145,17 @@ export function Layout({ children }: { children: ReactNode }) {
   const name = user.displayName || user.email;
   const initials = String(name).split(/[\s@._]+/).map((w) => w[0]).filter(Boolean).slice(0, 2).join('').toUpperCase();
   const signOut = () => { setSheet(false); logout(); nav('/login'); };
+  // The phone tab bar: the raised action in the middle, the rest either side of
+  // it, whatever order the menu lists them in.
+  const tabItems = (() => {
+    const rest = items.filter((it) => !it.sheet && !it.primary);
+    const primary = items.find((it) => it.primary && !it.sheet);
+    if (!primary) return rest;
+    // Rounded down, so with a single other tab the main action comes first.
+    const mid = Math.floor(rest.length / 2);
+    return [...rest.slice(0, mid), primary, ...rest.slice(mid)];
+  })();
+  const sheetItems = items.filter((it) => it.sheet);
 
   const Sidebar = ({ mini }: { mini: boolean }) => (
     <div
@@ -307,7 +337,6 @@ export function Layout({ children }: { children: ReactNode }) {
 
         {/* The extra bottom padding keeps the last row clear of the tab bar. */}
         <main className={`flex-1 p-4 sm:p-6 lg:p-8 max-w-[1440px] w-full ${app ? 'pb-28 sm:pb-28 lg:pb-8' : ''}`}>
-          {user.role === 'student' && pathname !== '/student/checkin' && <CheckInNudge />}
           {children}
         </main>
       </div>
@@ -317,12 +346,16 @@ export function Layout({ children }: { children: ReactNode }) {
         <nav className="lg:hidden fixed bottom-0 inset-x-0 z-40 glass-bar border-t pb-safe"
           style={{ borderColor: 'var(--color-border)' }} aria-label="Main">
           <div className="flex items-end justify-around max-w-xl mx-auto px-2 h-16">
-            {items.map((it) => {
+            {tabItems.map((it) => {
               const Icon = it.icon;
               const label = it.short || it.label;
               if (it.primary) {
                 return (
-                  <NavLink key={it.to} to={it.to} className="tap flex flex-col items-center self-start -mt-5 w-16 shrink-0" aria-label={it.label}>
+                  // An equal share of the bar like every other tab, the button
+                  // centred in it. A fixed 64px slot left it hard against the
+                  // edge whenever there was only one tab beside it (a student
+                  // with the dashboard locked has Check in and Profile).
+                  <NavLink key={it.to} to={it.to} className="tap flex flex-col items-center self-start -mt-5 flex-1 min-w-0" aria-label={it.label}>
                     {({ isActive }) => (
                       <>
                         <span className="grid place-items-center w-14 h-14 rounded-2xl text-white"
@@ -378,6 +411,15 @@ export function Layout({ children }: { children: ReactNode }) {
               </div>
             </div>
             <div className="space-y-2">
+              {sheetItems.map((it) => {
+                const Icon = it.icon;
+                return (
+                  <button key={it.to} className="tap w-full flex items-center gap-3 rounded-2xl px-4 py-3.5 text-left font-medium" style={{ background: 'var(--color-card-alt)' }}
+                    onClick={() => { setSheet(false); nav(it.to); }}>
+                    <Icon size={18} /> <span className="flex-1">{it.label}</span>
+                  </button>
+                );
+              })}
               <button className="tap w-full flex items-center gap-3 rounded-2xl px-4 py-3.5 text-left font-medium" style={{ background: 'var(--color-card-alt)' }} onClick={toggle}>
                 {dark ? <Sun size={18} /> : <Moon size={18} />}
                 <span className="flex-1">{dark ? 'Light theme' : 'Dark theme'}</span>

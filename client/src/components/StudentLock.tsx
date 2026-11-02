@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { Link } from 'react-router-dom';
+import { Link, Navigate } from 'react-router-dom';
 import { Lock, UserRound, KeyRound } from 'lucide-react';
 import { api } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
@@ -21,14 +21,22 @@ export function useStudentAccess(enabled = true) {
  * their profile and change their password. The server refuses the same data on
  * its side too, so this is the friendly face of the lock, not the lock itself.
  */
-export function StudentGate({ children }: { children: JSX.Element }) {
+export function StudentGate({ children, lockedTo }: {
+  children: JSX.Element;
+  /**
+   * Where to send the student instead of the locked screen. The dashboard uses
+   * it: while locked it is taken off the menu, so signing in lands on Check in
+   * — the reason they opened the app — not on a page saying there is nothing here.
+   */
+  lockedTo?: string;
+}) {
   const { user } = useAuth();
   const isStudent = user?.role === 'student';
   const access = useStudentAccess(isStudent);
   if (!isStudent) return children;
   if (access.isLoading) return <Spinner />;
   // If the check itself fails, err towards locked: that is the admin's setting today.
-  if (access.data !== false) return <StudentLockedScreen />;
+  if (access.data !== false) return lockedTo ? <Navigate to={lockedTo} replace /> : <StudentLockedScreen />;
   return children;
 }
 

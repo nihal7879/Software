@@ -96,10 +96,6 @@ export default function ForgotPassword() {
                     />
                     <label>Username</label>
                   </div>
-                  {/* Said before they get it wrong, not after. */}
-                  <p className="muted text-xs mt-1.5">
-                    Your username, not your email — one email can belong to a whole family.
-                  </p>
                 </div>
                 {notice && (
                   <div className="text-sm rounded-lg px-3 py-2.5 bg-amber-500/15 text-amber-700 dark:text-amber-400 flex gap-2">

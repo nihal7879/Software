@@ -291,16 +291,16 @@ aside ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.2); }
 @supports not (backdrop-filter: blur(1px)) { .glass-bar { background: var(--color-card); } }
 
 /* btn-outline is used on the attendance and check-in screens but was never
-   defined, so those buttons render as bare text. Styled as the ghost button on
-   tablets and phones only — laptop screens are left exactly as they were. */
+   defined, so those buttons rendered as bare text with the icon stacked above
+   the words. It was styled on phones and tablets first; the institute then
+   asked for it everywhere, so laptops get the same bordered button.
+   Matches btn-ghost, so the two sit together without looking different. */
 /* In the components layer so size utilities on the button (text-xs, !py-1) still win. */
 @layer components {
-  @media (max-width: 1023px) {
-    .btn-outline {
-      border: 1px solid var(--color-border);
-      background: var(--color-card);
-      @apply inline-flex items-center justify-center gap-1.5 rounded-lg px-4 py-2 text-sm font-medium transition-colors disabled:opacity-50;
-    }
+  .btn-outline {
+    border: 1px solid var(--color-border);
+    background: var(--color-card);
+    @apply inline-flex items-center justify-center gap-1.5 rounded-lg px-4 py-2 text-sm font-medium whitespace-nowrap transition-colors hover:bg-[var(--color-card-alt)] hover:border-[var(--color-muted)] disabled:opacity-50 disabled:pointer-events-none;
   }
 }
 
