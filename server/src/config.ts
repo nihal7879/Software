@@ -19,20 +19,23 @@ export const config = {
     database: process.env.DB_NAME || 'tuition_erp',
   },
   jwtSecret: process.env.JWT_SECRET || 'dev_secret_change_me',
-  jwtExpiresIn: process.env.JWT_EXPIRES_IN || '1d',
-  // A student's sign-in lasts far longer than anyone else's, because the only
-  // thing most of them open the app for is to scan the QR on a teacher's desk —
-  // and being asked for a password at the classroom door, on a phone, every time
-  // is the difference between attendance being recorded and not.
+  // How long a sign-in lasts, for every role. Fifteen days, matching the
+  // inactivity limit the app applies (client AuthContext). A token is not
+  // reissued as they go, so this is what signs someone out: fifteen days after
+  // signing in, or fifteen days of not opening it, whichever comes first.
   //
-  // They see their own attendance and nothing else; an admin on a shared office
-  // machine sees every family's fees, which is why that one is left alone.
+  // Students had this first — being asked for a password at the classroom door
+  // was the difference between attendance being recorded and not. Everyone
+  // else was held to a day, and twenty idle minutes, because an admin on a
+  // shared office machine sees every family's fees. The institute then asked
+  // (Nov 2026) for teachers, parents and both admins to stay signed in too,
+  // for the same reason teachers and parents give: a phone app that keeps
+  // asking for a password does not get used. A password change still throws
+  // every device out at once, through the token version.
   //
-  // Fifteen days, matching the inactivity limit the app applies (client
-  // AuthContext). A token is not reissued as they go, so in practice this is
-  // what signs a student out: fifteen days after signing in, or fifteen days of
-  // not opening it, whichever comes first.
-  jwtExpiresInStudent: process.env.JWT_EXPIRES_IN_STUDENT || '15d',
+  // Its own variable, not JWT_EXPIRES_IN: that one is set to a day in existing
+  // deployments, and would have quietly kept everyone else on a day.
+  sessionLength: process.env.SESSION_LENGTH || '15d',
   // Outgoing email (SMTP). Placeholders in .env until the real account is set;
   // utils/mailer.ts treats those as "not set up" and records instead of sending.
   mail: {

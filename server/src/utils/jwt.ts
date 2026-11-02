@@ -17,10 +17,9 @@ export interface JwtPayload {
 }
 
 export function signToken(payload: JwtPayload): string {
-  // A student's lasts longer — see config.ts for why. A password change still
+  // The same for every role — see config.ts for why. A password change still
   // kills it immediately, whatever its expiry, through the token version.
-  const expiresIn = payload.role === 'student' ? config.jwtExpiresInStudent : config.jwtExpiresIn;
-  const options: SignOptions = { expiresIn: expiresIn as SignOptions['expiresIn'] };
+  const options: SignOptions = { expiresIn: config.sessionLength as SignOptions['expiresIn'] };
   return jwt.sign(payload, config.jwtSecret, options);
 }
 

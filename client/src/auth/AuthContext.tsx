@@ -3,22 +3,22 @@ import { api, ensureLocation } from '../api/client';
 import { autoAskPush, resyncPush } from '../lib/push';
 
 /**
- * How long a sign-in survives with nobody touching it.
+ * How long a sign-in survives with nobody touching it: fifteen days, for every
+ * role. The server issues a token of the same length (config.sessionLength),
+ * and a password change still throws every device out at once.
  *
- * Twenty minutes for anyone who can see money or another family's details — the
- * office machine is shared, and that is what the rule is for.
+ * Students had this first — being asked for a password at the classroom door
+ * is the difference between attendance being recorded and not. Everyone else
+ * was signed out after twenty idle minutes, because the office machine is
+ * shared and an admin sees every family's fees. The institute asked (Nov 2026)
+ * for teachers, parents and both admins to stay signed in for fifteen days too.
+ * On a shared computer, signing out is now the person's own job.
  *
- * A student is a different case. The app is, to most of them, the thing that
- * scans the QR on a teacher's desk; being asked for a password at the classroom
- * door, on a phone, is the difference between the attendance being recorded and
- * not. They see their own attendance and nothing else, so fifteen days of not
- * opening it is the limit rather than twenty minutes. The server issues them a
- * longer token to match (config.jwtExpiresInStudent), and a password change
- * still throws every device out at once.
+ * Kept as a function of the role so a role can be given its own limit again
+ * without touching the callers.
  */
-const IDLE_LIMIT_MS = 20 * 60 * 1000;
-const IDLE_LIMIT_STUDENT_MS = 15 * 24 * 60 * 60 * 1000;
-const idleLimitFor = (role?: Role) => (role === 'student' ? IDLE_LIMIT_STUDENT_MS : IDLE_LIMIT_MS);
+const IDLE_LIMIT_MS = 15 * 24 * 60 * 60 * 1000;
+const idleLimitFor = (_role?: Role) => IDLE_LIMIT_MS;
 // The limit that applied to whoever is signed in, kept beside the token: on
 // opening the app the role is not known yet (that is what /auth/me is for) and
 // the decision has to be made before the token is used.
@@ -155,7 +155,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => clearTimeout(t);
   }, [user?.id]);
 
-  // Auto sign-out after 20 minutes of inactivity (only while logged in).
+  // Auto sign-out after fifteen days of inactivity (only while logged in).
   const idleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     if (!user) return;

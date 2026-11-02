@@ -53,7 +53,7 @@ a copy, or build one with these keys:
   CLIENT_ORIGIN        http://localhost:5173
   DB_HOST DB_PORT DB_USER DB_PASSWORD DB_NAME
   JWT_SECRET           any long random string
-  JWT_EXPIRES_IN       1d
+  SESSION_LENGTH       15d - how long a sign-in lasts, every role (default 15d)
   SMTP_HOST SMTP_PORT SMTP_USER SMTP_PASS MAIL_FROM
   ADMIN_NOTIFY_EMAIL   who is told when a student registers
   APP_URL              the link used in emails
