@@ -44,7 +44,9 @@ function snooze(userId?: number) {
   } catch { /* nothing to do — it will be offered again next time */ }
 }
 
-export function NotificationPrompt({ what = 'something happens' }: { what?: string }) {
+// `what` named the event in the line under the heading, which is gone; still
+// accepted so the dashboards that pass it need no change.
+export function NotificationPrompt(_props: { what?: string }) {
   const { user } = useAuth();
   const [state, setState] = useState<PushState | null>(null);
   const [hidden, setHidden] = useState(() => snoozed(user?.id));
@@ -109,12 +111,9 @@ export function NotificationPrompt({ what = 'something happens' }: { what?: stri
             </p>
           </>
         ) : (
-          <>
-            <div className="font-bold">Turn on notifications</div>
-            <p className="muted text-sm">
-              Know as soon as {what} — even when STEM Vision is closed. This device only.
-            </p>
-          </>
+          // Just the heading: the line under it was taken out at the
+          // institute's request, and the Turn on button says the rest.
+          <div className="font-bold">Turn on notifications</div>
         )}
       </div>
 

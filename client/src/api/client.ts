@@ -1,6 +1,25 @@
 import axios from 'axios';
 
-export const api = axios.create({ baseURL: import.meta.env.VITE_API_URL || '/api' });
+// The sign-in lives in an httpOnly cookie the browser sends by itself (server
+// utils/session.ts); the app never sees the token. X-Requested-With goes on
+// every request because the server refuses a cookie-signed change without it —
+// a header another site's form cannot add. VITE_API_URL must stay '/api', on
+// this same origin, or the cookie becomes third-party and browsers drop it.
+export const api = axios.create({
+  baseURL: import.meta.env.VITE_API_URL || '/api',
+  withCredentials: true,
+  headers: { 'X-Requested-With': 'XMLHttpRequest' },
+});
+
+/**
+ * Where a token used to be kept, before the cookie. A browser signed in then
+ * still has one; it is sent once as a header so the server can hand the same
+ * session over as a cookie (GET /auth/me), and then deleted.
+ */
+export const LEGACY_TOKEN_KEY = 'token';
+/** Not a secret: only whether someone signed in on this browser, so the app
+ *  knows to ask the server who, rather than asking on every public page. */
+export const SIGNED_IN_KEY = 'signedIn';
 
 // Best-effort browser GPS, cached and attached to every request as headers so
 // the server can record it in the audit trail. Silently skipped if denied or
@@ -39,8 +58,8 @@ async function fetchPublicIp() {
 fetchPublicIp();
 
 api.interceptors.request.use((cfg) => {
-  const token = localStorage.getItem('token');
-  if (token) cfg.headers.Authorization = `Bearer ${token}`;
+  const legacy = localStorage.getItem(LEGACY_TOKEN_KEY);
+  if (legacy) cfg.headers.Authorization = `Bearer ${legacy}`;
   if (coords) {
     cfg.headers['X-Gps-Lat'] = String(coords.lat);
     cfg.headers['X-Gps-Lng'] = String(coords.lng);
@@ -49,23 +68,18 @@ api.interceptors.request.use((cfg) => {
   return cfg;
 });
 
+// Changing a password signs every other device out; the server sets a fresh
+// cookie on the reply for this one, so nothing here needs to keep a token.
 api.interceptors.response.use(
-  (r) => {
-    // Changing a password signs every device out — the server raises the
-    // account's token version, which kills every token already handed out,
-    // including the one this browser just used. A fresh one comes back in the
-    // same reply and is stored here rather than at each of the three screens
-    // that offer a password change, so none of them can forget and leave the
-    // person staring at a sign-in page straight after succeeding.
-    if (r.config.url?.includes('/auth/change-password') && r.data?.token) {
-      localStorage.setItem('token', r.data.token);
-    }
-    return r;
-  },
+  (r) => r,
   (err) => {
     if (err.response?.status === 401) {
-      localStorage.removeItem('token');
-      if (!location.pathname.startsWith('/login')) location.href = '/login';
+      localStorage.removeItem(LEGACY_TOKEN_KEY);
+      localStorage.removeItem(SIGNED_IN_KEY);
+      // The opening "who is signed in?" check is allowed to come back empty:
+      // the public pages (register, forgot password, the QR link) must not be
+      // bounced to the sign-in screen for it.
+      if (!(err.config as any)?.quiet401 && !location.pathname.startsWith('/login')) location.href = '/login';
     }
     return Promise.reject(err);
   }

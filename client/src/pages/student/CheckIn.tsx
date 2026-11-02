@@ -155,7 +155,10 @@ export default function CheckIn() {
     <div className="space-y-4 max-w-2xl mx-auto">
       <Section title="Check in">
 
-        {openRow && !scanning && (
+        {/* One message at a time. Straight after a scan the confirmation below
+            says it all; this one is for coming back later while still in.
+            Shown together they repeated each other in two colours. */}
+        {openRow && !scanning && !result && (
           <div className="mb-4 rounded-xl border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
             <b>You are checked in</b> with {openRow.teacher_name} since {clock(openRow.in_at)}.
             Scan again when the class ends.
@@ -167,11 +170,13 @@ export default function CheckIn() {
             className={`mb-4 rounded-xl p-4 border ${
               result.action === 'out'
                 ? 'border-emerald-500/40 bg-emerald-500/10'
-                : 'border-blue-500/40 bg-blue-500/10'
+                // Checked in, class still running: the same amber as the
+                // "you are checked in" note, so "in" always looks the same.
+                : 'border-amber-500/40 bg-amber-500/10'
             }`}
           >
             <div className="flex items-start gap-3">
-              <CheckCircle2 className="w-6 h-6 shrink-0 text-emerald-600" />
+              <CheckCircle2 className={`w-6 h-6 shrink-0 ${result.action === 'out' ? 'text-emerald-600' : 'text-amber-600'}`} />
               <div>
                 <div className="font-semibold">{result.message}</div>
                 <div className="text-sm muted mt-1">

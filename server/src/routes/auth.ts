@@ -13,7 +13,8 @@ import { bumpTokenVersion, currentTokenVersion } from '../utils/tokenVersion';
 import { notify, adminUserIds } from '../utils/push';
 import { z } from 'zod';
 import { pool, query, queryOne } from '../db';
-import { signToken } from '../utils/jwt';
+import { signToken, verifyToken } from '../utils/jwt';
+import { setSessionCookie, clearSessionCookie, cookieToken, revokeToken } from '../utils/session';
 import { requireAuth } from '../middleware/auth';
 import { wrap } from '../middleware/error';
 import { loginBlocked, noteFailedLogin, clearFailedLogins } from '../utils/loginLimit';
@@ -149,12 +150,14 @@ async function completeLogin(req: Request, res: any, userId: number, chosenStude
     teacherId = t?.id ?? null;
   }
 
-  const token = signToken({
+  const { token, exp } = signToken({
     userId: user.id, role: user.role, email: user.email, studentId, teacherId,
     tv: Number(user.token_version || 0),
   });
+  // The token goes into an httpOnly cookie, out of reach of page scripts, and
+  // is no longer in the reply for the app to keep (security review S-07).
+  setSessionCookie(req, res, token, exp);
   return res.json({
-    token,
     user: {
       id: user.id, role: user.role, email: user.email, displayName: user.display_name, studentId, teacherId,
       // Set when the password came out of a reset. The app then shows nothing
@@ -374,6 +377,31 @@ router.post(
   wrap(async (req, res) => {
     const b = registerSchema.parse(req.body);
 
+    /**
+     * A ceiling on registrations (security review S-09, Nov 2026).
+     *
+     * Nothing used to limit them, and every teacher or parent registration
+     * pushes a notification to every admin: a script could fill the
+     * Registrations queue and buzz the office's phones all night. Five an hour
+     * from one connection is far more than a family or a teacher ever needs;
+     * forty an hour across the whole institute holds even if a script fakes
+     * where it is coming from.
+     */
+    const ip = clientIp(req);
+    const [recent] = await query<any>(
+      `SELECT
+         (SELECT COUNT(*) FROM student_registrations WHERE created_at > NOW() - INTERVAL 1 HOUR AND registration_ip <=> ?)
+       + (SELECT COUNT(*) FROM account_registrations WHERE created_at > NOW() - INTERVAL 1 HOUR AND registration_ip <=> ?) AS from_here,
+         (SELECT COUNT(*) FROM student_registrations WHERE created_at > NOW() - INTERVAL 1 HOUR)
+       + (SELECT COUNT(*) FROM account_registrations WHERE created_at > NOW() - INTERVAL 1 HOUR) AS everywhere`,
+      [ip, ip]
+    );
+    if (Number(recent?.from_here) >= 5 || Number(recent?.everywhere) >= 40) {
+      return res.status(429).json({
+        error: 'Too many registrations just now. Please try again in an hour, or contact the institute.',
+      });
+    }
+
     // The username is the login, so it is what must be unique — across live
     // accounts and requests still waiting for approval alike.
     const taken = await usernameTaken(b.username);
@@ -381,7 +409,6 @@ router.post(
       return res.status(409).json({ error: `The username "${b.username}" is already taken. Please choose another.`, code: 'USERNAME_TAKEN' });
     }
 
-    const ip = clientIp(req);
     const ua = deviceInfo(req);
     const gps = reqGps(req) ?? (b.lat != null && b.lng != null ? `${b.lat},${b.lng}` : null);
     const hash = await bcrypt.hash(b.password, 10);
@@ -500,6 +527,14 @@ router.get(
       'SELECT id, role, email, display_name, must_change_password FROM users WHERE id = ?',
       [u.userId]
     );
+    // Signed in before the move to cookies: the app still holds the token in
+    // localStorage and sent it as a header. Hand the same token over as the
+    // httpOnly cookie, so nobody is signed out by the change; the app then
+    // deletes its copy and never sends the header again (security review S-07).
+    const header = req.headers.authorization;
+    if (!cookieToken(req) && header?.startsWith('Bearer ') && u.exp) {
+      setSessionCookie(req, res, header.slice(7), u.exp);
+    }
     res.json({
       ...row,
       studentId: u.studentId ?? null,
@@ -533,12 +568,13 @@ router.post(
     // Raising the version turned off every token for this account — including
     // the one this request arrived with. A fresh one goes back, so the device
     // that did the changing stays signed in and every other device does not.
-    const token = signToken({
+    const { token, exp } = signToken({
       userId: user.id, role: user.role, email: user.email,
       studentId: req.user!.studentId ?? null, teacherId: req.user!.teacherId ?? null,
       tv: await currentTokenVersion(user.id),
     });
-    res.json({ ok: true, token });
+    setSessionCookie(req, res, token, exp);
+    res.json({ ok: true });
   })
 );
 
@@ -684,9 +720,19 @@ async function finishPasswordChange(user: { id: number; email?: string; username
 // Logout — token is cleared client-side; this records the event (IP/GPS/device) in the audit trail.
 router.post(
   '/logout',
-  requireAuth,
   wrap(async (req, res) => {
-    await audit(req.user!.userId, 'LOGOUT', 'user', req.user!.userId, null, { email: req.user!.email });
+    // Not behind requireAuth: signing out must always clear the cookie, even
+    // when the token has already run out or been cancelled.
+    const raw = cookieToken(req) || (req.headers.authorization?.startsWith('Bearer ') ? req.headers.authorization.slice(7) : null);
+    let payload: any = null;
+    try { payload = raw ? verifyToken(raw) : null; } catch { /* expired or bad: nothing to cancel */ }
+    if (payload?.userId) {
+      // This token stops working now, on the server — not only in this browser
+      // (security review S-08). The person's other devices stay signed in.
+      if (payload.jti && payload.exp) await revokeToken(payload.jti, payload.userId, payload.exp);
+      await audit(payload.userId, 'LOGOUT', 'user', payload.userId, null, { email: payload.email });
+    }
+    clearSessionCookie(req, res);
     res.json({ ok: true });
   })
 );

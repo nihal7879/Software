@@ -8,6 +8,27 @@ dotenv.config();
 // environment variables as well — this line covers local runs and scripts.
 process.env.TZ = process.env.TZ || 'Asia/Dubai';
 
+/**
+ * The secret every sign-in token is signed with.
+ *
+ * There is no fallback. There used to be — 'dev_secret_change_me' — and it is
+ * printed in a repository that was public: had JWT_SECRET ever gone missing on
+ * Vercel, anyone could have signed their own super-admin token. So a missing,
+ * default or short secret stops the server from starting, which is loud and
+ * immediate, rather than running quietly on a key everyone knows.
+ * (Security review S-04, Nov 2026.)
+ */
+function requireSecret(): string {
+  const s = process.env.JWT_SECRET || '';
+  if (s.length < 32 || s === 'dev_secret_change_me') {
+    throw new Error(
+      'JWT_SECRET is missing or too short. Set it to a long random string (32+ characters) ' +
+      'in server/.env, and in Vercel → Settings → Environment Variables.'
+    );
+  }
+  return s;
+}
+
 export const config = {
   port: Number(process.env.PORT || 4000),
   clientOrigin: process.env.CLIENT_ORIGIN || 'http://localhost:5173',
@@ -18,7 +39,7 @@ export const config = {
     password: process.env.DB_PASSWORD || '',
     database: process.env.DB_NAME || 'tuition_erp',
   },
-  jwtSecret: process.env.JWT_SECRET || 'dev_secret_change_me',
+  jwtSecret: requireSecret(),
   // How long a sign-in lasts, for every role. Fifteen days, matching the
   // inactivity limit the app applies (client AuthContext). A token is not
   // reissued as they go, so this is what signs someone out: fifteen days after

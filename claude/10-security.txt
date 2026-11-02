@@ -1,0 +1,376 @@
+SECURITY REVIEW
+===============
+Reviewed: 2 November 2026, against the code as it stood that day (including the
+uncommitted changes made the same day). Read-only review: nothing was changed.
+
+  !! READ FIRST !!
+  This file lists weaknesses that are NOT fixed yet. The GitHub repository
+  (github.com/nihal7879/Software) was PUBLIC when this was written. Do not
+  commit or push this file while the repository is public - it would hand the
+  list to anyone. Make the repository private first (GitHub -> Settings ->
+  Danger Zone -> Change visibility -> Private). Vercel keeps deploying.
+
+  When an issue is fixed, change its Status line and say how, so this file
+  stays the record of what was found and what was done.
+
+
+SUMMARY
+-------
+  ID    Severity   Area                 Title
+  S-01  HIGH       Access control       Students can read every teacher's desk QR code
+  S-02  HIGH       Access control       Teachers can read and edit any student, fees included
+  S-03  HIGH       Infrastructure       Database open to the internet, unencrypted
+  S-04  HIGH       Source / secrets     Public repository + a fallback token secret in the code
+  S-05  HIGH       Authentication       Failed-login limit can be bypassed with faked IP headers
+  S-06  HIGH       Dependencies         Libraries with known vulnerabilities (1 critical, 8 high)
+  S-07  MEDIUM     Session / browser    Token in localStorage for 15 days, no security headers
+  S-08  MEDIUM     Session              Signing out does not cancel the token
+  S-09  MEDIUM     Abuse                Registration has no rate limit or captcha
+  S-10  LOW        Access control       Any signed-in user can list any student's teachers
+
+  Totals: 6 high, 3 medium, 1 low.
+  Suggested order: S-01, S-02, S-04 (make private + check secret), S-05,
+  S-06, S-03, then the rest.
+
+
+-------------------------------------------------------------------------------
+S-01  Students can read every teacher's desk QR code
+-------------------------------------------------------------------------------
+  Severity      HIGH
+  Area          Access control
+  Where         server/src/routes/teachers.ts:230   GET /api/teachers
+  Who can do it Any signed-in user - student, parent, teacher.
+  What happens  The route runs SELECT * FROM teachers with no role check. The
+                teachers table has a qr_code column, so every teacher's desk
+                code comes back, with their email and mobile.
+  Impact        A student can read the codes once and "check in" from home by
+                typing a code on the Check in page. Attendance - and the hours
+                charged from it - can be faked. Teachers' contact details are
+                exposed to every student and parent.
+  Fix           Return only the columns a list needs (id, name, specialization,
+                is_active), never qr_code. The admin's QR printing already uses
+                its own route (GET /teachers/qr-codes, admin only), and a
+                teacher reads their own code from GET /teachers/me/qr.
+                Consider limiting the list to admin and faculty.
+  Effort        Small - one query.
+  Status        FIXED 2 Nov 2026 - GET /teachers never returns qr_code; teachers,
+                students and parents get id, name, specialization, is_active only.
+
+
+-------------------------------------------------------------------------------
+S-02  Teachers can read and edit any student, fees included
+-------------------------------------------------------------------------------
+  Severity      HIGH
+  Area          Access control
+  Where         server/src/middleware/auth.ts:72   ensureOwnStudent()
+                server/src/routes/students.ts:271  PUT /api/students/:id
+                server/src/routes/management.ts:9  router-wide admin + faculty
+                server/src/routes/management.ts:117 GET /management/student/:id/report
+  Who can do it Any teacher (faculty login).
+  What happens  ensureOwnStudent lets every faculty user through for every
+                student id, not only their own students. Behind it:
+                  - GET /fees/transactions/:id, /fees/ledger/:id,
+                    /fees/packages/:id, /fees/adjustments/:id - any family's
+                    payments, amounts and balances
+                  - GET /students/:id - the full record (SELECT *): parents'
+                    names, emails, mobiles, date of birth, login name
+                The management router admits faculty to the whole-institute
+                student master and the per-student report, which includes
+                pending fees.
+                PUT /students/:id is open to faculty for any student, and its
+                schema includes fees_received, status and student_type.
+  Impact        A teacher can see every family's money and personal details,
+                and can change any student's record, including fields that
+                belong to the office. The app's screens hide this from
+                teachers, but the server does not refuse it - CLAUDE.md rule 5
+                ("hiding a button is not security") is broken here.
+  Fix           For faculty, check that the student is assigned to them
+                (student_teacher_mapping) before letting the request through.
+                Keep fee routes admin-only. Remove faculty from the management
+                router, or limit it to the teacher's own students without fee
+                columns. Make PUT /students/:id admin-only, or strip the office
+                fields when a teacher sends it.
+  Effort        Medium - one middleware change, then a check of each route.
+  Status        FIXED 2 Nov 2026 - ensureOwnStudent no longer admits faculty; the
+                student list/create/update, /fees/ledger and the management router
+                are admin only. Teachers keep /teachers/me/... (assignment-checked).
+
+
+-------------------------------------------------------------------------------
+S-03  Database open to the internet, unencrypted
+-------------------------------------------------------------------------------
+  Severity      HIGH
+  Area          Infrastructure
+  Where         server/src/db.ts:4   mysql.createPool - no ssl option
+                The MySQL server on the office network (public address in the
+                server's .env, port 3306).
+  Who can do it Anyone on the internet who can reach the port; anyone on the
+                network path between Vercel and the office.
+  What happens  Vercel connects to MySQL over the public internet without TLS.
+                The login, every query and every result travel in plain text.
+                The port is reachable from anywhere, so the database login can
+                be guessed at directly.
+  Impact        Database password and all data (fees, families, passwords
+                hashes) can be read in transit; the database can be attacked
+                directly, bypassing the app entirely.
+  Fix           1. Turn on TLS in MySQL and add ssl: { rejectUnauthorized: true,
+                   ca: ... } to the pool.
+                2. Firewall port 3306 to Vercel's outbound addresses only (or
+                   put the database behind a tunnel/VPN).
+                3. Give the app's DB user only the rights it needs (no DROP,
+                   no GRANT, no FILE).
+                4. A long, unique DB password; change it after the repository
+                   is made private.
+  Effort        Medium - office server work, plus one config change.
+  Status        OPEN
+
+
+-------------------------------------------------------------------------------
+S-04  Public repository + a fallback token secret in the code
+-------------------------------------------------------------------------------
+  Severity      HIGH
+  Area          Source code / secrets
+  Where         github.com/nihal7879/Software - public (opens without login)
+                server/src/config.ts:21
+                  jwtSecret: process.env.JWT_SECRET || 'dev_secret_change_me'
+  Who can do it Anyone on the internet.
+  What happens  The whole code and the claude/ handover notes are readable,
+                with their full history. No real secrets were found in git
+                (.env files are not committed - good). But the code falls back
+                to a published secret when JWT_SECRET is not set.
+  Impact        If JWT_SECRET is ever missing on Vercel, anyone can sign their
+                own token as super admin and take over the system. The notes
+                give an attacker a map of the system and its known weak spots.
+  Fix           1. Make the repository private (see top of this file).
+                2. Check Vercel -> Settings -> Environment Variables:
+                   JWT_SECRET must be set to a long random value.
+                3. Remove the fallback: refuse to start when JWT_SECRET is
+                   missing or shorter than 32 characters.
+                4. Optional: rotate JWT_SECRET (signs everyone out once) and
+                   the DB password, since the code was public.
+                Deleting files does not help - git history keeps them.
+  Effort        Small.
+  Status        PARTLY FIXED 2 Nov 2026 - no fallback any more: the server refuses
+                to start without a JWT_SECRET of 32+ characters. Still to do: make
+                the repository private, and check JWT_SECRET is set on Vercel.
+
+
+-------------------------------------------------------------------------------
+S-05  Failed-login limit can be bypassed with faked IP headers
+-------------------------------------------------------------------------------
+  Severity      HIGH
+  Area          Authentication
+  Where         server/src/utils/reqContext.ts:24   clientIp()
+                server/src/app.ts:28                app.set('trust proxy', true)
+                server/src/utils/loginLimit.ts:26   8 failures / 15 minutes
+  Who can do it Anyone, without an account.
+  What happens  The limiter counts failures per "machine" = IP + browser name.
+                clientIp() takes the IP from cf-connecting-ip, true-client-ip,
+                x-real-ip, x-forwarded-for, and x-public-ip - headers the
+                caller can set to anything. The browser name (user agent) is
+                also the caller's to set. A script that changes them on every
+                try is never blocked.
+  Impact        Unlimited password guessing against any username. Passwords
+                only need 8 characters (credentials.ts:13), and the office set
+                at least one account to 12345678.
+  Fix           Use only the address the hosting platform sets (on Vercel, the
+                x-forwarded-for value Vercel writes, or req.ip with trust proxy
+                set to the exact hop count), never client-supplied headers.
+                Also count failures per username, with a short lock-out.
+                Reject the most common passwords (12345678, password1 …).
+  Effort        Small to medium.
+  Status        OPEN
+
+
+-------------------------------------------------------------------------------
+S-06  Libraries with known vulnerabilities
+-------------------------------------------------------------------------------
+  Severity      HIGH
+  Area          Dependencies
+  Where         server/package.json, client/package.json (npm audit, production
+                dependencies, 2 Nov 2026)
+                Server: 6 total - 1 critical, 3 high, 2 moderate
+                  CRITICAL proxy-addr  IP spoofing via IPv4-mapped IPv6 (ties
+                                       into S-05)
+                  high     body-parser denial of service with an invalid limit
+                  high     nodemailer  email to an unintended domain
+                  high     zod         memory exhaustion on oversized input
+                Client: 16 total - 5 high, 11 moderate
+                  high     xlsx        prototype pollution (SheetJS) - reached
+                                       through Finance -> Import Excel
+                  high     axios       prototype pollution in the fetch adapter
+                  high     follow-redirects  credentials kept across redirects
+                  high     brace-expansion   CPU denial of service
+                  high     zod         as above
+  Who can do it Depends on the library - xlsx needs a crafted file opened in
+                Import Excel; zod/body-parser can be hit by anyone sending
+                requests.
+  Impact        Ranges from crashing the server to code paths behaving in ways
+                nobody wrote.
+  Fix           npm audit fix in server/ and client/, then the build checks.
+                xlsx: the npm package is abandoned at a vulnerable version;
+                move to the SheetJS CDN build or to exceljs (already a
+                dependency) for reading imports.
+  Effort        Small for most; medium for xlsx.
+  Status        OPEN
+
+
+-------------------------------------------------------------------------------
+S-07  Token in localStorage for 15 days, no security headers
+-------------------------------------------------------------------------------
+  Severity      MEDIUM
+  Area          Session / browser
+  Where         client/src/auth/AuthContext.tsx:96   localStorage.setItem('token', …)
+                server/src/app.ts                    no helmet / security headers
+                vercel.json                          no headers section
+  Who can do it Only if a cross-site-scripting (XSS) hole ever appears.
+  What happens  Any script running on the page can read localStorage. Signed-in
+                sessions now last 15 days for every role. The site sends no
+                Content-Security-Policy, X-Frame-Options, Referrer-Policy or
+                X-Content-Type-Options.
+  Impact        One XSS bug would let an attacker copy an admin's token and
+                use it for up to 15 days. Without X-Frame-Options another site
+                can show the app in a frame (clickjacking).
+                No XSS sink was found today: React escapes text, the QR print
+                page escapes names (client/src/lib/qr.ts), and there is no
+                dangerouslySetInnerHTML.
+  Fix           Add security headers in vercel.json (both projects) or helmet
+                in app.ts: a Content-Security-Policy, X-Frame-Options: DENY,
+                Referrer-Policy, X-Content-Type-Options. Longer term, move the
+                token to an httpOnly, Secure, SameSite cookie so scripts cannot
+                read it.
+  Effort        Small for headers; medium for cookies.
+  Status        PARTLY FIXED 2 Nov 2026
+                Done: the token is an httpOnly, SameSite=Lax, Secure cookie (server
+                utils/session.ts), never given to page scripts; cookie-signed
+                changes need X-Requested-With; security headers on every API reply
+                (server app.ts).
+                TO DO - headers on the PAGES. Written and then taken out again on
+                2 Nov, to be added and tested later. They go in client/vercel.json,
+                beside "rewrites":
+
+                  "headers": [
+                    {
+                      "source": "/(.*)",
+                      "headers": [
+                        { "key": "Content-Security-Policy",
+                          "value": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob:; media-src 'self' blob:; connect-src 'self' https://api.ipify.org wss://streaming.assemblyai.com; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'" },
+                        { "key": "X-Frame-Options", "value": "DENY" },
+                        { "key": "X-Content-Type-Options", "value": "nosniff" },
+                        { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" },
+                        { "key": "Permissions-Policy",
+                          "value": "camera=(self), microphone=(self), geolocation=(self), payment=()" }
+                      ]
+                    }
+                  ]
+
+                What each does: the CSP lets the page run scripts only from the
+                site itself (an injected script is refused); X-Frame-Options stops
+                another site showing the app in a frame (clickjacking); nosniff
+                stops a file being run as a different type; Referrer-Policy keeps
+                our page addresses from leaking to other sites; Permissions-Policy
+                limits camera, microphone and location to the app itself.
+
+                Already prepared for it: the QR print window's Print button is
+                wired from code (client/src/lib/qr.ts), not an inline onclick the
+                CSP would block. A scan of the build found no inline scripts and
+                no eval that the CSP would stop.
+
+                After adding, test on the live site before relying on it: the QR
+                scanner (camera), printing QR cards, Excel import and export, the
+                microphone (remarks), notifications, and the Google fonts. If the
+                site ever calls a new outside address, add it to connect-src.
+
+
+-------------------------------------------------------------------------------
+S-08  Signing out does not cancel the token
+-------------------------------------------------------------------------------
+  Severity      MEDIUM
+  Area          Session
+  Where         server/src/routes/auth.ts:686   POST /auth/logout
+  Who can do it Anyone holding a copy of a token.
+  What happens  Logout only writes an audit entry; the browser deletes its own
+                copy. The token itself stays valid until it expires (15 days).
+  Impact        A token copied from a shared office computer, a phone or a
+                screenshot keeps working after the person signs out. Only a
+                password change (token_version) cancels it today.
+  Fix           Raise users.token_version on logout - the check already exists
+                on every request (utils/tokenVersion.ts). Note this signs the
+                person out on all their devices; if that is not wanted, keep a
+                small list of revoked token ids until they expire.
+  Effort        Small.
+  Status        FIXED 2 Nov 2026 - every token has its own id (jti); signing out
+                records it in revoked_tokens and requireAuth refuses it. Only that
+                session ends; the person stays signed in on other devices.
+
+
+-------------------------------------------------------------------------------
+S-09  Registration has no rate limit or captcha
+-------------------------------------------------------------------------------
+  Severity      MEDIUM
+  Area          Abuse
+  Where         server/src/routes/auth.ts:373   POST /auth/register
+                GET /auth/username-available (public)
+  Who can do it Anyone, without an account.
+  What happens  Nothing limits how many registrations one caller can send.
+                Each teacher or parent registration also pushes a notification
+                to every admin.
+  Impact        The Registrations queue and the admins' phones can be flooded.
+                Approval stops a fake account from signing in, so this is
+                nuisance rather than a break-in.
+  Fix           Limit registrations per IP (once S-05 gives a trustworthy IP)
+                and per hour; consider a captcha (e.g. Cloudflare Turnstile);
+                collapse repeated admin notifications into one.
+  Effort        Small.
+  Status        FIXED 2 Nov 2026 - at most 5 registrations an hour per address and
+                40 an hour in all (POST /auth/register). The per-address count trusts
+                the IP header, so it is only as strong as S-05.
+
+
+-------------------------------------------------------------------------------
+S-10  Any signed-in user can list any student's teachers
+-------------------------------------------------------------------------------
+  Severity      LOW
+  Area          Access control
+  Where         server/src/routes/teachers.ts:404   GET /teachers/of-student/:studentId
+  Who can do it Any signed-in user.
+  What happens  No role or ownership check; returns which teachers and
+                subjects a student has.
+  Impact        Small privacy leak between families.
+  Fix           Add ensureOwnStudent-style checks (after S-02 is fixed), or
+                limit it to admin.
+  Effort        Small.
+  Status        FIXED 2 Nov 2026 - GET /teachers/of-student/:id is admin only.
+
+
+WHAT IS ALREADY DONE RIGHT
+--------------------------
+  - Error messages: no stack traces, SQL or table names reach the browser.
+    Internal errors answer "Something went wrong…" with a reference to search
+    the logs for (server/src/middleware/error.ts).
+  - No secrets in git: .env files are not committed, only .env.example.
+  - SQL injection: queries use ? placeholders; the one sortable list picks its
+    column from a fixed list (fees.ts LEDGER_SORTS); dynamic UPDATE columns
+    come only from zod-validated keys.
+  - Passwords are bcrypt-hashed; reset codes are hashed, expire in 10 minutes
+    and allow 5 tries; the system-made reset password must be changed.
+  - A password change signs out every device (token_version, checked on every
+    request).
+  - Money: an admin's change to a payment or hours waits for the super admin,
+    enforced on the server (utils/approvals.ts).
+  - Login does not reveal which usernames exist until the password is right.
+  - Every change is audited with who, when, IP, GPS and device.
+  - Uploads: Excel files are parsed in the browser; the server takes JSON with
+    a 2 MB limit.
+
+
+NOTE ON "ENCRYPTING THE TOKEN"
+------------------------------
+The login token is a JWT: SIGNED, not encrypted. Anyone holding it can read
+what is inside (user id, role, student/teacher id, token version) but cannot
+change any of it - the signature breaks and the server refuses it. Nothing
+secret is inside, so encrypting it adds little. What actually protects it:
+  - HTTPS (Vercel provides it),
+  - keeping it out of reach of page scripts (httpOnly cookie - S-07),
+  - being able to cancel it (S-08),
+  - a secret that is long, private and set (S-04).

@@ -55,7 +55,7 @@ export async function printQrCards(cards: { name: string; code: string }[]) {
     @media print { body { padding: 0; } .noprint { display: none; } }
   </style></head><body>
     <div class="noprint" style="margin-bottom:12px">
-      <button onclick="window.print()" style="padding:8px 16px;font-size:14px">Print</button>
+      <button id="print" style="padding:8px 16px;font-size:14px">Print</button>
     </div>
     ${cards
       .map(
@@ -71,5 +71,8 @@ export async function printQrCards(cards: { name: string; code: string }[]) {
       .join('')}
   </body></html>`);
   win.document.close();
+  // Wired from here, not an inline onclick: the site's Content-Security-Policy
+  // (client/vercel.json) refuses inline script, and this window inherits it.
+  win.document.getElementById('print')?.addEventListener('click', () => win.print());
   return true;
 }

@@ -225,11 +225,22 @@ router.get(
   })
 );
 
-// List teachers
+// List teachers.
+//
+// Never qr_code. This list is open to every signed-in role, and it used to be
+// SELECT *: a student could read every desk code once and "check in" from home
+// by typing one (security review S-01, Nov 2026). The office prints codes from
+// /qr-codes and a teacher reads their own from /me/qr. Contact details go to
+// the office only — a teacher's mobile is not every family's business.
 router.get(
   '/',
-  wrap(async (_req, res) => {
-    const rows = await query('SELECT * FROM teachers ORDER BY name');
+  wrap(async (req, res) => {
+    const office = req.user!.role === 'admin' || req.user!.role === 'superadmin';
+    const rows = await query(
+      office
+        ? 'SELECT id, name, email, mobile, specialization, is_active, is_deleted, user_id, branch_id, created_at FROM teachers ORDER BY name'
+        : 'SELECT id, name, specialization, is_active FROM teachers WHERE is_deleted = FALSE ORDER BY name'
+    );
     res.json({ data: rows });
   })
 );
@@ -402,6 +413,9 @@ router.post(
 // Teachers assigned to a student
 router.get(
   '/of-student/:studentId',
+  // Admin only — the student report is its one reader. It was open to every
+  // signed-in role for any student id. (Security review S-10, Nov 2026.)
+  requireRole('admin'),
   wrap(async (req, res) => {
     const rows = await query(
       `SELECT m.id, t.id AS teacher_id, t.name AS teacher_name, sub.name AS subject_name, m.package_hours

@@ -6,7 +6,9 @@ import { CREDITED_EXPR, CONSUMED_EXPR, PENDING_EXPR, LAST_LECTURE_EXPR, deriveHo
 import { formNoOrder } from '../utils/formNo';
 
 const router = Router();
-router.use(requireAuth, requireRole('admin', 'faculty'));
+// Admin only. It listed every family's fees to any teacher who asked, and no
+// teacher screen uses it. (Security review S-02, Nov 2026.)
+router.use(requireAuth, requireRole('admin'));
 
 // ---------------------------------------------------------------------------
 // MANAGEMENT MASTER — one row per student with parent (who-pays), fee paid

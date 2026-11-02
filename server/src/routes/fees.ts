@@ -60,7 +60,8 @@ const LEDGER_STATUS_FILTERS: Record<string, string> = {
 // own id, so we never aggregate the whole table.
 router.get(
   '/ledger',
-  requireRole('admin', 'faculty'),
+  // Admin only: every family's balance, and no teacher screen uses it. (S-02)
+  requireRole('admin'),
   wrap(async (req, res) => {
     const search = (req.query.search as string) || '';
     const page = Math.max(1, Number(req.query.page || 1));

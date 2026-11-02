@@ -63,10 +63,12 @@ const studentSchema = z.object({
 const fullName = (b: any) =>
   [b.first_name, b.middle_name, b.last_name].filter(Boolean).join(' ').trim();
 
-// LIST (admin/faculty) with search + filters + pagination
+// LIST (admin) with search + filters + pagination
 router.get(
   '/',
-  requireRole('admin', 'faculty'),
+  // Admin only: no teacher screen uses it, and it opened every student's
+  // record to any teacher who asked. (Security review S-02, Nov 2026.)
+  requireRole('admin'),
   wrap(async (req, res) => {
     const search = (req.query.search as string) || '';
     const status = req.query.status as string;
@@ -122,7 +124,8 @@ router.get(
 // CREATE
 router.post(
   '/',
-  requireRole('admin', 'faculty'),
+  // Admin only — the office adds students; no teacher screen does. (S-02)
+  requireRole('admin'),
   wrap(async (req, res) => {
     const b = studentSchema.parse(req.body);
     // Optional login: management can hand the student credentials at creation.
@@ -270,7 +273,9 @@ router.post(
 // UPDATE
 router.put(
   '/:id',
-  requireRole('admin', 'faculty'),
+  // Admin only. Its fields include fees_received, status and student type,
+  // and a teacher could change them for any student. (Security review S-02.)
+  requireRole('admin'),
   wrap(async (req, res) => {
     const b = studentSchema.partial().parse(req.body);
     const before = await queryOne('SELECT * FROM students WHERE id = ?', [req.params.id]);

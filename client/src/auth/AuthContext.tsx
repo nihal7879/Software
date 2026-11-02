@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useRef, useState, ReactNode } from 'react';
-import { api, ensureLocation } from '../api/client';
+import { api, ensureLocation, LEGACY_TOKEN_KEY, SIGNED_IN_KEY } from '../api/client';
 import { autoAskPush, resyncPush } from '../lib/push';
 
 /**
@@ -69,23 +69,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const token = localStorage.getItem('token');
-    if (!token) { setLoading(false); return; }
+    // The session itself is an httpOnly cookie this code cannot see. Whether to
+    // ask the server about it: someone signed in on this browser, or it still
+    // holds a token from before the cookie (sent once, then swapped for one).
+    const legacy = localStorage.getItem(LEGACY_TOKEN_KEY);
+    if (!legacy && !localStorage.getItem(SIGNED_IN_KEY)) { setLoading(false); return; }
 
     // If the browser was closed (or the tab left idle) for longer than the idle
-    // limit, treat it as an expired session — don't silently log the user back in.
+    // limit, treat it as an expired session — don't silently log the user back
+    // in. Signed out on the server too, so the cookie is cancelled, not kept.
     const last = Number(localStorage.getItem(LAST_ACTIVITY_KEY));
     if (last && Date.now() - last > storedIdleLimit()) {
-      localStorage.removeItem('token');
-      localStorage.removeItem(LAST_ACTIVITY_KEY);
+      api.post('/auth/logout', {}, { quiet401: true } as any).catch(() => {});
+      clearLocal();
       setLoading(false);
       return;
     }
 
     api
-      .get('/auth/me')
-      .then((r) => setUser(r.data))
-      .catch(() => localStorage.removeItem('token'))
+      .get('/auth/me', { quiet401: true } as any)
+      .then((r) => {
+        setUser(r.data);
+        // The server has set the cookie now; the old copy goes.
+        localStorage.removeItem(LEGACY_TOKEN_KEY);
+        localStorage.setItem(SIGNED_IN_KEY, '1');
+      })
+      .catch(() => clearLocal())
       .finally(() => setLoading(false));
   }, []);
 
@@ -93,7 +102,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     ensureLocation(); // fire-and-forget: starts the GPS fix, never blocks login. IP is server-side.
     const r = await api.post('/auth/login', { email, password });
     if (r.data.select) return { signedIn: false, ticket: r.data.ticket, options: r.data.options };
-    localStorage.setItem('token', r.data.token);
+    // The token arrived as an httpOnly cookie; only the fact of signing in is kept.
+    localStorage.removeItem(LEGACY_TOKEN_KEY);
+    localStorage.setItem(SIGNED_IN_KEY, '1');
     localStorage.setItem(IDLE_LIMIT_KEY, String(idleLimitFor(r.data.user?.role)));
     setUser(r.data.user);
     resyncPush();
@@ -102,7 +113,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const selectAccount = async (ticket: string, index: number) => {
     const r = await api.post('/auth/login/select', { ticket, index });
-    localStorage.setItem('token', r.data.token);
+    localStorage.removeItem(LEGACY_TOKEN_KEY);
+    localStorage.setItem(SIGNED_IN_KEY, '1');
     localStorage.setItem(IDLE_LIMIT_KEY, String(idleLimitFor(r.data.user?.role)));
     setUser(r.data.user);
     resyncPush();
@@ -117,20 +129,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(r.data);
   };
 
+  // Registering no longer signs anyone in — every role waits for approval — so
+  // this only sends the request; the pages show "waiting for approval".
   const register = async (payload: any) => {
     ensureLocation();
-    const r = await api.post('/auth/register', payload);
-    localStorage.setItem('token', r.data.token);
-    localStorage.setItem(IDLE_LIMIT_KEY, String(idleLimitFor(r.data.user?.role)));
-    setUser(r.data.user);
+    await api.post('/auth/register', payload);
   };
 
-  const logout = async () => {
-    ensureLocation();
-    try { await api.post('/auth/logout'); } catch { /* token may be expired — ignore */ }
-    localStorage.removeItem('token');
+  // What this browser keeps about a sign-in, none of it the token itself.
+  const clearLocal = () => {
+    localStorage.removeItem(LEGACY_TOKEN_KEY);
+    localStorage.removeItem(SIGNED_IN_KEY);
     localStorage.removeItem(LAST_ACTIVITY_KEY);
     localStorage.removeItem(IDLE_LIMIT_KEY);
+  };
+
+  // The server cancels this session's token and clears the cookie; the rest
+  // of the person's devices stay signed in.
+  const logout = async () => {
+    ensureLocation();
+    try { await api.post('/auth/logout', {}, { quiet401: true } as any); } catch { /* already signed out — fine */ }
+    clearLocal();
     setUser(null);
     location.href = '/login';
   };
@@ -160,10 +179,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!user) return;
     const signOutIdle = () => {
-      localStorage.removeItem('token');
-      localStorage.removeItem(LAST_ACTIVITY_KEY);
-      setUser(null);
-      location.href = '/login?reason=timeout';
+      // Through the server, so the cookie is cleared and the token cancelled —
+      // clearing this browser's notes alone would leave the cookie signed in.
+      api.post('/auth/logout', {}, { quiet401: true } as any).catch(() => {}).finally(() => {
+        clearLocal();
+        setUser(null);
+        location.href = '/login?reason=timeout';
+      });
     };
     const limit = idleLimitFor(user.role);
     localStorage.setItem(IDLE_LIMIT_KEY, String(limit));

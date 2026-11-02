@@ -38,6 +38,20 @@ app.use(
 );
 app.use(express.json({ limit: '2mb' }));
 
+// Security headers on every reply (security review S-07, Nov 2026). The API
+// only ever answers with JSON: nothing here should be framed by another site,
+// sniffed into a script, cached by a shared machine, or leak its URL onward.
+// The pages themselves get theirs from the client's vercel.json.
+app.disable('x-powered-by');
+app.use((_req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('Referrer-Policy', 'no-referrer');
+  res.setHeader('Content-Security-Policy', "default-src 'none'; frame-ancestors 'none'");
+  res.setHeader('Cache-Control', 'no-store');
+  next();
+});
+
 // Capture IP + GPS per request so every audit() call records origin.
 app.use(requestContext);
 
