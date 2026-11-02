@@ -11,16 +11,22 @@
     <!-- The brain from inside the O of the wordmark. Two sizes: a browser
          picks the one closest to what it needs rather than scaling 512px
          down to 16 and turning it to mush. -->
-    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
-    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png" />
+    <!-- ?v=2: the icons were redrawn with room around the brain (Nov 2026) —
+         the old ones ran to the edge and were cut wherever a corner is
+         rounded. Browsers keep icons for weeks, so the name changes with them.
+         ?v=3 for the tab icons: the pale grey half vanished on a light tab at
+         16px and the brain looked cut in half, so it is drawn darker there. -->
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png?v=3" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png?v=3" />
+    <link rel="icon" href="/favicon.ico?v=3" sizes="any" />
     <title>STEM Vision</title>
 
     <!-- Added to the home screen, the app can send notifications. On Android
          this is a convenience; on an iPhone it is the only way — Safari refuses
          web notifications to a site opened as an ordinary tab. -->
-    <link rel="manifest" href="/manifest.json" />
+    <link rel="manifest" href="/manifest.json?v=2" />
     <!-- Safari ignores the manifest's icons and reads these two instead. -->
-    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=2" />
     <meta name="apple-mobile-web-app-title" content="STEM Vision" />
     <meta name="mobile-web-app-capable" content="yes" />
     <!-- theme-color and apple-mobile-web-app-capable are set above, where the
