@@ -111,8 +111,24 @@ async function optionsFor(users: any[]): Promise<LoginOption[]> {
           WHERE p.user_id = ? AND p.is_deleted = FALSE AND s.is_deleted = FALSE ORDER BY s.full_name`,
         [u.id]
       );
-      if (kids.length === 0) out.push({ userId: u.id, studentId: null, role: 'parent', label: u.display_name || u.email, sub: 'Parent' });
-      for (const k of kids) out.push({ userId: u.id, studentId: k.id, role: 'parent', label: k.full_name, sub: `Parent · Form ${k.form_no}` });
+      /**
+       * The PARENT's name on the parent row, not the child's.
+       *
+       * A family sharing one address and one password is offered both
+       * accounts at once, and both rows used to read "Nikita Sumit Jain" —
+       * one of them the child, one of them her father, and nothing on screen
+       * to tell them apart. The child is named underneath instead, which also
+       * keeps a parent of two children able to pick between them.
+       */
+      const parentName = (u.display_name || '').trim() || u.email;
+      if (kids.length === 0) out.push({ userId: u.id, studentId: null, role: 'parent', label: parentName, sub: 'Parent' });
+      for (const k of kids) {
+        out.push({
+          userId: u.id, studentId: k.id, role: 'parent',
+          label: parentName,
+          sub: `Parent of ${k.full_name} · Form ${k.form_no}`,
+        });
+      }
     } else {
       out.push({ userId: u.id, studentId: null, role: u.role, label: u.display_name || u.email, sub: u.role === 'faculty' ? 'Teacher' : 'Admin' });
     }

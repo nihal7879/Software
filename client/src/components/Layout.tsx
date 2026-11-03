@@ -54,6 +54,10 @@ const NAV: Record<string, Item[]> = {
     { to: '/admin/pivots', label: 'Pivots', icon: BarChart3 },
     { to: '/admin/approvals', label: 'Approvals', icon: KeyRound },
     { to: '/admin/notifications', label: 'Notifications', icon: BellRing, short: 'Alerts' },
+    // Locking a whole audience out of their figures. Its own place in the
+    // menu, because a switch that does that should not be found by scrolling
+    // past somebody's profile.
+    { to: '/admin/access', label: 'Dashboard access', icon: Lock, short: 'Access' },
     { to: '/admin/settings', label: 'Settings', icon: Settings },
   ],
   faculty: [

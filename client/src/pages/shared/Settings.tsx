@@ -33,66 +33,6 @@ function Field({ icon, label, value }: { icon: React.ReactNode; label: string; v
  * password and check in to a class; their dashboard, hours, fees and lectures
  * are refused by the server as well, so it is not merely a hidden screen.
  */
-function StudentAccessCard() {
-  const qc = useQueryClient();
-  const access = useStudentAccess();
-  const [confirming, setConfirming] = useState(false);
-  const locked = access.data !== false;
-
-  const flip = useMutation({
-    mutationFn: (next: boolean) => api.put('/settings/student-access', { locked: next }).then((r) => !!r.data.locked),
-    onSuccess: (next) => {
-      qc.setQueryData(['student-access'], next);
-      toast(next ? 'Student dashboards locked' : 'Student dashboards unlocked');
-      setConfirming(false);
-    },
-    onError: (e: any) => toast(e?.response?.data?.error || 'Could not change student access', 'error'),
-  });
-
-  return (
-    <div className="card p-5 flex flex-wrap items-center gap-4">
-      <span
-        className="grid place-items-center w-11 h-11 rounded-full shrink-0"
-        style={{ background: 'var(--color-card-alt)', color: locked ? '#ef4444' : '#10b981' }}
-      >
-        {locked ? <Lock size={20} /> : <LockOpen size={20} />}
-      </span>
-      <div className="min-w-0 flex-1">
-        <div className="font-bold flex items-center gap-2">
-          Student dashboards
-          <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${
-            locked ? 'bg-red-500/15 text-red-600 dark:text-red-400' : 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
-          }`}>
-            {access.isLoading ? '…' : locked ? 'Locked' : 'Open'}
-          </span>
-        </div>
-        <p className="muted text-sm">
-          {locked
-            ? 'Students can sign in, finish their profile, change their password and check in — their dashboard, hours, fees and lectures are locked.'
-            : 'Students can see their dashboard, hours, fees and lectures.'}
-        </p>
-      </div>
-      {confirming ? (
-        <div className="flex items-center gap-2">
-          <span className="text-sm">{locked ? 'Open every student dashboard?' : 'Lock every student dashboard?'}</span>
-          <button className="btn-primary !py-1.5 !px-3 text-sm" disabled={flip.isPending} onClick={() => flip.mutate(!locked)}>
-            {flip.isPending ? 'Saving…' : locked ? 'Yes, unlock' : 'Yes, lock'}
-          </button>
-          <button className="btn-ghost !py-1.5 !px-3 text-sm" onClick={() => setConfirming(false)}>Cancel</button>
-        </div>
-      ) : (
-        <button
-          className="btn-ghost !py-1.5 !px-3 text-sm whitespace-nowrap"
-          disabled={access.isLoading}
-          onClick={() => setConfirming(true)}
-        >
-          {locked ? 'Unlock for all students' : 'Lock for all students'}
-        </button>
-      )}
-    </div>
-  );
-}
-
 export default function Settings() {
   const { user } = useAuth();
   const qc = useQueryClient();
@@ -148,7 +88,6 @@ export default function Settings() {
       <h1 className="text-2xl font-bold hidden lg:block">Profile Settings</h1>
 
       {/* Locking every student dashboard is the super admin's switch. */}
-      {user?.role === 'superadmin' && <StudentAccessCard />}
 
       {/* Per device, not per person — see components/NotificationsCard.tsx.
           The office has it on their Notifications page instead, beside the log

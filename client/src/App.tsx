@@ -12,6 +12,7 @@ import TeacherRegister from './pages/TeacherRegister';
 import AdminDashboard from './pages/admin/AdminDashboard';
 import AdminLectureEntry from './pages/admin/AdminLectureEntry';
 import ManagementStudents from './pages/admin/ManagementStudents';
+import DashboardAccess from './pages/admin/DashboardAccess';
 import Registrations from './pages/admin/Registrations';
 import StudentReport from './pages/admin/StudentReport';
 import HoursMonthly from './pages/admin/HoursMonthly';
@@ -115,6 +116,9 @@ export default function App() {
           desk codes are printed from Teachers. Kept as a redirect for old links. */}
       <Route path="/admin/attendance" element={<Navigate to="/admin/teachers" replace />} />
       <Route path="/admin/notifications" element={<Protected roles={['admin']}><Notifications /></Protected>} />
+      {/* Throwing these shuts a whole audience out, so it is the super
+          admin's alone — the same rule as the approvals queue. */}
+      <Route path="/admin/access" element={<Protected roles={['superadmin']}><DashboardAccess /></Protected>} />
       <Route path="/admin/settings" element={<Protected roles={['admin']}><Settings /></Protected>} />
 
       {/* Faculty */}

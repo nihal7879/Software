@@ -4,6 +4,7 @@ import bcrypt from 'bcryptjs';
 import { query, queryOne } from '../db';
 import { requireAuth, requireRole } from '../middleware/auth';
 import { wrap } from '../middleware/error';
+import { blockLockedStudents } from '../utils/settings';
 import { audit } from '../utils/audit';
 import { usernameProblem, passwordProblem } from '../utils/credentials';
 import { clientIp, deviceInfo, getReqCtx } from '../utils/reqContext';
@@ -118,6 +119,8 @@ router.get(
 
 router.get(
   '/me/students',
+  // Behind the teacher dashboard lock — the roster their dashboard lists.
+  blockLockedStudents,
   requireRole('faculty', 'admin'),
   wrap(async (req, res) => {
     const tid = await myTeacherId(req);
@@ -145,6 +148,8 @@ router.get(
 // My lectures only
 router.get(
   '/me/lectures',
+  // Behind the teacher dashboard lock — their own lecture history.
+  blockLockedStudents,
   requireRole('faculty', 'admin'),
   wrap(async (req, res) => {
     const tid = await myTeacherId(req);
@@ -170,6 +175,8 @@ router.get(
 //   GET /teachers/me/student/:studentId?from=&to=
 router.get(
   '/me/student/:studentId',
+  // Behind the teacher dashboard lock — one student, with their hours.
+  blockLockedStudents,
   requireRole('faculty', 'admin'),
   wrap(async (req, res) => {
     const sid = Number(req.params.studentId);
