@@ -5,7 +5,7 @@ import { requireAuth, requireRole } from '../middleware/auth';
 import { wrap } from '../middleware/error';
 import { timeToDecimalHours, deriveMonth } from '../utils/hours';
 import { audit } from '../utils/audit';
-import { blockLockedStudents } from '../utils/settings';
+import { blockLockedStudents, blockLockedTeachers } from '../utils/settings';
 
 const router = Router();
 router.use(requireAuth);
@@ -54,6 +54,7 @@ const lectureSchema = z.object({
 router.get(
   '/',
   blockLockedStudents,
+  blockLockedTeachers('teacher_lecture'),
   wrap(async (req, res) => {
     const u = req.user!;
     let studentId = req.query.studentId ? Number(req.query.studentId) : undefined;
@@ -154,6 +155,7 @@ export async function insertLecture(conn: any, b: any, teacherId: number | null,
 router.post(
   '/',
   requireRole('admin', 'faculty'),
+  blockLockedTeachers('teacher_lecture'),
   wrap(async (req, res) => {
     const b = lectureSchema.parse(req.body);
     // Faculty can only log lectures under their own teacher id.
@@ -186,6 +188,7 @@ router.post(
 router.post(
   '/batch',
   requireRole('admin', 'faculty'),
+  blockLockedTeachers('teacher_lecture'),
   wrap(async (req, res) => {
     const rows = z.array(lectureSchema).min(1, 'Add at least one row').max(50).parse(req.body?.lectures);
 
@@ -234,6 +237,7 @@ const lectureEditSchema = lectureSchema.omit({ attendees: true }).partial();
 router.put(
   '/:id',
   requireRole('admin', 'faculty'),
+  blockLockedTeachers('teacher_lecture'),
   wrap(async (req, res) => {
     const b = lectureEditSchema.parse(req.body);
     const before = await queryOne<any>('SELECT * FROM lecture_sessions WHERE id = ? AND is_deleted = FALSE', [req.params.id]);
@@ -312,6 +316,7 @@ router.put(
 router.delete(
   '/:id',
   requireRole('admin', 'faculty'),
+  blockLockedTeachers('teacher_lecture'),
   wrap(async (req, res) => {
     const before = await queryOne<any>('SELECT * FROM lecture_sessions WHERE id = ? AND is_deleted = FALSE', [req.params.id]);
     if (!before) return res.status(404).json({ error: 'Lecture not found' });
@@ -399,6 +404,7 @@ async function mayChangeAttendees(req: Request, lecture: any): Promise<string | 
 router.get(
   '/:id/attendees',
   requireRole('admin', 'faculty'),
+  blockLockedTeachers('teacher_lecture'),
   wrap(async (req, res) => {
     const lecture = await queryOne<any>(
       'SELECT id, teacher_id FROM lecture_sessions WHERE id = ? AND is_deleted = FALSE',
@@ -427,6 +433,7 @@ router.get(
 router.post(
   '/:id/attendees',
   requireRole('admin', 'faculty'),
+  blockLockedTeachers('teacher_lecture'),
   wrap(async (req, res) => {
     const body = z.object({ student_id: z.number().int(), is_billable: z.boolean().optional() }).parse(req.body);
     const studentId = Number(body.student_id);
@@ -475,6 +482,7 @@ router.post(
 router.patch(
   '/:id/attendees/:studentId/billable',
   requireRole('admin', 'faculty'),
+  blockLockedTeachers('teacher_lecture'),
   wrap(async (req, res) => {
     const b = z.object({ is_billable: z.boolean() }).parse(req.body ?? {});
     const lecture = await queryOne<any>(
@@ -517,6 +525,7 @@ router.patch(
 router.delete(
   '/:id/attendees/:studentId',
   requireRole('admin', 'faculty'),
+  blockLockedTeachers('teacher_lecture'),
   wrap(async (req, res) => {
     const lecture = await queryOne<any>('SELECT id, session_date, teacher_id FROM lecture_sessions WHERE id = ? AND is_deleted = FALSE', [req.params.id]);
     if (!lecture) return res.status(404).json({ error: 'Lecture not found' });
@@ -541,6 +550,7 @@ router.delete(
 router.get(
   '/teacher/:teacherId',
   requireRole('admin', 'faculty'),
+  blockLockedTeachers('teacher_lecture'),
   wrap(async (req, res) => {
     const rows = await query(
       `SELECT l.*, sub.name AS subject_name,

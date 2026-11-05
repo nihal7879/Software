@@ -8,6 +8,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '../auth/AuthContext';
 import { api } from '../api/client';
 import { useStudentAccess } from './StudentLock';
+import { usePanelAccess } from './TeacherLock';
 import { useTheme } from '../theme/ThemeContext';
 import { roleLabel } from './MonthSelector';
 import { Toaster } from './Toast';
@@ -138,6 +139,17 @@ export function Layout({ children }: { children: ReactNode }) {
         : `${n} registration${n === 1 ? '' : 's'} waiting for approval`;
   // Students see a lock on Dashboard while an admin has student dashboards locked.
   const studentAccess = useStudentAccess(user?.role === 'student');
+  // The teacher app is locked a screen at a time, so each of its three menu
+  // items has its own switch. A locked one comes off the menu the same way
+  // the student dashboard does.
+  const teacherAccess = usePanelAccess(user?.role === 'faculty');
+  const TEACHER_AREA: Record<string, string> = {
+    '/faculty': 'teacher_dashboard',
+    '/faculty/students': 'teacher_students',
+    '/faculty/lecture': 'teacher_lecture',
+  };
+  const teacherLocked = (to: string) =>
+    user?.role === 'faculty' && !!TEACHER_AREA[to] && teacherAccess.data?.[TEACHER_AREA[to]] === true;
   const lockedFor = (to: string) => user?.role === 'student' && to === '/student' && studentAccess.data !== false;
   if (!user) return null;
   // While the admin has student dashboards locked, Dashboard is off the
@@ -146,6 +158,7 @@ export function Layout({ children }: { children: ReactNode }) {
   // known to be on, so an unlocked dashboard never blinks out while loading.
   const items = (NAV[user.role] || []).filter(
     (it) => !(user.role === 'student' && it.to === '/student' && studentAccess.data === true)
+         && !teacherLocked(it.to)
   );
   const home = items[0]?.to || '/';
   const goHome = () => { setOpen(false); setCollapsed(false); nav(home); };

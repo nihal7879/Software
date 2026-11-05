@@ -32,6 +32,7 @@ import CheckIn from './pages/student/CheckIn';
 import Scan from './pages/Scan';
 import { PENDING_SCAN } from './lib/qr';
 import { StudentGate } from './components/StudentLock';
+import { TeacherGate } from './components/TeacherLock';
 import LectureHistory from './pages/student/LectureHistory';
 import StudentFees from './pages/student/StudentFees';
 import StudentProfile from './pages/student/StudentProfile';
@@ -122,10 +123,10 @@ export default function App() {
       <Route path="/admin/settings" element={<Protected roles={['admin']}><Settings /></Protected>} />
 
       {/* Faculty */}
-      <Route path="/faculty" element={<Protected roles={['faculty', 'admin']}><FacultyDashboard /></Protected>} />
-      <Route path="/faculty/students" element={<Protected roles={['faculty', 'admin']}><FacultyStudents /></Protected>} />
-      <Route path="/faculty/student/:id" element={<Protected roles={['faculty', 'admin']}><FacultyStudentDetail /></Protected>} />
-      <Route path="/faculty/lecture" element={<Protected roles={['faculty', 'admin']}><LectureEntry /></Protected>} />
+      <Route path="/faculty" element={<Protected roles={['faculty', 'admin']}><TeacherGate area="teacher_dashboard" lockedTo="/faculty/lecture"><FacultyDashboard /></TeacherGate></Protected>} />
+      <Route path="/faculty/students" element={<Protected roles={['faculty', 'admin']}><TeacherGate area="teacher_students"><FacultyStudents /></TeacherGate></Protected>} />
+      <Route path="/faculty/student/:id" element={<Protected roles={['faculty', 'admin']}><TeacherGate area="teacher_students"><FacultyStudentDetail /></TeacherGate></Protected>} />
+      <Route path="/faculty/lecture" element={<Protected roles={['faculty', 'admin']}><TeacherGate area="teacher_lecture"><LectureEntry /></TeacherGate></Protected>} />
       {/* Attendance moved into Lecture Entry. Kept as a redirect because
           check-in notifications already sent still point here. */}
       <Route path="/faculty/attendance" element={<Navigate to="/faculty/lecture" replace />} />

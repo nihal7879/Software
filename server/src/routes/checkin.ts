@@ -2,6 +2,9 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { pool, query, queryOne } from '../db';
 import { requireAuth, requireRole } from '../middleware/auth';
+// Confirming a desk scan IS entering a lecture, so every faculty-facing
+// route here sits behind the Lecture Entry lock — not the dashboard one.
+import { blockLockedTeachers } from '../utils/settings';
 import { wrap } from '../middleware/error';
 import { audit } from '../utils/audit';
 import { teacherByCode } from '../utils/qrCode';
@@ -251,6 +254,7 @@ const INBOX_COLUMNS = `
 router.get(
   '/inbox',
   requireRole('faculty', 'admin'),
+  blockLockedTeachers('teacher_lecture'),
   wrap(async (req, res) => {
     const teacherId = await inboxTeacherId(req);
     if (req.user!.role === 'faculty' && !teacherId) {
@@ -298,6 +302,7 @@ const manualSchema = z.object({
 router.post(
   '/manual',
   requireRole('faculty', 'admin'),
+  blockLockedTeachers('teacher_lecture'),
   wrap(async (req, res) => {
     const b = manualSchema.parse(req.body);
     const teacherId = req.user!.role === 'faculty' ? await inboxTeacherId(req) : b.teacher_id ?? null;
@@ -404,6 +409,7 @@ async function applyFields(id: number, b: z.infer<typeof fillSchema>, sessionDat
 router.patch(
   '/:id',
   requireRole('faculty', 'admin'),
+  blockLockedTeachers('teacher_lecture'),
   wrap(async (req, res) => {
     const { error, row } = await rowFor(req, req.params.id);
     if (error) return res.status(403).json({ error });
@@ -420,6 +426,7 @@ router.patch(
 router.post(
   '/apply',
   requireRole('faculty', 'admin'),
+  blockLockedTeachers('teacher_lecture'),
   wrap(async (req, res) => {
     const b = z.object({ ids: z.array(z.number().int()).min(1).max(100) }).and(fillSchema).parse(req.body);
     let applied = 0;
@@ -490,6 +497,7 @@ async function confirmOne(req: any, id: number): Promise<{ ok: boolean; reason?:
 router.post(
   '/:id/confirm',
   requireRole('faculty', 'admin'),
+  blockLockedTeachers('teacher_lecture'),
   wrap(async (req, res) => {
     const r = await confirmOne(req, Number(req.params.id));
     if (!r.ok) return res.status(400).json({ error: r.reason });
@@ -501,6 +509,7 @@ router.post(
 router.post(
   '/confirm',
   requireRole('faculty', 'admin'),
+  blockLockedTeachers('teacher_lecture'),
   wrap(async (req, res) => {
     const { ids } = z.object({ ids: z.array(z.number().int()).min(1).max(100) }).parse(req.body);
     const done: number[] = [];
@@ -517,6 +526,7 @@ router.post(
 router.delete(
   '/:id',
   requireRole('faculty', 'admin'),
+  blockLockedTeachers('teacher_lecture'),
   wrap(async (req, res) => {
     const { error, row } = await rowFor(req, req.params.id);
     if (error) return res.status(403).json({ error });

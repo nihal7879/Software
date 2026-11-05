@@ -3,20 +3,41 @@ import { z } from 'zod';
 import { requireAuth, requireSuperAdmin } from '../middleware/auth';
 import { wrap } from '../middleware/error';
 import { audit } from '../utils/audit';
-import { panelLocks, setPanelLocked, isPanelLocked, type LockedRole } from '../utils/settings';
+import {
+  panelLocks, setAreaLocked, isAreaLocked, TEACHER_AREAS, type LockArea,
+} from '../utils/settings';
 
 const router = Router();
 router.use(requireAuth);
 
-const ROLES = ['student', 'parent', 'faculty'] as const;
-const LABEL: Record<LockedRole, string> = { student: 'STUDENT', parent: 'PARENT', faculty: 'TEACHER' };
+const AREAS = ['student', 'parent', 'teacher_dashboard', 'teacher_students', 'teacher_lecture'] as const;
+// 'faculty' is the old whole-teacher switch: it sets all three teacher areas
+// at once, so an older client still works and the office still has one pull
+// for "teachers see nothing".
+const PANELS = [...AREAS, 'faculty'] as const;
+
+const LABEL: Record<LockArea, string> = {
+  student: 'STUDENT',
+  parent: 'PARENT',
+  teacher_dashboard: 'TEACHER_DASHBOARD',
+  teacher_students: 'TEACHER_STUDENTS',
+  teacher_lecture: 'TEACHER_LECTURE',
+};
+
+const KEY_NAME: Record<LockArea, string> = {
+  student: 'student_panel_locked',
+  parent: 'parent_panel_locked',
+  teacher_dashboard: 'teacher_dashboard_locked',
+  teacher_students: 'teacher_students_locked',
+  teacher_lecture: 'teacher_lecture_locked',
+};
 
 /**
  * Which dashboards are locked. Any signed-in user may ask: each app needs it
  * to show the locked screen, and the super admin to draw the switches.
  *
- * `locked` is kept in the reply for the apps written against the old single
- * switch, so nothing breaks while they are updated.
+ * `locked` and `faculty` are kept in the reply for the apps written against
+ * the older switches, so nothing breaks while they are updated.
  */
 router.get(
   '/panel-access',
@@ -30,34 +51,41 @@ router.get(
 router.get(
   '/student-access',
   wrap(async (_req, res) => {
-    res.json({ locked: await isPanelLocked('student') });
+    res.json({ locked: await isAreaLocked('student') });
   })
 );
 
 /**
- * Lock or unlock one audience — the super admin's switch, so an admin cannot
- * shut a whole group out, or let them back in, on their own.
+ * Lock or unlock one part of one audience's app — the super admin's switch,
+ * so an admin cannot shut a whole group out, or let them back in, on their
+ * own.
  *
- * The three are independent on purpose: the office sometimes wants parents
- * held back while the figures are corrected but teachers still working.
+ * They are independent on purpose. The teacher side especially: the office
+ * holds back the hours on a teacher's dashboard while the figures are being
+ * corrected, and that must not stop them entering today's class.
  */
 router.put(
   '/panel-access',
   requireSuperAdmin,
   wrap(async (req, res) => {
     const { panel, locked } = z
-      .object({ panel: z.enum(ROLES), locked: z.boolean() })
+      .object({ panel: z.enum(PANELS), locked: z.boolean() })
       .parse(req.body);
-    const before = await isPanelLocked(panel);
-    await setPanelLocked(panel, locked, req.user!.userId);
-    await audit(
-      req.user!.userId,
-      (locked ? 'LOCK_' : 'UNLOCK_') + LABEL[panel] + '_PANEL',
-      'app_setting',
-      panel + '_panel_locked',
-      { locked: before },
-      { locked }
-    );
+
+    const areas: LockArea[] = panel === 'faculty' ? TEACHER_AREAS : [panel as LockArea];
+    for (const area of areas) {
+      const before = await isAreaLocked(area);
+      if (before === locked) continue;
+      await setAreaLocked(area, locked, req.user!.userId);
+      await audit(
+        req.user!.userId,
+        (locked ? 'LOCK_' : 'UNLOCK_') + LABEL[area],
+        'app_setting',
+        KEY_NAME[area],
+        { locked: before },
+        { locked }
+      );
+    }
     res.json(await panelLocks());
   })
 );
@@ -68,9 +96,9 @@ router.put(
   requireSuperAdmin,
   wrap(async (req, res) => {
     const { locked } = z.object({ locked: z.boolean() }).parse(req.body);
-    const before = await isPanelLocked('student');
-    await setPanelLocked('student', locked, req.user!.userId);
-    await audit(req.user!.userId, locked ? 'LOCK_STUDENT_PANEL' : 'UNLOCK_STUDENT_PANEL',
+    const before = await isAreaLocked('student');
+    await setAreaLocked('student', locked, req.user!.userId);
+    await audit(req.user!.userId, locked ? 'LOCK_STUDENT' : 'UNLOCK_STUDENT',
       'app_setting', 'student_panel_locked', { locked: before }, { locked });
     res.json({ locked });
   })

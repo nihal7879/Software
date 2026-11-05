@@ -1,47 +1,95 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Lock, LockOpen } from 'lucide-react';
+import { Lock, LockOpen, LayoutDashboard, Users, BookOpen } from 'lucide-react';
 import { api } from '../api/client';
 import { toast } from './Toast';
 
 /**
- * One switch per audience, in the super admin's settings.
+ * What each audience can see, in the super admin's hands.
  *
- * It was a single switch for students. A parent dashboard shows the same
+ * It began as one switch for students. A parent dashboard shows the same
  * hours, fees and attendance for the same child, so locking students while
  * the figures were being corrected left the one audience most likely to ask
- * about them still reading the old numbers. Teachers are here for the same
- * reason — their screens carry hours taught.
+ * about them still reading the old numbers — hence a switch of their own.
  *
- * The three are independent on purpose: the office sometimes wants parents
- * held back while teachers carry on working.
+ * The teacher side is not one switch but three. A teacher's app is also how
+ * the institute records what happened: a class entered, a desk scan
+ * confirmed. One pull used to take all of that away along with the figures,
+ * which stopped all nine teachers working. Now the hours on their dashboard
+ * can be held back while Lecture Entry carries on.
+ *
+ * A toggle that is ON means the screen is there. Turning one off asks a
+ * second time, because it goes off for everybody at once.
  */
-const PANELS = [
+type Row = {
+  key: string;
+  label: string;
+  icon: any;
+  whenOn: string;
+  whenOff: string;
+};
+
+const STUDENT: Row = {
+  key: 'student',
+  label: 'Student dashboard',
+  icon: LayoutDashboard,
+  whenOn: 'Students see their dashboard, hours, fees and lectures.',
+  whenOff: 'Students can sign in, finish their profile, change their password and check in — the figures are hidden.',
+};
+
+const PARENT: Row = {
+  key: 'parent',
+  label: 'Parent dashboard',
+  icon: LayoutDashboard,
+  whenOn: "Parents see their child's hours, fees and attendance.",
+  whenOff: 'Parents can sign in and change their password — the figures are hidden.',
+};
+
+const TEACHER: Row[] = [
   {
-    key: 'student' as const,
-    title: 'Student dashboards',
-    whenLocked: 'Students can sign in, finish their profile, change their password and check in — their dashboard, hours, fees and lectures are locked.',
-    whenOpen: 'Students can see their dashboard, hours, fees and lectures.',
-    lock: 'Lock for all students',
-    unlock: 'Unlock for all students',
+    key: 'teacher_dashboard',
+    label: 'Dashboard',
+    icon: LayoutDashboard,
+    whenOn: 'Teachers see their home screen: recent classes and hours taught.',
+    whenOff: 'The home screen is hidden. Signing in lands on Lecture Entry instead.',
   },
   {
-    key: 'parent' as const,
-    title: 'Parent dashboards',
-    whenLocked: "Parents can sign in and change their password — their child's hours, fees and attendance are locked.",
-    whenOpen: "Parents can see their child's hours, fees and attendance.",
-    lock: 'Lock for all parents',
-    unlock: 'Unlock for all parents',
+    key: 'teacher_students',
+    label: 'My Students',
+    icon: Users,
+    whenOn: "Teachers see their roster, and each student's hours.",
+    whenOff: 'The roster is hidden — Lecture Entry can still pick students for a class.',
   },
   {
-    key: 'faculty' as const,
-    title: 'Teacher dashboards',
-    whenLocked: 'Teachers can sign in and change their password — their students, hours and lectures are locked.',
-    whenOpen: 'Teachers can see their students, hours and lectures.',
-    lock: 'Lock for all teachers',
-    unlock: 'Unlock for all teachers',
+    key: 'teacher_lecture',
+    label: 'Lecture Entry',
+    icon: BookOpen,
+    whenOn: 'Teachers enter classes and confirm desk scans.',
+    whenOff: 'No class can be entered and no scan confirmed — attendance stops being recorded. Use this one sparingly.',
   },
 ];
+
+function Toggle({ on, busy, onClick, label }: { on: boolean; busy: boolean; onClick: () => void; label: string }) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={on}
+      aria-label={label}
+      disabled={busy}
+      onClick={onClick}
+      className={`relative shrink-0 w-12 h-7 rounded-full transition-colors duration-150 disabled:opacity-50 ${
+        on ? 'bg-emerald-500' : 'bg-neutral-300 dark:bg-neutral-600'
+      }`}
+    >
+      <span
+        className={`absolute top-1 left-1 w-5 h-5 rounded-full bg-white shadow transition-transform duration-150 ${
+          on ? 'translate-x-5' : ''
+        }`}
+      />
+    </button>
+  );
+}
 
 export function PanelAccessCards() {
   const qc = useQueryClient();
@@ -49,6 +97,7 @@ export function PanelAccessCards() {
     queryKey: ['panel-access'],
     queryFn: () => api.get('/settings/panel-access').then((r) => r.data as Record<string, boolean>),
   });
+  // The one being turned off, waiting for the second press.
   const [confirming, setConfirming] = useState<string | null>(null);
 
   const flip = useMutation({
@@ -59,58 +108,85 @@ export function PanelAccessCards() {
       // The student app reads the old key; keep it in step so a locked
       // student is not left looking at a dashboard until the page reloads.
       qc.setQueryData(['student-access'], !!data.student);
-      toast(v.locked ? 'Locked' : 'Unlocked');
+      toast(v.locked ? 'Hidden' : 'Visible');
       setConfirming(null);
     },
     onError: (e: any) => toast(e?.response?.data?.error || 'Could not change this', 'error'),
   });
 
+  const row = (r: Row, inset: boolean) => {
+    const locked = !!locks.data?.[r.key];
+    const busy = flip.isPending && flip.variables?.panel === r.key;
+    const asking = confirming === r.key;
+    const Icon = r.icon;
+    return (
+      <div key={r.key} className={`flex flex-wrap items-center gap-3 ${inset ? 'py-3' : ''}`}>
+        <span
+          className="grid place-items-center w-9 h-9 rounded-full shrink-0"
+          style={{ background: 'var(--color-card-alt)', color: locked ? '#ef4444' : '#10b981' }}
+        >
+          <Icon size={17} />
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="font-semibold flex items-center gap-2">
+            {r.label}
+            <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${
+              locked ? 'bg-red-500/15 text-red-600 dark:text-red-400' : 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
+            }`}>
+              {locks.isLoading ? '…' : locked ? 'Hidden' : 'Visible'}
+            </span>
+          </div>
+          <p className="muted text-sm">{locked ? r.whenOff : r.whenOn}</p>
+        </div>
+        {asking ? (
+          <div className="flex items-center gap-2">
+            <span className="text-sm">Hide it for everyone?</span>
+            <button className="btn-primary !py-1.5 !px-3 text-sm" disabled={busy}
+              onClick={() => flip.mutate({ panel: r.key, locked: true })}>
+              {busy ? 'Saving…' : 'Yes, hide'}
+            </button>
+            <button className="btn-ghost !py-1.5 !px-3 text-sm" onClick={() => setConfirming(null)}>Cancel</button>
+          </div>
+        ) : (
+          <Toggle
+            on={!locked}
+            busy={busy || locks.isLoading}
+            label={r.label}
+            // Turning one back on is the safe direction, so it happens at
+            // once. Turning one off takes everybody's screen away, so it asks.
+            onClick={() => (locked ? flip.mutate({ panel: r.key, locked: false }) : setConfirming(r.key))}
+          />
+        )}
+      </div>
+    );
+  };
+
+  const allTeacherOff = TEACHER.every((t) => !!locks.data?.[t.key]);
+
   return (
     <div className="space-y-3">
-      {PANELS.map((p) => {
-        const locked = !!locks.data?.[p.key];
-        const busy = flip.isPending && flip.variables?.panel === p.key;
-        return (
-          <div key={p.key} className="card p-5 flex flex-wrap items-center gap-4">
-            <span
-              className="grid place-items-center w-11 h-11 rounded-full shrink-0"
-              style={{ background: 'var(--color-card-alt)', color: locked ? '#ef4444' : '#10b981' }}
-            >
-              {locked ? <Lock size={20} /> : <LockOpen size={20} />}
-            </span>
-            <div className="min-w-0 flex-1">
-              <div className="font-bold flex items-center gap-2">
-                {p.title}
-                <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${
-                  locked ? 'bg-red-500/15 text-red-600 dark:text-red-400' : 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
-                }`}>
-                  {locks.isLoading ? '…' : locked ? 'Locked' : 'Open'}
-                </span>
-              </div>
-              <p className="muted text-sm">{locked ? p.whenLocked : p.whenOpen}</p>
-            </div>
-            {confirming === p.key ? (
-              <div className="flex items-center gap-2">
-                <span className="text-sm">{locked ? 'Open it for everyone?' : 'Lock it for everyone?'}</span>
-                <button className="btn-primary !py-1.5 !px-3 text-sm" disabled={busy}
-                  onClick={() => flip.mutate({ panel: p.key, locked: !locked })}>
-                  {busy ? 'Saving…' : locked ? 'Yes, unlock' : 'Yes, lock'}
-                </button>
-                <button className="btn-ghost !py-1.5 !px-3 text-sm" onClick={() => setConfirming(null)}>Cancel</button>
-              </div>
-            ) : (
-              <button
-                className="btn-ghost !py-1.5 !px-3 text-sm whitespace-nowrap"
-                disabled={locks.isLoading}
-                onClick={() => setConfirming(p.key)}
-              >
-                {locked ? p.unlock : p.lock}
-              </button>
-            )}
+      <div className="card p-5">{row(STUDENT, false)}</div>
+      <div className="card p-5">{row(PARENT, false)}</div>
+
+      <div className="card p-5">
+        <div className="flex items-center gap-3 mb-1">
+          <span
+            className="grid place-items-center w-11 h-11 rounded-full shrink-0"
+            style={{ background: 'var(--color-card-alt)', color: allTeacherOff ? '#ef4444' : '#10b981' }}
+          >
+            {allTeacherOff ? <Lock size={20} /> : <LockOpen size={20} />}
+          </span>
+          <div className="min-w-0">
+            <div className="font-bold">Teacher app</div>
+            <p className="muted text-sm">
+              One screen at a time. Signing in, the profile and changing a password are never locked.
+            </p>
           </div>
-        );
-      })}
+        </div>
+        <div className="divide-y" style={{ borderColor: 'var(--color-border)' }}>
+          {TEACHER.map((t) => row(t, true))}
+        </div>
+      </div>
     </div>
   );
 }
-
