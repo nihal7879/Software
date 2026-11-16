@@ -346,14 +346,25 @@ router.post(
   })
 );
 
-/** The fields a teacher fills in, plus the times when a scan was missed. */
+/**
+ * The fields a teacher fills in, plus the times when a scan was missed.
+ *
+ * Every limit here is the one the LECTURE allows, not a tighter one of its
+ * own. They used to differ — 500 characters of remark were accepted on a
+ * scan and refused by the lecture it turns into — so a teacher could fill a
+ * scan in perfectly and then be unable to confirm it, with nothing on screen
+ * to explain why.
+ */
+const text = (max: number, what: string) =>
+  z.string().trim().max(max, `${what} is too long — please keep it under ${max} characters.`).nullable().optional();
+
 const fillSchema = z.object({
   subject_id: z.number().int().nullable().optional(),
-  topic: z.string().trim().max(200).nullable().optional(),
-  subtopic: z.string().trim().max(200).nullable().optional(),
-  remark: z.string().trim().max(500).nullable().optional(),
-  venue: z.string().trim().max(80).nullable().optional(),
-  meeting_link: z.string().trim().max(255).nullable().optional(),
+  topic: text(255, 'The topic'),
+  subtopic: text(255, 'The subtopic'),
+  remark: text(4000, 'The remark'),
+  venue: text(80, 'The venue'),
+  meeting_link: text(500, 'The meeting link'),
   // 'HH:MM' — for the student who forgot to scan out.
   in_time: z.string().regex(/^\d{2}:\d{2}$/).optional(),
   out_time: z.string().regex(/^\d{2}:\d{2}$/).optional(),
@@ -515,8 +526,22 @@ router.post(
     const done: number[] = [];
     const skipped: { id: number; reason?: string }[] = [];
     for (const id of ids) {
-      const r = await confirmOne(req, id);
-      if (r.ok) done.push(id); else skipped.push({ id, reason: r.reason });
+      try {
+        const r = await confirmOne(req, id);
+        if (r.ok) done.push(id); else skipped.push({ id, reason: r.reason });
+      } catch (e: any) {
+        // One row the database refuses must not take the batch down with it.
+        // It used to: a single over-long remark among ten scans answered 500,
+        // so the teacher was told "something went wrong at our end" and could
+        // not tell which row was the problem or that the others had gone
+        // through. Now that row is reported like any other skipped one.
+        if (e?.code === 'ER_DATA_TOO_LONG' || e?.code === 'WARN_DATA_TRUNCATED') {
+          const column = /column '([^']+)'/.exec(String(e?.sqlMessage || ''))?.[1] || 'text';
+          skipped.push({ id, reason: `The ${column.replace(/_/g, ' ')} is too long to save — shorten it and confirm this one on its own.` });
+          continue;
+        }
+        throw e;
+      }
     }
     res.json({ confirmed: done.length, skipped });
   })

@@ -16,6 +16,17 @@ async function myTeacherId(req: Request): Promise<number | null> {
   return t?.id ?? null;
 }
 
+/**
+ * Free text a teacher types, with a limit the database can actually hold.
+ *
+ * There was no limit here at all, so a long remark passed validation and died
+ * on the insert as ER_DATA_TOO_LONG — which reached the teacher as "something
+ * went wrong at our end". Generous about what arrives, strict about what is
+ * stored: the number is the column's, and the sentence is for the person.
+ */
+const text = (max: number, what: string) =>
+  z.string().trim().max(max, `${what} is too long — please keep it under ${max} characters.`).optional().nullable();
+
 const lectureSchema = z.object({
   // Must be a strict ISO date (YYYY-MM-DD). A free-form / locale date would either
   // fail the DATE NOT NULL insert or store 0000-00-00 and vanish from every report.
@@ -25,11 +36,11 @@ const lectureSchema = z.object({
   time_in: z.string().optional().nullable(),
   time_out: z.string().optional().nullable(),
   total_hours: z.number().optional(),
-  topic: z.string().optional().nullable(),
-  subtopic: z.string().optional().nullable(),
-  remark: z.string().optional().nullable(),
-  venue: z.string().optional().nullable(),
-  meeting_link: z.string().optional().nullable(),
+  topic: text(255, 'The topic'),
+  subtopic: text(255, 'The subtopic'),
+  remark: text(4000, 'The remark'),
+  venue: text(80, 'The venue'),
+  meeting_link: text(500, 'The meeting link'),
   branch_id: z.number().int().optional().nullable(),
   // one or more attendees (group lecture). Defaults hours to session total.
   attendees: z
@@ -41,8 +52,8 @@ const lectureSchema = z.object({
         // the ordinary case must be the one nobody has to remember to send.
         is_billable: z.boolean().optional(),
         attendance_status: z.enum(['Present', 'Absent', 'Late']).optional(),
-        homework: z.string().optional().nullable(),
-        notes: z.string().optional().nullable(),
+        homework: text(4000, 'The homework'),
+        notes: text(4000, 'The notes'),
         performance_rating: z.number().int().min(1).max(5).optional().nullable(),
       })
     )

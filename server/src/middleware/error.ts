@@ -54,6 +54,33 @@ export function errorHandler(err: any, req: Request, res: Response, _next: NextF
     });
   }
 
+  if (err?.code === 'ER_DATA_TOO_LONG' || err?.code === 'WARN_DATA_TRUNCATED') {
+    // The column is in the driver's message ("Data too long for column
+    // 'remark' at row 1"). The column name is not the caller's business, but
+    // WHICH BOX TO SHORTEN is the only thing they need, so it is translated
+    // and nothing else of the message escapes. Before this, a teacher whose
+    // remark was one line too long was told "something went wrong at our end"
+    // and had no way to guess what.
+    const column = /column '([^']+)'/.exec(String(err?.sqlMessage || ''))?.[1] || '';
+    const label: Record<string, string> = {
+      remark: 'The remark',
+      topic: 'The topic',
+      subtopic: 'The subtopic',
+      notes: 'The notes',
+      homework: 'The homework',
+      venue: 'The venue',
+      meeting_link: 'The meeting link',
+      full_name: 'The name',
+      email: 'The email address',
+    };
+    console.error(`[${ref}] ${req.method} ${req.originalUrl} too long:`, err?.sqlMessage || err);
+    return res.status(400).json({
+      error: `${label[column] || 'One of the fields'} is too long to save. Please shorten it and try again.`,
+      field: column || undefined,
+      ref,
+    });
+  }
+
   /**
    * Ours to show: a 4xx that a route raised deliberately, with wording meant
    * for a person. A 500 never is — by the time something is a 500 nobody
