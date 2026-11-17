@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { UserRound, Users, ChevronRight, AlertCircle, Info } from 'lucide-react';
+import { UserRound, Users, ChevronRight, AlertCircle, Info, Eye, EyeOff } from 'lucide-react';
 import { AuthShell } from '../components/AuthHero';
 import { useAuth, type AccountChoice } from '../auth/AuthContext';
 
@@ -8,6 +8,10 @@ export default function Login() {
   const { login, selectAccount } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  // Starts masked, every time. Nothing remembers that it was shown last
+  // visit — on a shared desk at the front office that would leave the next
+  // person's password in plain sight before they have touched anything.
+  const [showPassword, setShowPassword] = useState(false);
   const timedOut = new URLSearchParams(window.location.search).get('reason') === 'timeout';
   const [error, setError] = useState('');
   // A registered student who is not approved yet is not a failed sign-in, so
@@ -120,11 +124,35 @@ export default function Login() {
               <label>Username or email</label>
             </div>
             <div>
-              {/* No show/hide toggle — the client asked for the password to stay masked. */}
+              {/* The password was masked with no way to reveal it, at the
+                  client's own request. Reversed by them on 17 November 2026:
+                  a wrong password is the most common thing that happens on
+                  this screen, and on a phone keyboard a typo you cannot see
+                  is indistinguishable from an account that does not work. */}
               <div className="field">
-                <input className="input !py-3.5" type="password" placeholder="Enter password" autoComplete="new-password"
-                  value={password} onChange={(e) => { setPassword(e.target.value); if (error) setError(''); }} />
+                <input
+                  className="input !py-3.5 !pr-12"
+                  type={showPassword ? 'text' : 'password'}
+                  placeholder="Enter password"
+                  autoComplete="new-password"
+                  value={password}
+                  onChange={(e) => { setPassword(e.target.value); if (error) setError(''); }}
+                />
                 <label>Password</label>
+                <button
+                  type="button"
+                  // Inside a form, a button with no type submits it — this one
+                  // must not try to sign in.
+                  onClick={() => setShowPassword((s) => !s)}
+                  // Said as what it will do, not as what it is, so a screen
+                  // reader announces the action rather than an eye.
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                  aria-pressed={showPassword}
+                  title={showPassword ? 'Hide password' : 'Show password'}
+                  className="absolute right-1 top-1/2 -translate-y-1/2 grid place-items-center w-10 h-10 rounded-lg text-[var(--color-muted)] hover:text-[var(--color-primary)] hover:bg-[var(--color-card-alt)] transition-colors"
+                >
+                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
               </div>
               <div className="flex justify-end mt-2">
                 <Link to="/forgot-password" className="text-xs font-semibold text-[var(--color-primary)] hover:underline">
