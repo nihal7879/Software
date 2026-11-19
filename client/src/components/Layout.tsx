@@ -3,6 +3,7 @@ import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, Users, Clock, Wallet, GraduationCap, BarChart3,
   BookOpen, User, LogOut, Moon, Sun, ChevronLeft, Menu, Settings, Lock, QrCode, KeyRound, Plus, BellRing, UserPlus, ClipboardList, X,
+  Megaphone,
 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '../auth/AuthContext';
@@ -36,6 +37,9 @@ const NAV: Record<string, Item[]> = {
     { to: '/admin/registrations', label: 'Registrations', icon: UserPlus },
     { to: '/admin/hours', label: 'Student Hours', icon: Clock },
     { to: '/admin/finance', label: 'Finance', icon: Wallet },
+    // Who is running out of hours, and who has already been called about it.
+    // Next to Finance on purpose: it is the same job, one step earlier.
+    { to: '/admin/reminders', label: 'Reminders', icon: Megaphone },
     // Attendance lives inside each teacher's Lecture Entry now, reached from
     // Teachers — the same screen the teacher has.
     { to: '/admin/teachers', label: 'Teachers', icon: GraduationCap },
@@ -51,6 +55,7 @@ const NAV: Record<string, Item[]> = {
     { to: '/admin/registrations', label: 'Registrations', icon: UserPlus },
     { to: '/admin/hours', label: 'Student Hours', icon: Clock },
     { to: '/admin/finance', label: 'Finance', icon: Wallet },
+    { to: '/admin/reminders', label: 'Reminders', icon: Megaphone },
     { to: '/admin/teachers', label: 'Teachers', icon: GraduationCap },
     { to: '/admin/pivots', label: 'Pivots', icon: BarChart3 },
     { to: '/admin/approvals', label: 'Approvals', icon: KeyRound },

@@ -1,0 +1,1012 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>STEM Vision — Assignments, developer build</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+/* ==================================================================
+   STEM Vision — Assignments. The build the developer works from.
+   One design, not a set of options. Everything here really runs: the
+   file you choose is held, downloads again, and the mark you type
+   reaches the student and the parent. Nothing leaves this tab.
+
+   The three rules this screen is built around:
+     1. The assignment is attached from an icon on the lecture row,
+        through a modal, and can be changed later from the same icon.
+     2. Marking happens on its own page, reached from two places - the
+        lecture row and the Assignments tab - and comes back.
+     3. Several students can be marked together ONLY when the lecture
+        was taken together. The same sheet handed out on another day
+        is a different assignment and is marked on its own.
+   ================================================================== */
+:root{
+  --bg:#F8FAFC; --card:#FFFFFF; --card-alt:#F1F5F9;
+  --border:#E8ECF1; --border-strong:#DDE3EA;
+  --text:#0F172A; --text-2:#334155; --muted:#64748B; --faint:#94A3B8;
+  --primary:#F97316; --primary-dark:#EA580C; --primary-soft:#FFF4EC; --primary-pale:#FFE7D4;
+  --blue:#1D4ED8; --blue-soft:#EFF6FF; --blue-line:#BFDBFE;
+  --green:#10B981; --green-soft:#ECFDF5; --green-line:#A7E6C4;
+  --amber:#F59E0B; --amber-soft:#FFFBEB;
+  --red:#EF4444; --red-soft:#FEF2F2; --red-line:#FECACA;
+  --sidebar-w:264px;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#EEF2F6;color:var(--text);-webkit-font-smoothing:antialiased;font-size:15px;line-height:1.5}
+svg{display:block}
+button{font:inherit}
+
+.demo{position:sticky;top:0;z-index:40;background:#0F172A;color:#E2E8F0;padding:11px 18px;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.demo .k{font-size:10.5px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:#94A3B8}
+.roles{display:inline-flex;gap:4px;background:#1E293B;border-radius:10px;padding:4px}
+.roles button{border:0;background:transparent;color:#CBD5E1;font-size:13.5px;font-weight:600;padding:7px 15px;border-radius:7px;cursor:pointer}
+.roles button.on{background:var(--primary);color:#fff}
+.demo select{background:#1E293B;border:1px solid #334155;color:#E2E8F0;border-radius:9px;padding:7px 11px;font-size:13.5px}
+.demo .sp{flex:1}
+.demo .reset{border:1px solid #334155;background:transparent;color:#CBD5E1;border-radius:9px;padding:7px 13px;font-size:13px;font-weight:600;cursor:pointer}
+.demo .reset:hover{background:#1E293B}
+.demo .tip{font-size:12.5px;color:#94A3B8}
+
+.shell{max-width:1520px;margin:18px auto 50px;padding:0 16px}
+.app{display:flex;background:var(--card);border:1px solid var(--border);border-radius:16px;overflow:hidden;box-shadow:0 2px 10px rgba(15,23,42,.06);min-height:660px}
+
+.side{width:var(--sidebar-w);flex:0 0 var(--sidebar-w);border-right:1px solid var(--border);background:var(--card);padding:20px 14px 16px;display:flex;flex-direction:column}
+.brand{padding:0 6px;margin-bottom:26px}
+.logo{font-weight:800;font-size:21px;letter-spacing:-.01em;line-height:1}
+.logo .s{color:#F15A24}.logo .v{color:#1D4ED8}
+.tagline{font-size:5.6px;letter-spacing:.16em;color:var(--faint);font-weight:700;margin-top:3px;padding-left:1px}
+.nav{display:flex;flex-direction:column;gap:2px}
+.nav a{display:flex;align-items:center;gap:13px;padding:10px 12px;border-radius:10px;color:var(--text-2);text-decoration:none;font-size:15px;font-weight:500;cursor:pointer}
+.nav a:hover{background:var(--bg)}
+.nav a.on{color:var(--primary);font-weight:600}
+.nav a.on svg{color:var(--primary)}
+.nav a svg{color:#475569;flex:0 0 auto}
+.nav .badge{margin-left:auto;background:var(--primary);color:#fff;font-size:11.5px;font-weight:700;min-width:20px;height:20px;border-radius:999px;display:grid;place-items:center;padding:0 6px}
+.who{margin-top:auto;background:var(--card-alt);border-radius:12px;padding:12px 14px}
+.who .role{font-size:10.5px;font-weight:700;letter-spacing:.1em;color:var(--muted)}
+.who .name{font-size:14.5px;font-weight:600;margin-top:2px}
+
+.main{flex:1;min-width:0;background:var(--bg);padding:24px 28px 40px}
+.ph{display:flex;align-items:flex-start;gap:18px;flex-wrap:wrap}
+.back{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--border-strong);background:var(--card);border-radius:10px;padding:11px 18px;font-size:15px;font-weight:600;color:var(--text);cursor:pointer;white-space:nowrap}
+.back:hover{background:var(--card-alt)}
+.ph .mid{flex:1;min-width:220px}
+.ph h1{font-size:28px;font-weight:800;letter-spacing:-.02em;margin:0}
+.ph .sub{color:var(--muted);font-size:15px;margin-top:3px}
+.ph .sub b{color:var(--text);font-weight:700}
+.add{display:inline-flex;align-items:center;gap:9px;background:var(--primary);border:0;border-radius:11px;color:#fff;font-size:16px;font-weight:600;padding:13px 22px;cursor:pointer}
+.add:hover{background:var(--primary-dark)}
+.seg{display:inline-flex;gap:4px;background:var(--card-alt);border-radius:12px;padding:5px;margin:20px 0}
+.seg button{display:inline-flex;align-items:center;gap:9px;border:0;background:transparent;font-size:15px;font-weight:600;color:var(--muted);padding:9px 18px;border-radius:9px;cursor:pointer}
+.seg button.on{background:var(--card);color:var(--primary);box-shadow:0 1px 2px rgba(15,23,42,.07)}
+.seg .cnt{background:var(--primary);color:#fff;font-size:11.5px;font-weight:700;min-width:20px;height:20px;border-radius:999px;display:grid;place-items:center;padding:0 6px}
+
+.card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:20px 22px}
+.card+.card{margin-top:16px}
+.card.flush{padding:0}
+.card-head{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;flex-wrap:wrap}
+.card-title{font-size:18px;font-weight:700;margin:0}
+.card-title::after{content:"";display:block;width:33px;height:3px;border-radius:2px;background:var(--primary);margin-top:8px}
+.hint{color:var(--muted);font-size:14px;margin:14px 0 0}
+.btn{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--border-strong);background:var(--card);color:var(--text);font-size:14px;font-weight:600;padding:9px 14px;border-radius:10px;cursor:pointer;white-space:nowrap}
+.btn:hover{background:var(--card-alt)}
+.btn.sm{font-size:12.5px;padding:6px 11px;border-radius:8px}
+.btn.primary{background:var(--primary);border-color:var(--primary);color:#fff}
+.btn.primary:hover{background:var(--primary-dark)}
+.btn.ghostred{border-color:var(--red-line);color:#DC2626}
+.btn.ghostred:hover{background:var(--red-soft)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.icbtn{border:1px solid var(--border-strong);background:var(--card);width:35px;height:35px;border-radius:9px;display:grid;place-items:center;color:var(--text-2);cursor:pointer;flex:0 0 auto;position:relative}
+.icbtn:hover{background:var(--card-alt)}
+.icbtn.red{border-color:var(--red-line);color:#DC2626}
+.icbtn.clip{border-color:var(--blue-line);background:var(--blue-soft);color:#1E40AF}
+.icbtn.clip:hover{background:#DBEAFE}
+.icbtn .n{position:absolute;top:-6px;right:-6px;min-width:17px;height:17px;padding:0 4px;border-radius:999px;background:var(--primary);color:#fff;font-size:10px;font-weight:800;display:grid;place-items:center}
+.icbtn .n.ok{background:var(--green)}
+.inp,.sel{border:1.5px solid var(--border-strong);background:var(--card);border-radius:10px;padding:10px 12px;font:inherit;font-size:14.5px;color:var(--text);width:100%}
+.inp::placeholder{color:var(--faint)}
+textarea.inp{resize:vertical;line-height:1.5}
+.lab{font-size:11px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);display:block;margin-bottom:6px}
+.lab i{font-style:normal;font-weight:500;text-transform:none;letter-spacing:0;color:var(--faint)}
+.row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.sp{flex:1}
+.pill{display:inline-flex;align-items:center;gap:5px;font-size:12.5px;font-weight:600;padding:4px 11px;border-radius:999px;white-space:nowrap}
+.pill.grey{background:var(--card-alt);color:var(--muted)}
+.pill.amber{background:var(--amber-soft);color:#B45309}
+.pill.green{background:var(--green-soft);color:#047857}
+.pill.red{background:var(--red-soft);color:#B91C1C}
+.pill.blue{background:var(--blue-soft);color:#1E40AF}
+.afile{display:inline-flex;align-items:center;gap:7px;background:var(--blue-soft);border:1px solid var(--blue-line);border-radius:9px;padding:5px 11px;font-size:13.5px;font-weight:600;color:#1E40AF}
+.linkbtn{border:0;background:none;font-size:13.5px;font-weight:600;color:var(--primary-dark);cursor:pointer;padding:0;display:inline-flex;align-items:center;gap:6px}
+.linkbtn:hover{text-decoration:underline}
+.drop{border:1.5px dashed var(--border-strong);background:var(--card);border-radius:11px;padding:14px 16px;display:flex;align-items:center;gap:11px;color:var(--muted);font-size:14px;cursor:pointer}
+.drop:hover,.drop.over{border-color:var(--primary);background:var(--primary-soft);color:#9A3412}
+.drop b{color:var(--text)}
+.drop.has{border-style:solid;border-color:var(--blue-line);background:var(--blue-soft);color:#1E40AF}
+
+table{width:100%;border-collapse:collapse;table-layout:fixed}
+thead th{text-align:left;font-size:11px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);padding:12px 10px;border-bottom:1px solid var(--border)}
+tbody td{padding:14px 10px;border-bottom:1px solid var(--border);vertical-align:middle;font-size:14.5px}
+tbody tr:last-child td{border-bottom:0}
+tbody tr:hover{background:#FCFDFE}
+.card.flush table thead th{padding-left:20px}
+.card.flush table thead th:last-child{padding-right:20px}
+.card.flush tbody td:first-child{padding-left:20px}
+.card.flush tbody td:last-child{padding-right:20px}
+.sname{font-weight:600}
+.sid{color:var(--faint);font-size:12.5px;margin-left:4px;font-variant-numeric:tabular-nums}
+.dt{font-variant-numeric:tabular-nums;letter-spacing:.03em;color:var(--text-2)}
+.subj{font-weight:700}
+.topic{color:var(--muted);font-size:13.5px;margin-top:2px;line-height:1.45}
+.schip{display:inline-flex;align-items:center;gap:6px;background:var(--card-alt);border-radius:999px;padding:3px 11px 3px 8px;font-size:13.5px;margin:1px 0}
+.schip .n{color:var(--faint);font-size:12px;font-variant-numeric:tabular-nums}
+.fileline{display:flex;align-items:center;gap:10px;min-width:0}
+.fileico{width:34px;height:34px;border-radius:8px;background:var(--red-soft);color:#DC2626;display:grid;place-items:center;flex:0 0 auto}
+.fileico.g{background:var(--green-soft);color:#047857}
+.fname{font-weight:600;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fwhen{font-size:12.5px;color:var(--faint);margin-top:1px}
+.markin{display:flex;align-items:center;gap:8px}
+.markin .inp{width:70px;text-align:center;font-weight:700;font-variant-numeric:tabular-nums}
+.markin .of{color:var(--muted);font-size:14.5px;white-space:nowrap}
+
+/* ---- day grouping in the Assignments tab ---- */
+.daybar{display:flex;align-items:center;gap:11px;padding:11px 20px;background:var(--card-alt);border-top:1px solid var(--border);border-bottom:1px solid var(--border)}
+.card.flush .daybar:first-child{border-top:0}
+.dayname{font-size:12.5px;font-weight:700;letter-spacing:.04em;color:var(--text-2);text-transform:uppercase}
+.daycount{font-size:12px;color:var(--muted);background:var(--card);border:1px solid var(--border-strong);border-radius:999px;padding:1px 9px;font-weight:600}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:16px}
+.stat{background:var(--card);border:1px solid var(--border);border-radius:13px;padding:16px 18px}
+.stat .l{display:flex;align-items:center;gap:8px;font-size:10.5px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.stat .pip{width:9px;height:9px;border-radius:999px}
+.stat .v{font-size:28px;font-weight:800;margin-top:7px;line-height:1}
+.stat .s{font-size:12.5px;color:var(--muted);margin-top:6px}
+
+/* ---- modal ---- */
+.scrim{position:fixed;inset:0;background:rgba(15,23,42,.45);display:grid;place-items:center;padding:20px;z-index:50}
+.modal{background:var(--card);border-radius:16px;box-shadow:0 20px 50px rgba(15,23,42,.3);width:100%;max-width:620px;max-height:90vh;overflow:auto}
+.modal .mh{padding:20px 22px 0;display:flex;align-items:flex-start;gap:14px}
+.modal .mh h3{margin:0;font-size:19px;font-weight:700}
+.modal .mh p{margin:4px 0 0;color:var(--muted);font-size:13.5px}
+.modal .mb{padding:18px 22px}
+.modal .mf{padding:15px 22px;border-top:1px solid var(--border);display:flex;gap:9px;align-items:center;background:#FCFDFE;border-radius:0 0 16px 16px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:13px}
+.grid3{display:grid;grid-template-columns:1.3fr 1fr .8fr;gap:13px}
+
+/* ---- marking page: list left, one big marking area right ---- */
+.mk{display:grid;grid-template-columns:250px 1fr;gap:16px;align-items:start}
+.mklist{background:var(--card);border:1px solid var(--border);border-radius:14px;overflow:hidden}
+.mklist .h{padding:13px 16px;border-bottom:1px solid var(--border);font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.mkitem{display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid var(--border);cursor:pointer;border-left:3px solid transparent}
+.mkitem:last-child{border-bottom:0}
+.mkitem:hover{background:var(--bg)}
+.mkitem.on{background:var(--primary-soft);border-left-color:var(--primary)}
+.mkitem .nm{flex:1;min-width:0;font-size:14px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mkitem.on .nm{color:#9A3412}
+.mkdot{width:9px;height:9px;border-radius:999px;flex:0 0 auto}
+.mkpane{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:20px 22px}
+.grpnote{display:flex;align-items:flex-start;gap:11px;background:var(--blue-soft);border:1px solid var(--blue-line);border-radius:11px;padding:12px 15px;font-size:13.5px;color:#1E3A8A;margin-bottom:16px}
+.grpnote.warn{background:var(--amber-soft);border-color:#FDE68A;color:#78350F}
+.empty{padding:44px 20px;text-align:center;color:var(--muted);font-size:14.5px}
+.toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%) translateY(14px);background:#0F172A;color:#fff;padding:12px 20px;border-radius:11px;font-size:14px;font-weight:600;box-shadow:0 10px 26px rgba(15,23,42,.22);opacity:0;pointer-events:none;transition:.22s;z-index:60}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+input[type=file]{display:none}
+
+@media (max-width:1150px){
+  .app{flex-direction:column}
+  .side{width:auto;flex:none;border-right:0;border-bottom:1px solid var(--border)}
+  .nav{flex-direction:row;flex-wrap:wrap}.nav a{padding:8px 11px}
+  .who{display:none}
+  .main{padding:20px 16px 30px}
+  .mk{grid-template-columns:1fr}
+  .stats{grid-template-columns:1fr}
+  .grid2,.grid3{grid-template-columns:1fr}
+  table,thead,tbody,tr,td{display:block;width:auto}
+  thead{display:none}
+  tbody tr{border-bottom:1px solid var(--border);padding:14px 4px}
+  tbody td{border:0;padding:4px 0}
+  tbody td::before{content:attr(data-l);display:block;font-size:10.5px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--faint);margin-bottom:3px}
+}
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+  <g id="i-dash"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></g>
+  <g id="i-users"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/></g>
+  <g id="i-clock"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></g>
+  <g id="i-clip"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M9 12h6M9 16h4"/></g>
+  <g id="i-bell"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></g>
+  <g id="i-gear"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-2.9 1.2V21a2 2 0 0 1-4 0v-.1A1.7 1.7 0 0 0 7 19.4a1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1A1.7 1.7 0 0 0 2.6 14H2a2 2 0 0 1 0-4h.1A1.7 1.7 0 0 0 4 7.4l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1A1.7 1.7 0 0 0 10 3.6V3a2 2 0 0 1 4 0v.1a1.7 1.7 0 0 0 2.9 1.2l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1A1.7 1.7 0 0 0 21.4 10H22a2 2 0 0 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/></g>
+  <g id="i-left"><path d="m15 18-6-6 6-6"/></g>
+  <g id="i-plus"><path d="M12 5v14M5 12h14"/></g>
+  <g id="i-paper"><path d="M21.4 11.1 12.3 20a5 5 0 0 1-7-7l9-9a3.3 3.3 0 0 1 4.7 4.7l-9 9a1.7 1.7 0 0 1-2.4-2.4l8.3-8.3"/></g>
+  <g id="i-file"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/></g>
+  <g id="i-dl"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5M12 15V3"/></g>
+  <g id="i-up"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 9 5-5 5 5M12 4v12"/></g>
+  <g id="i-check"><path d="M20 6 9 17l-5-5"/></g>
+  <g id="i-eye"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></g>
+  <g id="i-pencil"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></g>
+  <g id="i-trash"><path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></g>
+  <g id="i-qr"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3h-3z"/></g>
+  <g id="i-cal"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M8 3v4M16 3v4M3 10h18"/></g>
+  <g id="i-home"><path d="m3 10 9-7 9 7v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/><path d="M9 21v-7h6v7"/></g>
+  <g id="i-x"><path d="M18 6 6 18M6 6l12 12"/></g>
+  <g id="i-info"><circle cx="12" cy="12" r="9"/><path d="M12 16v-5M12 8h.01"/></g>
+  <g id="i-group"><circle cx="9" cy="8" r="3.2"/><circle cx="17" cy="9" r="2.6"/><path d="M3 20v-1.6A4.4 4.4 0 0 1 7.4 14h3.2a4.4 4.4 0 0 1 4.4 4.4V20"/><path d="M17 14.5h.6a3.4 3.4 0 0 1 3.4 3.4V20"/></g>
+</defs></svg>
+
+<div class="demo">
+  <span class="k">Developer build — you are</span>
+  <span class="roles" id="roles"></span>
+  <span class="k" id="whoLabel">Student</span>
+  <select id="studentPick"></select>
+  <span class="sp"></span>
+  <span class="tip" id="tip"></span>
+  <button class="reset" id="resetBtn">Start again</button>
+</div>
+
+<div class="shell">
+  <div class="app">
+    <aside class="side" id="side"></aside>
+    <main class="main" id="main"></main>
+  </div>
+</div>
+
+<div id="modalRoot"></div>
+<div class="toast" id="toast"></div>
+<input type="file" id="picker">
+
+<script>
+'use strict';
+
+/* The app runs on Dubai time; the prototype pins a "today" so the seeded
+   due dates and the late / closed demonstrations stay meaningful. */
+const TODAY = '2026-11-18';
+
+const STUDENTS = [
+  { id: 23, name: 'Meera Samrat Navale',  grade: 'Grade 11', parent: 'Samrat Navale' },
+  { id: 41, name: 'Atharv Chaitnya Powale', grade: 'Grade 11', parent: 'Chaitnya Powale' },
+  { id: 4,  name: 'Nikita Sumit Jain',    grade: 'Grade 11', parent: 'Sumit Jain' },
+  { id: 20, name: 'Sofia campos dionisio', grade: 'Grade 10', parent: 'Elena Campos' },
+];
+
+function seed() {
+  return {
+    role: 'teacher',
+    view: 'lectures',          // checkins | lectures | assignments | marking
+    mk: null,                  // { lectureId, sid, mode:'one'|'all' }
+    modal: null,               // { lectureId } while the assignment modal is open
+    draft: null,
+    studentId: 23,
+    checkin: { subject: '', topic: '', subtopic: '', remark: '' },
+    nextLecture: 10,
+    // Lecture 1 was taken by three students together -> they can be marked as a group.
+    // Lecture 4 is the SAME sheet handed to one student on another day -> separate.
+    lectures: [
+      { id: 1, date: '2026-11-16', students: [23, 41, 4], time: '4:30 PM – 5:30 PM', hours: '1 h',
+        subject: 'Maths', topic: 'Binomial expansion',
+        detail: 'Discussed exam style questions based on finding coefficient of specific term.', a: null },
+      { id: 2, date: '2026-11-16', students: [41], time: '12:30 PM – 2:00 PM', hours: '1.5 h',
+        subject: 'Maths', topic: 'Past paper discussion', detail: 'Discussed sums from 2025 oct past paper', a: null },
+      { id: 3, date: '2026-11-15', students: [20], time: '2:30 PM – 4:00 PM', hours: '1.5 h',
+        subject: 'Maths', topic: 'Sequences', detail: 'Discussed sums based on finding nth term of AP.', a: null },
+      { id: 4, date: '2026-11-15', students: [4], time: '11:30 AM – 1:00 PM', hours: '1.5 h',
+        subject: 'Maths', topic: 'Functions', detail: 'Discussed sums based on sketching of transformation of functions', a: null },
+      { id: 5, date: '2026-11-15', students: [23], time: '10:15 AM – 11:15 AM', hours: '1 h',
+        subject: 'Maths', topic: 'Binomial expansion', detail: 'Explained her expansion of binomial terms using pascal triangle.', a: null },
+    ],
+    pending: [{ id: 101, date: '2026-11-17', student: 151, name: 'Simone Amit Ahuja', inAt: '05:34 PM' }],
+  };
+}
+let S = seed();
+
+/* ---------- helpers ---------- */
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const ico = (n, sz, sw) => `<svg width="${sz || 16}" height="${sz || 16}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="${sw || 1.9}" stroke-linecap="round" stroke-linejoin="round"><use href="#${n}"/></svg>`;
+const student = (id) => STUDENTS.find((s) => s.id === id) || { id, name: 'Student ' + id, grade: '', parent: '' };
+const dmy = (iso) => { if (!iso) return ''; const p = iso.split('-'); return `${p[2]}-${p[1]}-${p[0].slice(2)}`; };
+const kb = (n) => n < 1048576 ? Math.max(1, Math.round(n / 1024)) + ' KB' : (n / 1048576).toFixed(1) + ' MB';
+const days = (a, b) => Math.round((Date.parse(b) - Date.parse(a)) / 86400000);
+const lec = (id) => S.lectures.find((l) => l.id === id);
+
+function toast(m) { const t = $('toast'); t.textContent = m; t.classList.add('show'); clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove('show'), 2800); }
+function pickFile(accept) {
+  return new Promise((res) => { const el = $('picker'); el.accept = accept || 'application/pdf,image/*'; el.value = ''; el.onchange = () => res(el.files && el.files[0] || null); el.click(); });
+}
+const hold = (f) => ({ name: f.name, size: f.size, url: URL.createObjectURL(f) });
+const openFile = (u) => window.open(u, '_blank', 'noopener');
+function download(f) { const a = document.createElement('a'); a.href = f.url; a.download = f.name; document.body.appendChild(a); a.click(); a.remove(); }
+function nowTime() { const d = new Date(); let h = d.getHours(); const m = String(d.getMinutes()).padStart(2, '0'); const ap = h >= 12 ? 'PM' : 'AM'; h = h % 12 || 12; return `${String(h).padStart(2, '0')}:${m} ${ap}`; }
+
+/* ---------- state questions ---------- */
+const sub = (a, sid) => a && a.subs ? a.subs[sid] : null;
+const mark = (a, sid) => a && a.marks ? a.marks[sid] : null;
+const closed = (a) => a && a.due && !a.reopened && days(a.due, TODAY) > 0;
+function statusOf(a, sid) {
+  if (mark(a, sid)) return 'marked';
+  if (sub(a, sid)) return 'submitted';
+  if (closed(a)) return 'closed';
+  return 'todo';
+}
+const withA = () => S.lectures.filter((l) => l.a);
+const mineL = (sid) => S.lectures.filter((l) => l.a && l.students.includes(sid));
+/** Several students can be marked together only when the lecture itself was taken together. */
+const groupable = (l) => l.students.length > 1;
+/** The same title given on another lecture — a different assignment, marked on its own. */
+const sameSheetElsewhere = (l) => withA().filter((x) => x.id !== l.id && x.a.title.trim().toLowerCase() === l.a.title.trim().toLowerCase());
+
+const toMarkCount = () => withA().reduce((n, l) => n + l.students.filter((s) => sub(l.a, s) && !mark(l.a, s)).length, 0);
+
+/* ==================================================================
+   SIDEBAR
+   ================================================================== */
+function navItem(icon, label, on, badge, go) {
+  return `<a class="${on ? 'on' : ''}" data-go="${go || ''}">${ico(icon, 19)}${esc(label)}${badge ? `<span class="badge">${badge}</span>` : ''}</a>`;
+}
+function renderSide() {
+  const head = `<div class="brand">
+    <div class="logo"><span class="s">STEM</span><span class="v">VISI</span><svg style="display:inline-block;vertical-align:-2px;margin:0 1px" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke-width="2"><circle cx="12" cy="12" r="9" stroke="#F15A24"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18A14 14 0 0 1 12 3Z" stroke="#1D4ED8"/></svg><span class="v">N</span></div>
+    <div class="tagline">EXPLORE. EXPERIMENT. EXCEL.</div></div>`;
+  let nav, who;
+  if (S.role === 'teacher') {
+    nav = navItem('i-dash', 'Dashboard') + navItem('i-users', 'My students') +
+          navItem('i-clip', 'Lecture Entry', true, toMarkCount() || '', 'lectures') +
+          navItem('i-bell', 'Notifications') + navItem('i-gear', 'Settings');
+    who = `<div class="role">TEACHER</div><div class="name">Sachin Chawan</div>`;
+  } else if (S.role === 'student') {
+    const todo = mineL(S.studentId).filter((l) => statusOf(l.a, S.studentId) === 'todo').length;
+    nav = navItem('i-home', 'Dashboard') + navItem('i-qr', 'Check-in') +
+          navItem('i-clip', 'Assignments', true, todo || '', 'assignments') + navItem('i-users', 'Profile');
+    who = `<div class="role">STUDENT</div><div class="name">${esc(student(S.studentId).name)}</div>`;
+  } else {
+    const need = mineL(S.studentId).filter((l) => ['todo', 'closed'].includes(statusOf(l.a, S.studentId))).length;
+    nav = navItem('i-home', 'Dashboard') + navItem('i-clock', 'Hours') +
+          navItem('i-clip', 'Assignments', true, need || '', 'assignments') + navItem('i-users', 'Profile');
+    who = `<div class="role">PARENT</div><div class="name">${esc(student(S.studentId).parent)}</div>`;
+  }
+  $('side').innerHTML = head + `<nav class="nav">${nav}</nav><div class="who">${who}</div>`;
+}
+
+/* ==================================================================
+   TEACHER — shell with the three tabs
+   ================================================================== */
+function shell(tab, body) {
+  const q = toMarkCount();
+  return `
+  <div class="ph">
+    <button class="back">${ico('i-left', 16, 2.2)}Teachers</button>
+    <div class="mid"><h1>Lecture Entry</h1>
+      <div class="sub"><b>Sachin Chawan</b> — confirm their scanned check-ins, or add a lecture when they are busy.</div></div>
+    <button class="add">${ico('i-plus', 18, 2.4)}Add lecture</button>
+  </div>
+  <div class="seg">
+    <button class="${tab === 'checkins' ? 'on' : ''}" data-go="checkins">Scanned check-ins ${S.pending.length ? `<span class="cnt">${S.pending.length}</span>` : ''}</button>
+    <button class="${tab === 'lectures' ? 'on' : ''}" data-go="lectures">Lectures</button>
+    <button class="${tab === 'assignments' ? 'on' : ''}" data-go="assignments">Assignments ${q ? `<span class="cnt">${q}</span>` : ''}</button>
+  </div>${body}`;
+}
+
+/* ---------- the paperclip icon that lives on every lecture row ---------- */
+function clipButton(l) {
+  if (!l.a) return `<button class="icbtn" title="Add an assignment" data-clip="${l.id}">${ico('i-paper', 16, 2)}</button>`;
+  const n = l.students.length;
+  const subs = l.students.filter((s) => sub(l.a, s)).length;
+  const marked = l.students.filter((s) => mark(l.a, s)).length;
+  const waiting = subs - marked;
+  const badge = waiting ? `<span class="n">${waiting}</span>` : (marked === n ? `<span class="n ok">${ico('i-check', 10, 4)}</span>` : '');
+  return `<button class="icbtn clip" title="Change the assignment" data-clip="${l.id}">${ico('i-paper', 16, 2)}${badge}</button>`;
+}
+
+/** The one-line state under the topic, plus the way in to marking. */
+function strip(l) {
+  if (!l.a) return '';
+  const a = l.a, n = l.students.length;
+  const subs = l.students.filter((s) => sub(a, s)).length;
+  const marked = l.students.filter((s) => mark(a, s)).length;
+  let p;
+  if (marked === n) p = `<span class="pill green">${ico('i-check', 12, 3)}all marked</span>`;
+  else if (subs > marked) p = `<span class="pill amber">${subs - marked} to mark</span>`;
+  else if (subs === 0 && closed(a)) p = `<span class="pill red">nothing submitted</span>`;
+  else p = `<span class="pill grey">${subs} of ${n} submitted</span>`;
+  return `<div class="row" style="margin-top:9px;padding-top:9px;border-top:1px dashed var(--border-strong)">
+    <span class="afile">${ico('i-paper', 13, 2)}${esc(a.title)}</span>${p}
+    <span class="pill grey">due ${dmy(a.due)}</span>
+    <span class="sp"></span><button class="linkbtn" data-mark="${l.id}">Mark →</button></div>`;
+}
+
+function viewLectures() {
+  const rows = S.lectures.map((l) => `
+    <tr>
+      <td data-l="Date" class="dt">${dmy(l.date)}</td>
+      <td data-l="Students">${l.students.map((s) => `<span class="schip"><span class="n">${s}</span>${esc(student(s).name)}</span>`).join(' ')}</td>
+      <td data-l="Time" class="dt">${esc(l.time)}</td>
+      <td data-l="Hours">${esc(l.hours)}</td>
+      <td data-l="Subject / topic"><div class="subj">${esc(l.subject)}</div><div class="topic">${esc(l.topic)} — ${esc(l.detail)}</div>${strip(l)}</td>
+      <td><div class="row" style="justify-content:flex-end;gap:7px">
+        ${clipButton(l)}
+        <button class="icbtn">${ico('i-pencil', 15, 2)}</button>
+        <button class="icbtn red">${ico('i-trash', 15, 2)}</button>
+      </div></td>
+    </tr>`).join('');
+  return shell('lectures', `
+    <div class="card flush">
+      <div style="padding:20px 20px 0"><h2 class="card-title">Lectures by this teacher</h2>
+        <p class="hint" style="font-size:13.5px">The ${ico('i-paper', 13, 2)} on a row adds an assignment, or changes the one that is there. The badge on it is how many answers are waiting for a mark.</p></div>
+      <table style="margin-top:14px">
+        <colgroup><col style="width:10%"><col style="width:22%"><col style="width:14%"><col style="width:7%"><col style="width:33%"><col style="width:14%"></colgroup>
+        <thead><tr><th>Date</th><th>Students on this lecture</th><th>Time</th><th>Hours</th><th>Subject / topic</th><th></th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table></div>`);
+}
+
+/* ---------- Assignments tab: the marking queue, day by day ---------- */
+function viewAssignments() {
+  // every submission that has not been marked, newest day first
+  const q = [];
+  withA().forEach((l) => l.students.forEach((sid) => {
+    const s = sub(l.a, sid);
+    if (s && !mark(l.a, sid)) q.push({ l, sid, s });
+  }));
+  q.sort((a, b) => (a.s.at < b.s.at ? 1 : a.s.at > b.s.at ? -1 : 0));
+
+  const byDay = {};
+  q.forEach((x) => (byDay[x.s.at] = byDay[x.s.at] || []).push(x));
+  const dayLabel = (d) => d === TODAY ? `Today · ${dmy(d)}` : days(d, TODAY) === 1 ? `Yesterday · ${dmy(d)}` : dmy(d);
+
+  const queue = Object.keys(byDay).length ? Object.keys(byDay).sort().reverse().map((d) => `
+    <div class="daybar"><span class="dayname">${dayLabel(d)}</span><span class="daycount">${byDay[d].length}</span></div>
+    <table>
+      <colgroup><col style="width:18%"><col style="width:21%"><col style="width:29%"><col style="width:13%"><col style="width:19%"></colgroup>
+      <tbody>${byDay[d].map(({ l, sid, s }) => `
+        <tr>
+          <td data-l="Student"><span class="sname">${esc(student(sid).name)}</span><span class="sid">${sid}</span><div class="topic">${esc(student(sid).grade)}</div></td>
+          <td data-l="Assignment"><span class="afile">${ico('i-paper', 13, 2)}${esc(l.a.title)}</span><div class="topic" style="margin-top:5px">${esc(l.subject)} · ${esc(l.topic)}</div></td>
+          <td data-l="Their answer"><div class="fileline">
+            <span class="fileico">${ico('i-file', 16)}</span>
+            <div style="min-width:0"><div class="fname">${esc(s.file.name)}</div><div class="fwhen">${kb(s.file.size)}</div></div>
+            <button class="btn sm" data-qopen="${l.id}:${sid}" title="Open the answer">${ico('i-eye', 13)}Open</button>
+            <button class="btn sm" data-qdl="${l.id}:${sid}" title="Download the answer">${ico('i-dl', 13)}</button>
+          </div></td>
+          <td data-l="Sent"><div class="dt">${esc(s.time)}</div><div class="fwhen">${s.late ? '<b style="color:#B45309">late</b>' : 'on time'}</div></td>
+          <td><div class="row" style="justify-content:flex-end;gap:6px">
+            <button class="btn sm" data-qbrief="${l.id}" title="The question paper">${ico('i-paper', 13, 2)}Sheet</button>
+            <button class="btn sm primary" data-mark1="${l.id}:${sid}">Mark</button>
+          </div></td>
+        </tr>`).join('')}</tbody>
+    </table>`).join('') : `<div class="empty">Nothing waiting.<br><span style="font-size:13.5px">New answers land here the moment a student sends one.</span></div>`;
+
+  const all = withA().length ? `
+    <table>
+      <colgroup><col style="width:24%"><col style="width:23%"><col style="width:12%"><col style="width:12%"><col style="width:17%"><col style="width:12%"></colgroup>
+      <thead><tr><th>Assignment</th><th>Subject / topic</th><th>Given</th><th>Due</th><th>Progress</th><th></th></tr></thead>
+      <tbody>${withA().map((l) => {
+        const n = l.students.length, s = l.students.filter((x) => sub(l.a, x)).length, m = l.students.filter((x) => mark(l.a, x)).length;
+        const also = sameSheetElsewhere(l).length;
+        return `<tr>
+          <td data-l="Assignment"><span class="afile">${ico('i-paper', 13, 2)}${esc(l.a.title)}</span>
+            ${groupable(l) ? `<div class="fwhen" style="margin-top:5px">${ico('i-group', 12, 2)} ${n} students, one lecture</div>` : ''}
+            ${also ? `<div class="fwhen" style="margin-top:4px">same sheet on ${also} other lecture${also > 1 ? 's' : ''} — marked separately</div>` : ''}</td>
+          <td data-l="Subject"><div class="subj">${esc(l.subject)}</div><div class="topic">${esc(l.topic)}</div></td>
+          <td data-l="Given" class="dt">${dmy(l.date)}</td>
+          <td data-l="Due" class="dt">${dmy(l.a.due)}${closed(l.a) ? '<div class="fwhen" style="color:#B91C1C">closed</div>' : ''}</td>
+          <td data-l="Progress"><span class="pill ${m === n ? 'green' : s > m ? 'amber' : 'grey'}">${s} of ${n} sent · ${m} marked</span></td>
+          <td><div class="row" style="justify-content:flex-end"><button class="btn sm" data-mark="${l.id}">Open</button></div></td>
+        </tr>`; }).join('')}</tbody></table>` : `<div class="empty">No assignments set yet.</div>`;
+
+  const waiting = withA().reduce((n, l) => n + l.students.filter((s) => !sub(l.a, s) && !closed(l.a)).length, 0);
+  const missed = withA().reduce((n, l) => n + l.students.filter((s) => !sub(l.a, s) && closed(l.a)).length, 0);
+
+  return shell('assignments', `
+    <div class="stats">
+      <div class="stat"><div class="l"><span class="pip" style="background:var(--primary)"></span>To mark</div><div class="v">${q.length}</div><div class="s">answers waiting for you</div></div>
+      <div class="stat"><div class="l"><span class="pip" style="background:var(--amber)"></span>Still to come</div><div class="v">${waiting}</div><div class="s">not sent, still open</div></div>
+      <div class="stat"><div class="l"><span class="pip" style="background:var(--red)"></span>Missed</div><div class="v">${missed}</div><div class="s">closed with nothing sent</div></div>
+    </div>
+    <div class="card flush">
+      <div style="padding:20px 20px 16px"><h2 class="card-title">New submissions</h2>
+        <p class="hint" style="font-size:13.5px">Day by day, newest first. This is the list to work down — no scrolling through lectures to find who sent what.</p></div>
+      ${queue}
+    </div>
+    <div class="card flush" style="margin-top:16px">
+      <div style="padding:20px 20px 16px"><h2 class="card-title">All assignments</h2>
+        <p class="hint" style="font-size:13.5px">Everything set so far, how many have sent, how many are marked, and when each is due.</p></div>
+      ${all}
+    </div>`);
+}
+
+/* ---------- Check-ins ---------- */
+function viewCheckins() {
+  const p = S.pending[0];
+  if (!p) return shell('checkins', `<div class="card"><div class="empty">Nothing waiting. Every check-in has been confirmed.</div></div>`);
+  return shell('checkins', `
+    <div class="card">
+      <div class="card-head"><h2 class="card-title">Scanned check-ins</h2>
+        <div class="row"><button class="btn">${ico('i-qr', 16)}QR code</button><button class="btn">${ico('i-cal', 16)}Any date</button></div></div>
+      <p class="hint">Each line is one student. Fill in the subject and topic and press Confirm — that is when it becomes a lecture and counts against their hours.</p>
+      <div class="row" style="margin:20px 0 2px"><span style="font-size:16px;font-weight:700" class="dt">${dmy(p.date)}</span><span style="color:var(--muted)">1 student</span></div>
+      <table>
+        <colgroup><col style="width:26%"><col style="width:22%"><col style="width:16%"><col style="width:36%"></colgroup>
+        <thead><tr><th>Student</th><th>Subject</th><th>Time in</th><th></th></tr></thead>
+        <tbody><tr>
+          <td data-l="Student"><span class="sname">${esc(p.name)}</span><span class="sid">${p.student}</span><div style="color:var(--primary-dark);font-size:13px;margin-top:2px">no scan out</div></td>
+          <td data-l="Subject"><input class="inp" data-c="subject" value="${esc(S.checkin.subject)}" placeholder="Subject…"></td>
+          <td data-l="Time in"><input class="inp" value="${esc(p.inAt)}"></td>
+          <td><div class="row" style="justify-content:flex-end"><button class="btn sm">Save</button><button class="btn sm primary" data-confirm="1">Confirm</button><button class="btn sm ghostred">Discard</button></div></td>
+        </tr></tbody>
+      </table>
+      <div class="row" style="gap:11px;margin-top:4px">
+        <div style="flex:1 1 150px"><input class="inp" data-c="topic" value="${esc(S.checkin.topic)}" placeholder="Topic"></div>
+        <div style="flex:1 1 150px"><input class="inp" data-c="subtopic" value="${esc(S.checkin.subtopic)}" placeholder="Subtopic"></div>
+        <div style="flex:1.4 1 190px"><input class="inp" data-c="remark" value="${esc(S.checkin.remark)}" placeholder="Remark"></div>
+      </div>
+      <p class="hint" style="font-size:13.5px">The assignment is not given here. Confirm first, then use the ${ico('i-paper', 13, 2)} on the lecture row — one place to set it, one place to change it.</p>
+    </div>`);
+}
+
+/* ==================================================================
+   THE ASSIGNMENT MODAL — add, and change
+   ================================================================== */
+function renderModal() {
+  if (!S.modal) { $('modalRoot').innerHTML = ''; return; }
+  const l = lec(S.modal.lectureId);
+  const editing = !!l.a;
+  const d = S.draft || {};
+  const f = d.file;
+  const names = l.students.map((s) => `<span class="schip"><span class="n">${s}</span>${esc(student(s).name)}</span>`).join(' ');
+  const also = editing ? sameSheetElsewhere(l) : [];
+
+  $('modalRoot').innerHTML = `<div class="scrim" data-scrim="1"><div class="modal">
+    <div class="mh">
+      <div style="flex:1">
+        <h3>${editing ? 'Change the assignment' : 'Add an assignment'}</h3>
+        <p>${esc(l.subject)} · ${esc(l.topic)} · lecture of ${dmy(l.date)}</p>
+      </div>
+      <button class="icbtn" data-close="1">${ico('i-x', 16, 2.2)}</button>
+    </div>
+    <div class="mb">
+      <div style="margin-bottom:15px">
+        <span class="lab">Goes to</span>
+        <div>${names}</div>
+        ${l.students.length > 1
+          ? `<div class="grpnote" style="margin-top:11px">${ico('i-group', 17, 1.9)}<div>These ${l.students.length} sat the same lecture, so one sheet covers all of them and you can <b>mark them together</b>.</div></div>`
+          : `<div class="grpnote warn" style="margin-top:11px">${ico('i-info', 17, 1.9)}<div>One student on this lecture. If you hand the same sheet to someone else on another day, that is <b>a separate assignment</b> on that lecture — it is marked on its own.</div></div>`}
+      </div>
+
+      <span class="lab">The sheet <i>— PDF or a photo, up to 10 MB</i></span>
+      <div class="drop ${f ? 'has' : ''}" data-pick="1">${ico(f ? 'i-file' : 'i-up', 17)}<span>${f ? esc(f.name) + ' · ' + kb(f.size) : 'Choose a file, or drop one here'}</span></div>
+      ${editing && f && l.a.file && f.url === l.a.file.url ? `<div class="fwhen" style="margin-top:6px">This is the file the students already have. Choosing another one replaces it for everybody.</div>` : ''}
+
+      <div class="grid3" style="margin-top:15px">
+        <div><span class="lab">Title</span><input class="inp" data-d="title" value="${esc(d.title || '')}" placeholder="Worksheet 7"></div>
+        <div><span class="lab">Due date</span><input class="inp" type="date" data-d="due" value="${esc(d.due || '')}"></div>
+        <div><span class="lab">Out of</span><div class="markin"><input class="inp" data-d="total" value="${esc(d.total || '')}" placeholder="10"><span class="of">marks</span></div></div>
+      </div>
+
+      ${also.length ? `<div class="grpnote" style="margin-top:15px">${ico('i-info', 17, 1.9)}<div>The same title is on ${also.length} other lecture${also.length > 1 ? 's' : ''} (${also.map((x) => dmy(x.date)).join(', ')}). Those stay <b>separate assignments</b> with their own marks — changing this one does not touch them.</div></div>` : ''}
+    </div>
+    <div class="mf">
+      ${editing ? `<button class="btn ghostred" data-remove="1">${ico('i-trash', 15, 2)}Remove</button>` : ''}
+      <span class="sp"></span>
+      <button class="btn" data-close="1">Cancel</button>
+      <button class="btn primary" data-save="1">${editing ? 'Save changes' : 'Confirm'}</button>
+    </div>
+  </div></div>`;
+}
+
+/* ==================================================================
+   MARKING — its own page, with Back. List on the left so the right
+   side is free for the remark, which is the part that needs room.
+   ================================================================== */
+function viewMarking() {
+  const l = lec(S.mk.lectureId);
+  if (!l || !l.a) { S.view = 'lectures'; return viewLectures(); }
+  const a = l.a;
+  const group = groupable(l);
+  const mode = group ? (S.mk.mode || 'one') : 'one';
+  const also = sameSheetElsewhere(l);
+
+  const head = `
+    <div class="ph">
+      <button class="back" data-go="${S.mk.from || 'lectures'}">${ico('i-left', 16, 2.2)}Back</button>
+      <div class="mid"><h1>${esc(a.title)}</h1>
+        <div class="sub"><b>${esc(l.subject)} · ${esc(l.topic)}</b> — given ${dmy(l.date)}, due ${dmy(a.due)}, out of ${esc(a.total)}</div></div>
+      <button class="btn" data-open-brief="1">${ico('i-eye', 16)}The sheet</button>
+    </div>
+    ${group
+      ? `<div class="grpnote" style="margin-top:18px">${ico('i-group', 17, 1.9)}<div><b>One lecture, ${l.students.length} students.</b> They sat it together, so you can mark them one by one or all together on one screen.
+          ${also.length ? ` The same sheet on ${also.map((x) => dmy(x.date)).join(', ')} is a separate assignment and is not touched here.` : ''}</div></div>`
+      : `<div class="grpnote warn" style="margin-top:18px">${ico('i-info', 17, 1.9)}<div><b>One student on this lecture</b>, so there is nobody to mark alongside.
+          ${also.length ? ` The same sheet went out on ${also.map((x) => dmy(x.date)).join(', ')} — those are separate assignments with their own marks.` : ''}</div></div>`}
+    ${group ? `<div class="seg" style="margin:14px 0 2px">
+        <button class="${mode === 'one' ? 'on' : ''}" data-mode="one">One by one</button>
+        <button class="${mode === 'all' ? 'on' : ''}" data-mode="all">All together</button>
+      </div>` : ''}`;
+
+  if (mode === 'all') return head + markAll(l);
+
+  const sid = S.mk.sid && l.students.includes(S.mk.sid) ? S.mk.sid : l.students[0];
+  const list = l.students.map((x) => {
+    const st = statusOf(a, x);
+    const col = st === 'marked' ? 'var(--green)' : st === 'submitted' ? 'var(--primary)' : st === 'closed' ? 'var(--red)' : 'var(--border-strong)';
+    return `<div class="mkitem ${x === sid ? 'on' : ''}" data-pick-student="${x}">
+      <span class="mkdot" style="background:${col}"></span><span class="nm">${esc(student(x).name)}</span>
+      ${mark(a, x) ? `<b style="font-size:13px;color:#047857">${esc(mark(a, x).mark)}</b>` : ''}</div>`;
+  }).join('');
+
+  return head + `<div class="mk" style="margin-top:16px">
+    <div class="mklist"><div class="h">Students (${l.students.length})</div>${list}</div>
+    <div class="mkpane">${markOne(l, sid)}</div>
+  </div>`;
+}
+
+function markOne(l, sid) {
+  const a = l.a, s = sub(a, sid), m = mark(a, sid) || {};
+  const st = student(sid);
+  if (!s) {
+    return `<div class="row"><div><div style="font-size:17px;font-weight:700">${esc(st.name)}<span class="sid">${sid}</span></div>
+      <div class="fwhen" style="margin-top:3px">${esc(st.grade)}</div></div><span class="sp"></span>
+      <span class="pill red">nothing submitted</span></div>
+      <div class="empty" style="padding:34px 10px">${closed(a) ? `The due date passed on ${dmy(a.due)}.` : 'Not sent yet.'}
+        <div class="row" style="justify-content:center;margin-top:14px">
+          <button class="btn" data-remind="${sid}">Send a reminder</button>
+          ${closed(a) ? `<button class="btn primary" data-reopen="1">Re-open for everyone</button>` : ''}
+        </div></div>`;
+  }
+  const marked = m.file;
+  return `
+    <div class="row">
+      <div><div style="font-size:17px;font-weight:700">${esc(st.name)}<span class="sid">${sid}</span></div>
+        <div class="fwhen" style="margin-top:3px">${esc(st.grade)} · sent ${dmy(s.at)} ${esc(s.time)} · ${s.late ? '<b style="color:#B45309">late</b>' : 'on time'}</div></div>
+      <span class="sp"></span>
+      ${mark(a, sid) ? `<span class="pill green">${ico('i-check', 12, 3)}marked</span>` : `<span class="pill amber">waiting</span>`}
+    </div>
+
+    <div class="row" style="margin-top:15px;padding:13px 15px;background:var(--bg);border:1px solid var(--border);border-radius:11px">
+      <div class="fileline" style="flex:1;min-width:180px"><span class="fileico">${ico('i-file', 17)}</span>
+        <div style="min-width:0"><div class="fname">${esc(s.file.name)}</div><div class="fwhen">${kb(s.file.size)} · their answer</div></div></div>
+      <button class="btn sm" data-open-sub="${sid}">${ico('i-eye', 14)}Open</button>
+      <button class="btn sm" data-dl-sub="${sid}">${ico('i-dl', 14)}Download</button>
+    </div>
+
+    <div class="row" style="margin-top:16px;align-items:flex-end">
+      <div><span class="lab">Mark</span><div class="markin"><input class="inp" data-mk="${sid}" value="${m.mark != null ? esc(m.mark) : ''}" placeholder="–" style="width:86px;font-size:19px;padding:12px"><span class="of" style="font-size:15px">out of ${esc(a.total)}</span></div></div>
+      <span class="sp"></span>
+      <div style="text-align:right">
+        <span class="lab" style="margin-bottom:6px">Marked sheet <i>— optional</i></span>
+        ${marked ? `<div class="row"><span class="afile">${ico('i-file', 13, 2)}${esc(marked.name)}</span><button class="btn sm" data-marked="${sid}">Replace</button></div>`
+                 : `<button class="btn sm" data-marked="${sid}">${ico('i-up', 14)}Attach your corrected copy</button>`}
+      </div>
+    </div>
+
+    <div style="margin-top:16px">
+      <span class="lab">Remark <i>— optional, leave it empty when there is nothing to add</i></span>
+      <textarea class="inp" data-rm="${sid}" style="min-height:190px;font-size:15px" placeholder="Only write here when you have something to say. The student and the parent read these exact words.">${esc(m.remark || '')}</textarea>
+    </div>
+
+    <div class="row" style="margin-top:14px">
+      <span style="font-size:12.5px;color:var(--muted)">${mark(a, sid) ? `Marked ${dmy(m.at)}. Changing it keeps the first mark in the audit trail.` : 'A mark on its own saves fine.'}</span>
+      <span class="sp"></span>
+      <button class="btn" data-save-mark="${sid}:stay">Save</button>
+      <button class="btn primary" data-save-mark="${sid}:next">Save &amp; next</button>
+    </div>`;
+}
+
+/** Group marking — only offered when the lecture itself was taken together. */
+function markAll(l) {
+  const a = l.a;
+  const rows = l.students.map((sid) => {
+    const s = sub(a, sid), m = mark(a, sid) || {};
+    return `<tr>
+      <td data-l="Student"><span class="sname">${esc(student(sid).name)}</span><span class="sid">${sid}</span></td>
+      <td data-l="Answer">${s
+        ? `<div class="row" style="gap:7px"><button class="btn sm" data-open-sub="${sid}">${ico('i-eye', 13)}Open</button><span class="fwhen">${esc(s.time)} · ${s.late ? 'late' : 'on time'}</span></div>`
+        : `<span class="pill red">nothing sent</span>`}</td>
+      <td data-l="Mark"><div class="markin"><input class="inp" data-mk="${sid}" value="${m.mark != null ? esc(m.mark) : ''}" placeholder="–" ${s ? '' : 'disabled'}><span class="of">/ ${esc(a.total)}</span></div></td>
+      <td data-l="Remark"><textarea class="inp" data-rm="${sid}" style="min-height:62px" placeholder="optional" ${s ? '' : 'disabled'}>${esc(m.remark || '')}</textarea></td>
+    </tr>`;
+  }).join('');
+  return `<div class="card flush" style="margin-top:14px">
+    <div style="padding:20px 20px 0"><h2 class="card-title">Mark all ${l.students.length} together</h2>
+      <p class="hint" style="font-size:13.5px">One sheet, one lecture. Give everyone a mark, write a remark only where one is deserved, and save once.</p></div>
+    <table style="margin-top:14px">
+      <colgroup><col style="width:23%"><col style="width:24%"><col style="width:17%"><col style="width:36%"></colgroup>
+      <thead><tr><th>Student</th><th>Their answer</th><th>Mark</th><th>Remark — optional</th></tr></thead>
+      <tbody>${rows}</tbody></table>
+    <div class="row" style="padding:16px 20px;border-top:1px solid var(--border);justify-content:flex-end">
+      <button class="btn primary" data-save-all="1">Save all marks</button></div>
+  </div>`;
+}
+
+/* ==================================================================
+   STUDENT — plain rows, with the downloads on the right
+   ================================================================== */
+function viewStudent() {
+  const sid = S.studentId;
+  const mine = mineL(sid);
+  const order = { todo: 0, closed: 1, submitted: 2, marked: 3 };
+  mine.sort((x, y) => order[statusOf(x.a, sid)] - order[statusOf(y.a, sid)] || (x.a.due < y.a.due ? -1 : 1));
+  const todo = mine.filter((l) => statusOf(l.a, sid) === 'todo').length;
+
+  const rows = mine.map((l) => {
+    const a = l.a, st = statusOf(a, sid), s = sub(a, sid), m = mark(a, sid);
+    const left = days(TODAY, a.due);
+    let status, actions;
+    if (st === 'marked') {
+      status = `<span class="pill green">${ico('i-check', 12, 3)}Marked</span>`;
+      actions = `<button class="btn sm" data-dl-brief="${l.id}">${ico('i-dl', 13)}Sheet</button>
+                 <button class="btn sm" data-dl-mine="${l.id}">${ico('i-dl', 13)}My answer</button>
+                 ${m.file ? `<button class="btn sm" data-dl-marked="${l.id}">${ico('i-dl', 13)}Marked copy</button>` : ''}`;
+    } else if (st === 'submitted') {
+      status = `<span class="pill grey">Sent — waiting</span>`;
+      actions = `<button class="btn sm" data-dl-brief="${l.id}">${ico('i-dl', 13)}Sheet</button>
+                 <button class="btn sm" data-dl-mine="${l.id}">${ico('i-dl', 13)}My answer</button>
+                 <button class="btn sm" data-submit="${l.id}">Replace</button>`;
+    } else if (st === 'closed') {
+      status = `<span class="pill red">Closed — not sent</span>`;
+      actions = `<button class="btn sm" data-dl-brief="${l.id}">${ico('i-dl', 13)}Sheet</button>`;
+    } else {
+      status = `<span class="pill ${left <= 0 ? 'red' : 'amber'}">${left <= 0 ? 'Due today' : 'Due in ' + left + ' day' + (left > 1 ? 's' : '')}</span>`;
+      actions = `<button class="btn sm" data-dl-brief="${l.id}">${ico('i-dl', 13)}Download</button>
+                 <button class="btn sm primary" data-submit="${l.id}">${ico('i-up', 13)}Send answer</button>`;
+    }
+    return `<tr>
+      <td data-l="Assignment"><div class="sname">${esc(a.title)}</div><div class="topic">${esc(l.subject)} · ${esc(l.topic)}</div></td>
+      <td data-l="Given" class="dt">${dmy(l.date)}</td>
+      <td data-l="Due" class="dt">${dmy(a.due)}</td>
+      <td data-l="Status">${status}</td>
+      <td data-l="Mark">${m ? `<b style="font-size:16px">${esc(m.mark)}</b> <span style="color:var(--muted)">/ ${esc(a.total)}</span>` : '<span style="color:var(--faint)">—</span>'}</td>
+      <td data-l="Teacher's remark">${m && m.remark ? esc(m.remark) : `<span style="color:var(--faint)">—</span>`}</td>
+      <td><div class="row" style="justify-content:flex-end;gap:6px">${actions}</div></td>
+    </tr>`;
+  }).join('');
+
+  return `
+    <h1 style="font-size:28px;font-weight:800;letter-spacing:-.02em;margin:0">Assignments</h1>
+    <div style="color:var(--muted);font-size:15px;margin-top:3px">${todo ? todo + ' to do' : 'Nothing to do'} · ${mine.length} in all</div>
+    <div class="card flush" style="margin-top:20px">
+      ${mine.length ? `<table>
+        <colgroup><col style="width:19%"><col style="width:9%"><col style="width:9%"><col style="width:13%"><col style="width:8%"><col style="width:21%"><col style="width:21%"></colgroup>
+        <thead><tr><th>Assignment</th><th>Given</th><th>Due</th><th>Status</th><th>Mark</th><th>Teacher's remark</th><th></th></tr></thead>
+        <tbody>${rows}</tbody></table>`
+      : `<div class="empty">No assignments yet.<br><span style="font-size:13.5px">Switch to <b>Teacher</b> at the top and give one.</span></div>`}
+    </div>`;
+}
+
+/* ==================================================================
+   PARENT — plain rows. Sent or not, the mark, the remark. No files.
+   ================================================================== */
+function viewParent() {
+  const sid = S.studentId, st = student(sid);
+  const mine = mineL(sid);
+  const order = { todo: 0, closed: 1, submitted: 2, marked: 3 };
+  mine.sort((x, y) => order[statusOf(x.a, sid)] - order[statusOf(y.a, sid)] || (x.a.due < y.a.due ? -1 : 1));
+
+  const sent = mine.filter((l) => sub(l.a, sid)).length;
+  const notSent = mine.length - sent;
+  const ms = mine.map((l) => mark(l.a, sid)).filter((m) => m && !isNaN(Number(m.mark))).map((m) => Number(m.mark));
+  const avg = ms.length ? (ms.reduce((a, b) => a + b, 0) / ms.length).toFixed(1) : '—';
+
+  const rows = mine.map((l) => {
+    const a = l.a, s = sub(a, sid), m = mark(a, sid), stt = statusOf(a, sid);
+    const sentCell = s ? `<span class="pill green">${ico('i-check', 12, 3)}Sent ${s.late ? 'late' : 'on time'}</span>`
+      : stt === 'closed' ? `<span class="pill red">Not sent</span>`
+      : `<span class="pill amber">Not yet</span>`;
+    return `<tr>
+      <td data-l="Assignment"><div class="sname">${esc(a.title)}</div><div class="topic">${esc(l.subject)} · ${esc(l.topic)}</div></td>
+      <td data-l="Due" class="dt">${dmy(a.due)}</td>
+      <td data-l="Sent">${sentCell}</td>
+      <td data-l="Mark">${m ? `<b style="font-size:16px">${esc(m.mark)}</b> <span style="color:var(--muted)">/ ${esc(a.total)}</span>` : '<span style="color:var(--faint)">—</span>'}</td>
+      <td data-l="Teacher's remark">${m && m.remark ? esc(m.remark) : `<span style="color:var(--faint)">${m ? 'no remark this time' : '—'}</span>`}</td>
+    </tr>`;
+  }).join('');
+
+  return `
+    <h1 style="font-size:28px;font-weight:800;letter-spacing:-.02em;margin:0">Assignments</h1>
+    <div style="color:var(--muted);font-size:15px;margin-top:3px">${esc(st.name)} · ${esc(st.grade)}</div>
+    <div class="stats" style="margin-top:20px">
+      <div class="stat"><div class="l"><span class="pip" style="background:var(--green)"></span>Sent</div><div class="v">${sent} <span style="font-size:15px;color:var(--muted);font-weight:600">of ${mine.length}</span></div></div>
+      <div class="stat"><div class="l"><span class="pip" style="background:var(--blue)"></span>Average mark</div><div class="v">${avg}</div></div>
+      <div class="stat"><div class="l"><span class="pip" style="background:var(--red)"></span>Not sent</div><div class="v" style="${notSent ? 'color:#B91C1C' : ''}">${notSent}</div></div>
+    </div>
+    <div class="card flush">
+      ${mine.length ? `<table>
+        <colgroup><col style="width:26%"><col style="width:11%"><col style="width:17%"><col style="width:11%"><col style="width:35%"></colgroup>
+        <thead><tr><th>Assignment</th><th>Due</th><th>Sent</th><th>Mark</th><th>Teacher's remark</th></tr></thead>
+        <tbody>${rows}</tbody></table>` : `<div class="empty">Nothing has been set yet.</div>`}
+    </div>
+    <p class="hint" style="font-size:13px">No files are shown here — a parent sees whether it was sent, the mark, and the remark.</p>`;
+}
+
+/* ==================================================================
+   RENDER
+   ================================================================== */
+function render() {
+  $('roles').innerHTML = ['teacher', 'student', 'parent']
+    .map((r) => `<button class="${S.role === r ? 'on' : ''}" data-role="${r}">${r[0].toUpperCase() + r.slice(1)}</button>`).join('');
+  const show = S.role !== 'teacher';
+  $('studentPick').style.display = show ? '' : 'none';
+  $('whoLabel').style.display = show ? '' : 'none';
+  $('whoLabel').textContent = S.role === 'parent' ? 'Parent of' : 'Student';
+  $('studentPick').innerHTML = STUDENTS.map((s) => `<option value="${s.id}" ${s.id === S.studentId ? 'selected' : ''}>${esc(s.name)}</option>`).join('');
+  $('tip').textContent = S.role === 'teacher'
+    ? 'Lectures → the paperclip icon → give an assignment. Then switch to Student.'
+    : S.role === 'student' ? 'Download it, send an answer, then go back to Teacher → Assignments to mark it'
+    : 'Read-only — sent or not, the mark, the remark. No files.';
+
+  renderSide();
+  let html;
+  if (S.role === 'teacher') html = S.view === 'marking' ? viewMarking() : S.view === 'assignments' ? viewAssignments() : S.view === 'checkins' ? viewCheckins() : viewLectures();
+  else if (S.role === 'student') html = viewStudent();
+  else html = viewParent();
+  $('main').innerHTML = html;
+  renderModal();
+}
+
+/* ---------- read inputs back before anything re-renders ---------- */
+function readDraft() { document.querySelectorAll('[data-d]').forEach((el) => { (S.draft = S.draft || {})[el.dataset.d] = el.value; }); }
+function readCheckin() { document.querySelectorAll('[data-c]').forEach((el) => { S.checkin[el.dataset.c] = el.value; }); }
+
+function saveMarkFor(l, sid) {
+  const mi = document.querySelector(`[data-mk="${sid}"]`), ri = document.querySelector(`[data-rm="${sid}"]`);
+  if (!mi) return null;
+  const mv = mi.value.trim(), rv = ri ? ri.value.trim() : '';
+  if (!mv && !rv) return 'empty';
+  if (mv && (isNaN(Number(mv)) || Number(mv) < 0 || Number(mv) > Number(l.a.total))) return 'range';
+  const prev = l.a.marks[sid];
+  l.a.marks[sid] = { mark: mv || '—', remark: rv, at: TODAY, file: prev ? prev.file : null };
+  return 'ok';
+}
+
+/* ==================================================================
+   EVENTS
+   ================================================================== */
+document.addEventListener('click', async (e) => {
+  const t = e.target.closest('[data-role],[data-go],[data-clip],[data-close],[data-scrim],[data-pick],[data-save],[data-remove],[data-mark],[data-mark1],[data-qopen],[data-qdl],[data-qbrief],[data-mode],[data-pick-student],[data-open-brief],[data-open-sub],[data-dl-sub],[data-marked],[data-save-mark],[data-save-all],[data-remind],[data-reopen],[data-dl-brief],[data-dl-mine],[data-dl-marked],[data-submit],[data-confirm]');
+  if (!t) return;
+  if (t.dataset.scrim !== undefined && e.target !== t) return;   // only a click on the backdrop itself
+  const d = t.dataset;
+
+  if (d.role) { S.role = d.role; S.view = S.role === 'teacher' ? 'lectures' : 'assignments'; S.modal = null; return render(); }
+  if (d.go) { S.view = d.go; S.modal = null; return render(); }
+
+  /* ---- the modal ---- */
+  if (d.clip) {
+    const l = lec(Number(d.clip));
+    S.modal = { lectureId: l.id };
+    S.draft = l.a ? { file: l.a.file, title: l.a.title, due: l.a.due, total: l.a.total } : { file: null, title: '', due: '', total: '10' };
+    return render();
+  }
+  if (d.close !== undefined || d.scrim !== undefined) { S.modal = null; S.draft = null; return render(); }
+  if (d.pick) {
+    readDraft();
+    const f = await pickFile();
+    if (!f) return render();
+    if (f.size > 10 * 1024 * 1024) { toast('That file is over 10 MB — the limit is 10 MB.'); return render(); }
+    S.draft.file = hold(f);
+    return render();
+  }
+  if (d.remove) {
+    const l = lec(S.modal.lectureId);
+    l.a = null; S.modal = null; S.draft = null;
+    toast('Assignment removed from this lecture.');
+    return render();
+  }
+  if (d.save) {
+    readDraft();
+    const l = lec(S.modal.lectureId), dr = S.draft;
+    if (!dr.file) return toast('Choose the assignment file first.');
+    if (!dr.title) return toast('Give it a title, so the student knows what it is.');
+    if (!dr.due) return toast('Set a due date.');
+    if (l.a) {
+      Object.assign(l.a, { title: dr.title, due: dr.due, total: dr.total || '10', file: dr.file });
+      toast('Assignment changed. The students see the new one.');
+    } else {
+      l.a = { title: dr.title, due: dr.due, total: dr.total || '10', file: dr.file, subs: {}, marks: {}, reopened: false };
+      toast(`Given to ${l.students.length} student${l.students.length > 1 ? 's' : ''}.`);
+    }
+    S.modal = null; S.draft = null;
+    return render();
+  }
+
+  /* ---- marking ---- */
+  if (d.mark) { S.mk = { lectureId: Number(d.mark), sid: null, mode: 'one', from: S.view }; S.view = 'marking'; return render(); }
+  if (d.mark1) { const [lid, sid] = d.mark1.split(':').map(Number); S.mk = { lectureId: lid, sid, mode: 'one', from: 'assignments' }; S.view = 'marking'; return render(); }
+  // read the answer straight from the queue, without opening the marking page
+  if (d.qopen) { const [lid, sid] = d.qopen.split(':').map(Number); return openFile(lec(lid).a.subs[sid].file.url); }
+  if (d.qdl) { const [lid, sid] = d.qdl.split(':').map(Number); return download(lec(lid).a.subs[sid].file); }
+  if (d.qbrief) return openFile(lec(Number(d.qbrief)).a.file.url);
+  if (d.mode) { S.mk.mode = d.mode; return render(); }
+  if (d.pickStudent) { S.mk.sid = Number(d.pickStudent); return render(); }
+  if (d.openBrief) return openFile(lec(S.mk.lectureId).a.file.url);
+  if (d.openSub) return openFile(lec(S.mk.lectureId).a.subs[d.openSub].file.url);
+  if (d.dlSub) return download(lec(S.mk.lectureId).a.subs[d.dlSub].file);
+  if (d.marked) {
+    const l = lec(S.mk.lectureId), sid = Number(d.marked);
+    const f = await pickFile();
+    if (!f) return;
+    l.a.marks[sid] = l.a.marks[sid] || { mark: '', remark: '', at: TODAY, file: null };
+    l.a.marks[sid].file = hold(f);
+    toast('Corrected copy attached — the student can download it.');
+    return render();
+  }
+  if (d.saveMark) {
+    const [sidS, what] = d.saveMark.split(':');
+    const l = lec(S.mk.lectureId), sid = Number(sidS);
+    const r = saveMarkFor(l, sid);
+    if (r === 'empty') return toast('Put in a mark, or a remark, or both.');
+    if (r === 'range') return toast(`The mark has to be between 0 and ${l.a.total}.`);
+    const hasRemark = !!l.a.marks[sid].remark;
+    if (what === 'next') {
+      const rest = l.students.filter((x) => sub(l.a, x) && !mark(l.a, x));
+      S.mk.sid = rest.length ? rest[0] : sid;
+      toast(rest.length ? 'Saved. On to the next one.' : 'Saved — that was the last one.');
+    } else toast(hasRemark ? 'Saved. The student and the parent see the mark and the remark.' : 'Mark saved, no remark — that is fine.');
+    return render();
+  }
+  if (d.saveAll) {
+    const l = lec(S.mk.lectureId);
+    let n = 0, bad = false;
+    l.students.forEach((sid) => { if (!sub(l.a, sid)) return; const r = saveMarkFor(l, sid); if (r === 'range') bad = true; else if (r === 'ok') n++; });
+    if (bad) return toast(`Every mark has to be between 0 and ${l.a.total}.`);
+    toast(n ? `${n} mark${n > 1 ? 's' : ''} saved together.` : 'Nothing to save yet.');
+    return render();
+  }
+  if (d.remind) return toast('A reminder would go to the student and the parent.');
+  if (d.reopen) { lec(S.mk.lectureId).a.reopened = true; toast('Re-opened — they can send it now.'); return render(); }
+
+  /* ---- student ---- */
+  if (d.dlBrief) return download(lec(Number(d.dlBrief)).a.file);
+  if (d.dlMine) return download(lec(Number(d.dlMine)).a.subs[S.studentId].file);
+  if (d.dlMarked) return download(lec(Number(d.dlMarked)).a.marks[S.studentId].file);
+  if (d.submit) {
+    const l = lec(Number(d.submit));
+    if (closed(l.a)) return toast('This one is closed — ask your teacher to open it again.');
+    const f = await pickFile();
+    if (!f) return;
+    if (f.size > 10 * 1024 * 1024) return toast('That file is over 10 MB — the limit is 10 MB.');
+    const was = !!l.a.subs[S.studentId];
+    l.a.subs[S.studentId] = { file: hold(f), at: TODAY, time: nowTime(), late: days(l.a.due, TODAY) > 0 };
+    delete l.a.marks[S.studentId];     // a replaced answer has to be marked again
+    toast(was ? 'Replaced — your teacher will mark the new one.' : 'Sent. Your teacher can see it now.');
+    return render();
+  }
+
+  /* ---- check-in confirm ---- */
+  if (d.confirm) {
+    readCheckin();
+    const p = S.pending.shift();
+    S.lectures.unshift({ id: S.nextLecture++, date: p.date, students: [p.student], time: p.inAt + ' – 6:34 PM', hours: '1 h',
+      subject: S.checkin.subject || 'Maths', topic: S.checkin.topic || 'Lecture', detail: S.checkin.remark || '', a: null });
+    if (!STUDENTS.some((s) => s.id === p.student)) STUDENTS.push({ id: p.student, name: p.name, grade: '', parent: 'Parent of ' + p.name.split(' ')[0] });
+    S.view = 'lectures';
+    toast('Lecture confirmed. Use the paperclip on its row to give an assignment.');
+    return render();
+  }
+});
+
+$('studentPick').addEventListener('change', (e) => { S.studentId = Number(e.target.value); render(); });
+$('resetBtn').addEventListener('click', () => { S = seed(); toast('Back to the start.'); render(); });
+
+document.addEventListener('dragover', (e) => { const z = e.target.closest('.drop'); if (z) { e.preventDefault(); z.classList.add('over'); } });
+document.addEventListener('dragleave', (e) => { const z = e.target.closest('.drop'); if (z) z.classList.remove('over'); });
+document.addEventListener('drop', (e) => {
+  const z = e.target.closest('.drop');
+  if (!z) return;
+  e.preventDefault(); z.classList.remove('over');
+  const f = e.dataTransfer.files && e.dataTransfer.files[0];
+  if (!f) return;
+  if (f.size > 10 * 1024 * 1024) return toast('That file is over 10 MB — the limit is 10 MB.');
+  readDraft();
+  (S.draft = S.draft || {}).file = hold(f);
+  render();
+});
+
+render();
+</script>
+</body>
+</html>

@@ -1,0 +1,706 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>STEM Vision — Assignments, developer screens</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+/* ------------------------------------------------------------------
+   The screens, one by one, with what each piece does beside it.
+   The clickable version is developer.html — this is the paper copy
+   the work is built from, so every rule is written down rather than
+   only demonstrated.
+   ------------------------------------------------------------------ */
+:root{
+  --bg:#F8FAFC; --card:#FFFFFF; --card-alt:#F1F5F9;
+  --border:#E8ECF1; --border-strong:#DDE3EA;
+  --text:#0F172A; --text-2:#334155; --muted:#64748B; --faint:#94A3B8;
+  --primary:#F97316; --primary-dark:#EA580C; --primary-soft:#FFF4EC; --primary-pale:#FFE7D4;
+  --blue:#1D4ED8; --blue-soft:#EFF6FF; --blue-line:#BFDBFE;
+  --green:#10B981; --green-soft:#ECFDF5; --green-line:#A7E6C4;
+  --amber:#F59E0B; --amber-soft:#FFFBEB;
+  --red:#EF4444; --red-soft:#FEF2F2; --red-line:#FECACA;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--text);-webkit-font-smoothing:antialiased;font-size:15px;line-height:1.5}
+svg{display:block}
+
+.sheet{max-width:1280px;margin:0 auto;padding:30px 18px 80px}
+.title h1{font-size:27px;font-weight:800;letter-spacing:-.02em;margin:0 0 7px}
+.title p{margin:0;color:var(--muted);font-size:14.5px;max-width:880px}
+.title .link{display:inline-flex;align-items:center;gap:8px;margin-top:14px;background:var(--text);color:#fff;border-radius:10px;padding:10px 16px;font-size:13.5px;font-weight:600;text-decoration:none}
+
+.toc{display:grid;grid-template-columns:repeat(auto-fit,minmax(215px,1fr));gap:10px;margin:24px 0 34px}
+.toc a{display:block;background:var(--card);border:1px solid var(--border);border-radius:11px;padding:13px 15px;text-decoration:none;color:var(--text)}
+.toc a:hover{border-color:var(--primary)}
+.toc a b{display:block;font-size:14px;font-weight:700}
+.toc a span{display:block;font-size:12.5px;color:var(--muted);margin-top:2px}
+
+.scr{margin-bottom:34px;scroll-margin-top:16px}
+.scr-h{display:flex;align-items:baseline;gap:13px;flex-wrap:wrap;margin-bottom:5px}
+.scr-h .n{width:30px;height:30px;border-radius:9px;background:var(--primary);color:#fff;display:grid;place-items:center;font-weight:800;font-size:14px;flex:0 0 auto}
+.scr-h h2{font-size:21px;font-weight:800;letter-spacing:-.015em;margin:0}
+.scr-h .who{font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#fff;background:var(--text-2);border-radius:999px;padding:3px 10px}
+.scr-h .who.t{background:#7C3F13}
+.scr-h .who.s{background:#1E40AF}
+.scr-h .who.p{background:#047857}
+.scr-sub{color:var(--muted);font-size:14.5px;margin:0 0 16px;max-width:900px}
+
+.mock{background:var(--bg);border:1px solid var(--border-strong);border-radius:14px;padding:18px}
+.mock+.notes{margin-top:14px}
+.notes{background:var(--card);border:1px solid var(--border);border-radius:14px;overflow:hidden}
+.notes .nh{padding:13px 18px;border-bottom:1px solid var(--border);background:#FCFDFE;font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.nrow{display:grid;grid-template-columns:190px 1fr;gap:16px;padding:13px 18px;border-bottom:1px solid var(--border);font-size:14px}
+.nrow:last-child{border-bottom:0}
+.nrow b{color:var(--text);font-weight:600}
+.nrow div:last-child{color:var(--text-2)}
+.rule{display:flex;gap:11px;align-items:flex-start;background:var(--amber-soft);border:1px solid #FDE68A;border-radius:11px;padding:13px 16px;font-size:14px;color:#78350F;margin-top:14px}
+.rule.blue{background:var(--blue-soft);border-color:var(--blue-line);color:#1E3A8A}
+.rule.green{background:var(--green-soft);border-color:var(--green-line);color:#065F46}
+.rule b{font-weight:700}
+
+/* ---- app pieces, same as the real app ---- */
+.card{background:var(--card);border:1px solid var(--border);border-radius:13px;padding:17px 19px}
+.card.flush{padding:0}
+.card-title{font-size:17px;font-weight:700;margin:0}
+.card-title::after{content:"";display:block;width:32px;height:3px;border-radius:2px;background:var(--primary);margin-top:8px}
+.btn{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--border-strong);background:var(--card);color:var(--text);font:inherit;font-size:13.5px;font-weight:600;padding:8px 13px;border-radius:9px;cursor:default;white-space:nowrap}
+.btn.sm{font-size:12.5px;padding:6px 11px;border-radius:8px}
+.btn.primary{background:var(--primary);border-color:var(--primary);color:#fff}
+.btn.ghostred{border-color:var(--red-line);color:#DC2626}
+.icbtn{border:1px solid var(--border-strong);background:var(--card);width:34px;height:34px;border-radius:9px;display:grid;place-items:center;color:var(--text-2);flex:0 0 auto;position:relative}
+.icbtn.red{border-color:var(--red-line);color:#DC2626}
+.icbtn.clip{border-color:var(--blue-line);background:var(--blue-soft);color:#1E40AF}
+.icbtn .n{position:absolute;top:-6px;right:-6px;min-width:17px;height:17px;padding:0 4px;border-radius:999px;background:var(--primary);color:#fff;font-size:10px;font-weight:800;display:grid;place-items:center}
+.icbtn .n.ok{background:var(--green)}
+.inp,.sel{border:1.5px solid var(--border-strong);background:var(--card);border-radius:9px;padding:9px 12px;font:inherit;font-size:14px;color:var(--text);width:100%}
+.inp.ph{color:var(--faint)}
+.lab{font-size:10.5px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);display:block;margin-bottom:5px}
+.lab i{font-style:normal;font-weight:500;text-transform:none;letter-spacing:0;color:var(--faint)}
+.row{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+.sp{flex:1}
+.pill{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600;padding:4px 10px;border-radius:999px;white-space:nowrap}
+.pill.grey{background:var(--card-alt);color:var(--muted)}
+.pill.amber{background:var(--amber-soft);color:#B45309}
+.pill.green{background:var(--green-soft);color:#047857}
+.pill.red{background:var(--red-soft);color:#B91C1C}
+.pill.blue{background:var(--blue-soft);color:#1E40AF}
+.afile{display:inline-flex;align-items:center;gap:6px;background:var(--blue-soft);border:1px solid var(--blue-line);border-radius:8px;padding:4px 10px;font-size:13px;font-weight:600;color:#1E40AF}
+.linkbtn{border:0;background:none;font:inherit;font-size:13px;font-weight:600;color:var(--primary-dark);padding:0;display:inline-flex;align-items:center;gap:5px}
+.drop{border:1.5px dashed var(--border-strong);background:var(--card);border-radius:10px;padding:12px 14px;display:flex;align-items:center;gap:10px;color:var(--muted);font-size:13.5px}
+.drop b{color:var(--text)}
+.seg{display:inline-flex;gap:4px;background:var(--card-alt);border-radius:11px;padding:4px}
+.seg button{border:0;background:transparent;font:inherit;font-size:14px;font-weight:600;color:var(--muted);padding:8px 16px;border-radius:8px;display:inline-flex;align-items:center;gap:8px}
+.seg button.on{background:var(--card);color:var(--primary);box-shadow:0 1px 2px rgba(15,23,42,.07)}
+.seg .cnt{background:var(--primary);color:#fff;font-size:11px;font-weight:700;min-width:19px;height:19px;border-radius:999px;display:grid;place-items:center;padding:0 5px}
+
+table{width:100%;border-collapse:collapse;table-layout:fixed}
+thead th{text-align:left;font-size:10.5px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);padding:11px 10px;border-bottom:1px solid var(--border)}
+tbody td{padding:13px 10px;border-bottom:1px solid var(--border);vertical-align:middle;font-size:14px}
+tbody tr:last-child td{border-bottom:0}
+.card.flush thead th:first-child,.card.flush tbody td:first-child{padding-left:19px}
+.card.flush thead th:last-child,.card.flush tbody td:last-child{padding-right:19px}
+.sname{font-weight:600}
+.sid{color:var(--faint);font-size:12px;margin-left:4px;font-variant-numeric:tabular-nums}
+.dt{font-variant-numeric:tabular-nums;letter-spacing:.03em;color:var(--text-2)}
+.subj{font-weight:700}
+.topic{color:var(--muted);font-size:13px;margin-top:2px;line-height:1.45}
+.schip{display:inline-flex;align-items:center;gap:6px;background:var(--card-alt);border-radius:999px;padding:3px 10px 3px 7px;font-size:13px;margin:1px 0}
+.schip .n{color:var(--faint);font-size:11.5px;font-variant-numeric:tabular-nums}
+.fileico{width:32px;height:32px;border-radius:8px;background:var(--red-soft);color:#DC2626;display:grid;place-items:center;flex:0 0 auto}
+.fileline{display:flex;align-items:center;gap:9px;min-width:0}
+.fname{font-weight:600;font-size:13.5px}
+.fwhen{font-size:12px;color:var(--faint);margin-top:1px}
+.markin{display:flex;align-items:center;gap:7px}
+.markin .inp{width:62px;text-align:center;font-weight:700;font-variant-numeric:tabular-nums}
+.markin .of{color:var(--muted);font-size:13.5px;white-space:nowrap}
+.daybar{display:flex;align-items:center;gap:10px;padding:10px 19px;background:var(--card-alt);border-top:1px solid var(--border);border-bottom:1px solid var(--border)}
+.dayname{font-size:12px;font-weight:700;letter-spacing:.04em;color:var(--text-2);text-transform:uppercase}
+.daycount{font-size:11.5px;color:var(--muted);background:var(--card);border:1px solid var(--border-strong);border-radius:999px;padding:1px 8px;font-weight:600}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:14px}
+.stat{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px 16px}
+.stat .l{display:flex;align-items:center;gap:7px;font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.stat .pip{width:8px;height:8px;border-radius:999px}
+.stat .v{font-size:25px;font-weight:800;margin-top:6px;line-height:1}
+.stat .s{font-size:12px;color:var(--muted);margin-top:5px}
+.modal{background:var(--card);border:1px solid var(--border-strong);border-radius:14px;box-shadow:0 14px 36px rgba(15,23,42,.14);max-width:580px;margin:0 auto;overflow:hidden}
+.modal .mh{padding:17px 19px 0;display:flex;gap:12px}
+.modal .mb{padding:16px 19px}
+.modal .mf{padding:13px 19px;border-top:1px solid var(--border);display:flex;gap:9px;align-items:center;background:#FCFDFE}
+.grid3{display:grid;grid-template-columns:1.3fr 1fr .8fr;gap:11px}
+.scrim{background:rgba(15,23,42,.14);border-radius:12px;padding:20px}
+.mk{display:grid;grid-template-columns:230px 1fr;gap:14px;align-items:start}
+.mklist{background:var(--card);border:1px solid var(--border);border-radius:13px;overflow:hidden}
+.mklist .h{padding:12px 15px;border-bottom:1px solid var(--border);font-size:10.5px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.mkitem{display:flex;align-items:center;gap:9px;padding:11px 15px;border-bottom:1px solid var(--border);border-left:3px solid transparent}
+.mkitem:last-child{border-bottom:0}
+.mkitem.on{background:var(--primary-soft);border-left-color:var(--primary)}
+.mkitem .nm{flex:1;min-width:0;font-size:13.5px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mkitem.on .nm{color:#9A3412}
+.mkdot{width:9px;height:9px;border-radius:999px;flex:0 0 auto}
+.mkpane{background:var(--card);border:1px solid var(--border);border-radius:13px;padding:18px 20px}
+.grpnote{display:flex;align-items:flex-start;gap:10px;background:var(--blue-soft);border:1px solid var(--blue-line);border-radius:10px;padding:11px 14px;font-size:13px;color:#1E3A8A}
+.grpnote.warn{background:var(--amber-soft);border-color:#FDE68A;color:#78350F}
+.big{min-height:150px;border:1.5px solid var(--border-strong);border-radius:9px;background:var(--card);padding:11px 13px;color:var(--faint);font-size:14px}
+pre{background:#0F172A;color:#E2E8F0;border-radius:12px;padding:16px 18px;overflow:auto;font-family:ui-monospace,'Cascadia Code',Consolas,monospace;font-size:12.5px;line-height:1.65;margin:0}
+pre .c{color:#64748B}
+pre .k{color:#FBBF24}
+code{background:var(--card-alt);border:1px solid var(--border);border-radius:5px;padding:1px 6px;font-size:12.5px;font-family:ui-monospace,Consolas,monospace;color:#B45309}
+.states{display:grid;grid-template-columns:repeat(auto-fit,minmax(195px,1fr));gap:12px}
+.state{background:var(--card);border:1px solid var(--border);border-radius:11px;padding:14px;text-align:center}
+.state .ic{display:flex;justify-content:center;margin-bottom:11px}
+.state b{display:block;font-size:13.5px}
+.state span{display:block;font-size:12.5px;color:var(--muted);margin-top:3px;line-height:1.45}
+
+@media (max-width:900px){
+  .nrow{grid-template-columns:1fr;gap:3px}
+  .mk{grid-template-columns:1fr}
+  .grid3,.stats{grid-template-columns:1fr}
+  table,thead,tbody,tr,td{display:block;width:auto}
+  thead{display:none}
+  tbody tr{border-bottom:1px solid var(--border);padding:12px 4px}
+  tbody td{border:0;padding:3px 0}
+  tbody td::before{content:attr(data-l);display:block;font-size:10px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--faint);margin-bottom:2px}
+}
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+  <g id="i-paper"><path d="M21.4 11.1 12.3 20a5 5 0 0 1-7-7l9-9a3.3 3.3 0 0 1 4.7 4.7l-9 9a1.7 1.7 0 0 1-2.4-2.4l8.3-8.3"/></g>
+  <g id="i-file"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/></g>
+  <g id="i-dl"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5M12 15V3"/></g>
+  <g id="i-up"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 9 5-5 5 5M12 4v12"/></g>
+  <g id="i-check"><path d="M20 6 9 17l-5-5"/></g>
+  <g id="i-eye"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></g>
+  <g id="i-pencil"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></g>
+  <g id="i-trash"><path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></g>
+  <g id="i-left"><path d="m15 18-6-6 6-6"/></g>
+  <g id="i-x"><path d="M18 6 6 18M6 6l12 12"/></g>
+  <g id="i-info"><circle cx="12" cy="12" r="9"/><path d="M12 16v-5M12 8h.01"/></g>
+  <g id="i-group"><circle cx="9" cy="8" r="3.2"/><circle cx="17" cy="9" r="2.6"/><path d="M3 20v-1.6A4.4 4.4 0 0 1 7.4 14h3.2a4.4 4.4 0 0 1 4.4 4.4V20"/><path d="M17 14.5h.6a3.4 3.4 0 0 1 3.4 3.4V20"/></g>
+  <g id="i-play"><path d="M8 5v14l11-7Z"/></g>
+</defs></svg>
+
+<div class="sheet">
+
+<div class="title">
+  <h1>Assignments — the screens, one by one</h1>
+  <p>
+    Every screen the feature adds, with what each piece does written beside it. The clickable version of exactly
+    this is <code>developer.html</code> — open that to try the flow, come back here for the rules.
+  </p>
+  <a class="link" href="developer.html">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" stroke="none"><use href="#i-play"/></svg>
+    Open the working prototype
+  </a>
+</div>
+
+<div class="toc">
+  <a href="#s1"><b>1 · The paperclip on a lecture</b><span>Teacher · Lecture Entry</span></a>
+  <a href="#s2"><b>2 · The assignment modal</b><span>Teacher · add and change</span></a>
+  <a href="#s3"><b>3 · Assignments tab</b><span>Teacher · the marking queue</span></a>
+  <a href="#s4"><b>4 · Marking, one by one</b><span>Teacher · its own page</span></a>
+  <a href="#s5"><b>5 · Marking together</b><span>Teacher · only one lecture</span></a>
+  <a href="#s6"><b>6 · Student</b><span>Plain rows, downloads</span></a>
+  <a href="#s7"><b>7 · Parent</b><span>Plain rows, no files</span></a>
+  <a href="#s8"><b>8 · Data, storage, rules</b><span>What to build</span></a>
+</div>
+
+<!-- =============================== 1 =============================== -->
+<section class="scr" id="s1">
+  <div class="scr-h"><span class="n">1</span><h2>The paperclip on a lecture row</h2><span class="who t">Teacher &amp; Admin</span></div>
+  <p class="scr-sub">
+    No new column. One icon joins the pencil and the bin at the end of the row. It is the only way in: one place to
+    set the assignment, the same place to change it.
+  </p>
+
+  <div class="mock">
+    <div class="card flush">
+      <table>
+        <colgroup><col style="width:10%"><col style="width:23%"><col style="width:14%"><col style="width:7%"><col style="width:32%"><col style="width:14%"></colgroup>
+        <thead><tr><th>Date</th><th>Students on this lecture</th><th>Time</th><th>Hours</th><th>Subject / topic</th><th></th></tr></thead>
+        <tbody>
+          <tr>
+            <td data-l="Date" class="dt">16-11-26</td>
+            <td data-l="Students"><span class="schip"><span class="n">23</span>Meera S. Navale</span> <span class="schip"><span class="n">41</span>Atharv C. Powale</span> <span class="schip"><span class="n">4</span>Nikita S. Jain</span></td>
+            <td data-l="Time" class="dt">4:30 – 5:30 PM</td>
+            <td data-l="Hours">1 h</td>
+            <td data-l="Subject">
+              <div class="subj">Maths</div><div class="topic">Binomial expansion — exam style questions on the coefficient of a specific term.</div>
+              <div class="row" style="margin-top:9px;padding-top:9px;border-top:1px dashed var(--border-strong)">
+                <span class="afile"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-paper"/></svg>Worksheet 7</span>
+                <span class="pill amber">2 to mark</span><span class="pill grey">due 22-11-26</span>
+                <span class="sp"></span><button class="linkbtn">Mark →</button>
+              </div>
+            </td>
+            <td><div class="row" style="justify-content:flex-end;gap:7px">
+              <button class="icbtn clip"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-paper"/></svg><span class="n">2</span></button>
+              <button class="icbtn"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-pencil"/></svg></button>
+              <button class="icbtn red"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-trash"/></svg></button>
+            </div></td>
+          </tr>
+          <tr>
+            <td data-l="Date" class="dt">16-11-26</td>
+            <td data-l="Students"><span class="schip"><span class="n">41</span>Atharv C. Powale</span></td>
+            <td data-l="Time" class="dt">12:30 – 2:00 PM</td>
+            <td data-l="Hours">1.5 h</td>
+            <td data-l="Subject"><div class="subj">Maths</div><div class="topic">Past paper discussion — sums from the 2025 Oct paper.</div></td>
+            <td><div class="row" style="justify-content:flex-end;gap:7px">
+              <button class="icbtn"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-paper"/></svg></button>
+              <button class="icbtn"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-pencil"/></svg></button>
+              <button class="icbtn red"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-trash"/></svg></button>
+            </div></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="states" style="margin-top:16px">
+      <div class="state"><div class="ic"><button class="icbtn"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-paper"/></svg></button></div><b>No assignment</b><span>Grey outline. Click opens an empty modal.</span></div>
+      <div class="state"><div class="ic"><button class="icbtn clip"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-paper"/></svg></button></div><b>Given, nothing waiting</b><span>Blue. Click opens it filled in, ready to change.</span></div>
+      <div class="state"><div class="ic"><button class="icbtn clip"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-paper"/></svg><span class="n">2</span></button></div><b>2 answers waiting</b><span>Orange count = how many need a mark.</span></div>
+      <div class="state"><div class="ic"><button class="icbtn clip"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-paper"/></svg><span class="n ok"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><use href="#i-check"/></svg></span></button></div><b>All marked</b><span>Green tick. Nothing left to do here.</span></div>
+    </div>
+  </div>
+
+  <div class="notes">
+    <div class="nh">What each piece does</div>
+    <div class="nrow"><div><b>The paperclip</b></div><div>Opens the modal in screen 2. Same button whether the lecture has an assignment or not — the modal decides which mode it is in.</div></div>
+    <div class="nrow"><div><b>The badge</b></div><div>Count of submissions with no mark yet. Hidden when zero. Turns into a green tick when every student on the lecture has been marked.</div></div>
+    <div class="nrow"><div><b>The strip under the topic</b></div><div>Only drawn when an assignment exists. Title, state, due date, and <b>Mark →</b>. It is the second way into marking, so the teacher never has to leave the row they are looking at.</div></div>
+    <div class="nrow"><div><b>Nothing else moves</b></div><div>Five columns stay five columns. The strip lives inside the Subject / topic cell, which is why the table still never scrolls sideways.</div></div>
+  </div>
+
+  <div class="rule blue"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><use href="#i-info"/></svg>
+    <div>The assignment is <b>not</b> given from the check-in row. Confirm the lecture first, then use the paperclip. One place to set it, one place to change it — that is what keeps it simple.</div></div>
+</section>
+
+<!-- =============================== 2 =============================== -->
+<section class="scr" id="s2">
+  <div class="scr-h"><span class="n">2</span><h2>The assignment modal — add, and change</h2><span class="who t">Teacher &amp; Admin</span></div>
+  <p class="scr-sub">
+    The same modal does both. When the lecture already has an assignment it opens filled in, with a Remove button
+    and <b>Save changes</b> instead of Confirm.
+  </p>
+
+  <div class="mock">
+    <div class="scrim">
+      <div class="modal">
+        <div class="mh">
+          <div style="flex:1"><h3 style="margin:0;font-size:18px;font-weight:700">Add an assignment</h3>
+            <p style="margin:4px 0 0;color:var(--muted);font-size:13px">Maths · Binomial expansion · lecture of 16-11-26</p></div>
+          <button class="icbtn"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-x"/></svg></button>
+        </div>
+        <div class="mb">
+          <span class="lab">Goes to</span>
+          <div><span class="schip"><span class="n">23</span>Meera S. Navale</span> <span class="schip"><span class="n">41</span>Atharv C. Powale</span> <span class="schip"><span class="n">4</span>Nikita S. Jain</span></div>
+          <div class="grpnote" style="margin:11px 0 15px"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><use href="#i-group"/></svg>
+            <div>These 3 sat the same lecture, so one sheet covers all of them and you can <b>mark them together</b>.</div></div>
+
+          <span class="lab">The sheet <i>— PDF or a photo, up to 10 MB</i></span>
+          <div class="drop"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><use href="#i-up"/></svg><span>Choose a file, or drop one here</span></div>
+
+          <div class="grid3" style="margin-top:15px">
+            <div><span class="lab">Title</span><input class="inp ph" value="Worksheet 7"></div>
+            <div><span class="lab">Due date</span><input class="inp" value="2026-11-22"></div>
+            <div><span class="lab">Out of</span><div class="markin"><input class="inp" value="10"><span class="of">marks</span></div></div>
+          </div>
+
+          <div class="grpnote" style="margin-top:15px"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><use href="#i-info"/></svg>
+            <div>The same title is on 1 other lecture (15-11-26). That stays a <b>separate assignment</b> with its own marks — changing this one does not touch it.</div></div>
+        </div>
+        <div class="mf">
+          <button class="btn ghostred"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-trash"/></svg>Remove</button>
+          <span class="sp"></span><button class="btn">Cancel</button><button class="btn primary">Confirm</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="notes">
+    <div class="nh">Fields and rules</div>
+    <div class="nrow"><div><b>Goes to</b></div><div>Read-only. The students already on the lecture. An assignment can never be given to somebody who was not on it — that is how the group rule stays true.</div></div>
+    <div class="nrow"><div><b>The sheet</b></div><div>Required. PDF or image, 10 MB. Choosing a new file while editing replaces it <b>for everybody</b>, and the modal says so.</div></div>
+    <div class="nrow"><div><b>Title</b></div><div>Required. This is what the student, the parent and the marking queue all show — not the filename, which is usually something like <code>ws7_final_v2.pdf</code>.</div></div>
+    <div class="nrow"><div><b>Due date</b></div><div>Required. After it passes, the student sees <b>Closed</b> and cannot send. Only the teacher can re-open.</div></div>
+    <div class="nrow"><div><b>Out of</b></div><div>Whole number, default 10. A mark above it is refused on save.</div></div>
+    <div class="nrow"><div><b>Remove</b></div><div>Soft delete — <code>is_deleted = TRUE</code>. Files stay in storage; submissions already made are kept.</div></div>
+    <div class="nrow"><div><b>Editing after marks exist</b></div><div>Allowed. Changing the total re-checks every saved mark, and refuses if one would now be out of range.</div></div>
+  </div>
+</section>
+
+<!-- =============================== 3 =============================== -->
+<section class="scr" id="s3">
+  <div class="scr-h"><span class="n">3</span><h2>Assignments tab — the marking queue</h2><span class="who t">Teacher &amp; Admin</span></div>
+  <p class="scr-sub">
+    A third tab beside Scanned check-ins and Lectures. This answers the teacher's real daily question — <b>what came
+    in, and what do I owe?</b> — without scrolling through lectures looking for it.
+  </p>
+
+  <div class="mock">
+    <div class="seg" style="margin-bottom:14px"><button>Scanned check-ins <span class="cnt">2</span></button><button>Lectures</button><button class="on">Assignments <span class="cnt">3</span></button></div>
+
+    <div class="stats">
+      <div class="stat"><div class="l"><span class="pip" style="background:var(--primary)"></span>To mark</div><div class="v">3</div><div class="s">answers waiting for you</div></div>
+      <div class="stat"><div class="l"><span class="pip" style="background:var(--amber)"></span>Still to come</div><div class="v">2</div><div class="s">not sent, still open</div></div>
+      <div class="stat"><div class="l"><span class="pip" style="background:var(--red)"></span>Missed</div><div class="v">1</div><div class="s">closed with nothing sent</div></div>
+    </div>
+
+    <div class="card flush">
+      <div style="padding:18px 19px 14px"><h3 class="card-title">New submissions</h3>
+        <p style="margin:12px 0 0;color:var(--muted);font-size:13px">Day by day, newest first. Work down this list.</p></div>
+      <div class="daybar"><span class="dayname">Today · 18-11-26</span><span class="daycount">2</span></div>
+      <table>
+        <colgroup><col style="width:18%"><col style="width:21%"><col style="width:29%"><col style="width:13%"><col style="width:19%"></colgroup>
+        <tbody>
+          <tr><td data-l="Student"><span class="sname">Meera S. Navale</span><span class="sid">23</span><div class="topic">Grade 11</div></td>
+            <td data-l="Assignment"><span class="afile"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-paper"/></svg>Worksheet 7</span><div class="topic" style="margin-top:5px">Maths · Binomial expansion</div></td>
+            <td data-l="Their answer"><div class="fileline"><span class="fileico"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><use href="#i-file"/></svg></span>
+              <div style="min-width:0"><div class="fname">Meera — answers.pdf</div><div class="fwhen">1.2 MB</div></div>
+              <button class="btn sm"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><use href="#i-eye"/></svg>Open</button>
+              <button class="btn sm"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><use href="#i-dl"/></svg></button></div></td>
+            <td data-l="Sent"><div class="dt">09:04 AM</div><div class="fwhen">on time</div></td>
+            <td><div class="row" style="justify-content:flex-end;gap:6px"><button class="btn sm"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-paper"/></svg>Sheet</button><button class="btn sm primary">Mark</button></div></td></tr>
+          <tr><td data-l="Student"><span class="sname">Atharv C. Powale</span><span class="sid">41</span><div class="topic">Grade 11</div></td>
+            <td data-l="Assignment"><span class="afile"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-paper"/></svg>Worksheet 7</span><div class="topic" style="margin-top:5px">Maths · Binomial expansion</div></td>
+            <td data-l="Their answer"><div class="fileline"><span class="fileico"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><use href="#i-file"/></svg></span>
+              <div style="min-width:0"><div class="fname">atharv_ws7.pdf</div><div class="fwhen">780 KB</div></div>
+              <button class="btn sm"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><use href="#i-eye"/></svg>Open</button>
+              <button class="btn sm"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><use href="#i-dl"/></svg></button></div></td>
+            <td data-l="Sent"><div class="dt">10:51 PM</div><div class="fwhen"><b style="color:#B45309">late</b></div></td>
+            <td><div class="row" style="justify-content:flex-end;gap:6px"><button class="btn sm"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-paper"/></svg>Sheet</button><button class="btn sm primary">Mark</button></div></td></tr>
+        </tbody>
+      </table>
+      <div class="daybar"><span class="dayname">Yesterday · 17-11-26</span><span class="daycount">1</span></div>
+      <table>
+        <colgroup><col style="width:18%"><col style="width:21%"><col style="width:29%"><col style="width:13%"><col style="width:19%"></colgroup>
+        <tbody>
+          <tr><td data-l="Student"><span class="sname">Sofia campos dionisio</span><span class="sid">20</span><div class="topic">Grade 10</div></td>
+            <td data-l="Assignment"><span class="afile"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-paper"/></svg>AP practice set</span><div class="topic" style="margin-top:5px">Maths · Sequences</div></td>
+            <td data-l="Their answer"><div class="fileline"><span class="fileico"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><use href="#i-file"/></svg></span>
+              <div style="min-width:0"><div class="fname">sofia_ap_set.pdf</div><div class="fwhen">2.1 MB</div></div>
+              <button class="btn sm"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><use href="#i-eye"/></svg>Open</button>
+              <button class="btn sm"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><use href="#i-dl"/></svg></button></div></td>
+            <td data-l="Sent"><div class="dt">08:12 PM</div><div class="fwhen">on time</div></td>
+            <td><div class="row" style="justify-content:flex-end;gap:6px"><button class="btn sm"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-paper"/></svg>Sheet</button><button class="btn sm primary">Mark</button></div></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="card flush" style="margin-top:14px">
+      <div style="padding:18px 19px 14px"><h3 class="card-title">All assignments</h3>
+        <p style="margin:12px 0 0;color:var(--muted);font-size:13px">Everything set so far, how many sent, how many marked, when each is due.</p></div>
+      <table>
+        <colgroup><col style="width:24%"><col style="width:23%"><col style="width:12%"><col style="width:12%"><col style="width:17%"><col style="width:12%"></colgroup>
+        <thead><tr><th>Assignment</th><th>Subject / topic</th><th>Given</th><th>Due</th><th>Progress</th><th></th></tr></thead>
+        <tbody>
+          <tr><td data-l="Assignment"><span class="afile"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-paper"/></svg>Worksheet 7</span>
+              <div class="fwhen" style="margin-top:5px"><svg style="display:inline-block;vertical-align:-2px" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><use href="#i-group"/></svg> 3 students, one lecture</div>
+              <div class="fwhen" style="margin-top:3px">same sheet on 1 other lecture — marked separately</div></td>
+            <td data-l="Subject"><div class="subj">Maths</div><div class="topic">Binomial expansion</div></td>
+            <td data-l="Given" class="dt">16-11-26</td><td data-l="Due" class="dt">22-11-26</td>
+            <td data-l="Progress"><span class="pill amber">2 of 3 sent · 0 marked</span></td>
+            <td><div class="row" style="justify-content:flex-end"><button class="btn sm">Open</button></div></td></tr>
+          <tr><td data-l="Assignment"><span class="afile"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-paper"/></svg>Worksheet 7</span>
+              <div class="fwhen" style="margin-top:5px">1 student · given on a different day</div></td>
+            <td data-l="Subject"><div class="subj">Maths</div><div class="topic">Binomial expansion</div></td>
+            <td data-l="Given" class="dt">15-11-26</td><td data-l="Due" class="dt">20-11-26</td>
+            <td data-l="Progress"><span class="pill green">1 of 1 sent · 1 marked</span></td>
+            <td><div class="row" style="justify-content:flex-end"><button class="btn sm">Open</button></div></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="notes">
+    <div class="nh">How it is built</div>
+    <div class="nrow"><div><b>New submissions</b></div><div>Every submission with no mark, grouped by <b>the day it was sent</b> (not the day it was set), newest day first. A row leaves the list the moment it is marked.</div></div>
+    <div class="nrow"><div><b>Their answer, on the row</b></div><div>The file itself — name, size, <b>Open</b> and a download. The teacher can read the answer <b>without leaving this list</b>, which is how a queue gets worked through: read, decide, then Mark. Making them open the marking page first just to see the paper would defeat the point of having a queue.</div></div>
+    <div class="nrow"><div><b>Sheet</b></div><div>Opens the question paper for that assignment. Needed often — the teacher is reading an answer to a sheet they set a week ago.</div></div>
+    <div class="nrow"><div><b>Mark button</b></div><div>Goes straight to screen 4 <b>with that student already selected</b>, so the teacher does not have to find them in the list.</div></div>
+    <div class="nrow"><div><b>All assignments</b></div><div>One row per assignment, which means one row per lecture that has one. Shows the group note and the "same sheet elsewhere" note, so the separation is visible rather than surprising.</div></div>
+    <div class="nrow"><div><b>The three numbers</b></div><div>To mark · Still to come · Missed. The sidebar badge and the tab count both use <b>To mark</b>.</div></div>
+    <div class="nrow"><div><b>Admin sees it too</b></div><div>Same screen, not filtered to one teacher — for the admin it lists every teacher's assignments.</div></div>
+  </div>
+</section>
+
+<!-- =============================== 4 =============================== -->
+<section class="scr" id="s4">
+  <div class="scr-h"><span class="n">4</span><h2>Marking — its own page, one student at a time</h2><span class="who t">Teacher &amp; Admin</span></div>
+  <p class="scr-sub">
+    Reached from the lecture row or from the queue, and comes back with <b>Back</b>. The student list is a narrow
+    column on the left so the whole right-hand side is free for the thing that needs room: the remark.
+  </p>
+
+  <div class="mock">
+    <div class="row" style="margin-bottom:16px">
+      <button class="btn"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-left"/></svg>Back</button>
+      <div style="flex:1;min-width:200px"><div style="font-size:24px;font-weight:800;letter-spacing:-.02em">Worksheet 7</div>
+        <div style="color:var(--muted);font-size:14px;margin-top:2px"><b style="color:var(--text)">Maths · Binomial expansion</b> — given 16-11-26, due 22-11-26, out of 10</div></div>
+      <button class="btn"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><use href="#i-eye"/></svg>The sheet</button>
+    </div>
+
+    <div class="grpnote" style="margin-bottom:14px"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><use href="#i-group"/></svg>
+      <div><b>One lecture, 3 students.</b> They sat it together, so you can mark them one by one or all together. The same sheet on 15-11-26 is a separate assignment and is not touched here.</div></div>
+
+    <div class="seg" style="margin-bottom:14px"><button class="on">One by one</button><button>All together</button></div>
+
+    <div class="mk">
+      <div class="mklist">
+        <div class="h">Students (3)</div>
+        <div class="mkitem on"><span class="mkdot" style="background:var(--primary)"></span><span class="nm">Meera S. Navale</span></div>
+        <div class="mkitem"><span class="mkdot" style="background:var(--primary)"></span><span class="nm">Atharv C. Powale</span></div>
+        <div class="mkitem"><span class="mkdot" style="background:var(--border-strong)"></span><span class="nm">Nikita S. Jain</span></div>
+      </div>
+      <div class="mkpane">
+        <div class="row">
+          <div><div style="font-size:16.5px;font-weight:700">Meera Samrat Navale<span class="sid">23</span></div>
+            <div class="fwhen" style="margin-top:3px">Grade 11 · sent 18-11-26 09:04 AM · on time</div></div>
+          <span class="sp"></span><span class="pill amber">waiting</span>
+        </div>
+        <div class="row" style="margin-top:14px;padding:12px 14px;background:var(--bg);border:1px solid var(--border);border-radius:10px">
+          <div class="fileline" style="flex:1;min-width:170px"><span class="fileico"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><use href="#i-file"/></svg></span>
+            <div><div class="fname">Meera — answers.pdf</div><div class="fwhen">1.2 MB · their answer</div></div></div>
+          <button class="btn sm"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><use href="#i-eye"/></svg>Open</button>
+          <button class="btn sm"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><use href="#i-dl"/></svg>Download</button>
+        </div>
+        <div class="row" style="margin-top:15px;align-items:flex-end">
+          <div><span class="lab">Mark</span><div class="markin"><input class="inp" value="8" style="width:82px;font-size:18px;padding:11px"><span class="of" style="font-size:14.5px">out of 10</span></div></div>
+          <span class="sp"></span>
+          <div style="text-align:right"><span class="lab">Marked sheet <i>— optional</i></span>
+            <button class="btn sm"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><use href="#i-up"/></svg>Attach your corrected copy</button></div>
+        </div>
+        <div style="margin-top:15px"><span class="lab">Remark <i>— optional, leave it empty when there is nothing to add</i></span>
+          <div class="big">Only write here when you have something to say. The student and the parent read these exact words.</div></div>
+        <div class="row" style="margin-top:13px"><span style="font-size:12.5px;color:var(--muted)">A mark on its own saves fine.</span>
+          <span class="sp"></span><button class="btn">Save</button><button class="btn primary">Save &amp; next</button></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="notes">
+    <div class="nh">How it is built</div>
+    <div class="nrow"><div><b>Back</b></div><div>Returns to wherever marking was opened from — the Lectures tab or the Assignments tab. Store that on the way in.</div></div>
+    <div class="nrow"><div><b>The dot colours</b></div><div>Grey = nothing sent · Orange = sent, not marked · Green = marked · Red = closed with nothing sent. The saved mark shows beside the name once there is one.</div></div>
+    <div class="nrow"><div><b>Remark box</b></div><div>Minimum 190px tall and the full width of the pane. This is the one field that was cramped in every earlier draft, so it gets the space.</div></div>
+    <div class="nrow"><div><b>Marked sheet</b></div><div>Optional second upload — the teacher's corrected copy. When present, the student gets a third download button.</div></div>
+    <div class="nrow"><div><b>Save &amp; next</b></div><div>Saves and jumps to the next student who has sent something and has no mark. On the last one it says so rather than jumping back to the top.</div></div>
+    <div class="nrow"><div><b>Save rules</b></div><div>A mark alone is fine. A remark alone is fine. Both empty is refused. A mark outside 0–total is refused. Re-saving keeps the first mark in the audit trail.</div></div>
+    <div class="nrow"><div><b>Nothing sent</b></div><div>The pane shows <b>Send a reminder</b>, and <b>Re-open for everyone</b> once the due date has passed.</div></div>
+  </div>
+</section>
+
+<!-- =============================== 5 =============================== -->
+<section class="scr" id="s5">
+  <div class="scr-h"><span class="n">5</span><h2>Marking together — and when it is not allowed</h2><span class="who t">Teacher &amp; Admin</span></div>
+  <p class="scr-sub">
+    The rule in one line: <b>the same sheet can be marked as a group only when the lecture itself was taken
+    together.</b> Handed out on another day to another student, it is a different assignment with its own marks.
+  </p>
+
+  <div class="mock">
+    <div class="card flush">
+      <div style="padding:18px 19px 0"><h3 class="card-title">Mark all 3 together</h3>
+        <p style="margin:12px 0 0;color:var(--muted);font-size:13px">One sheet, one lecture. Give everyone a mark, write a remark only where one is deserved, save once.</p></div>
+      <table style="margin-top:13px">
+        <colgroup><col style="width:23%"><col style="width:24%"><col style="width:17%"><col style="width:36%"></colgroup>
+        <thead><tr><th>Student</th><th>Their answer</th><th>Mark</th><th>Remark — optional</th></tr></thead>
+        <tbody>
+          <tr><td data-l="Student"><span class="sname">Meera S. Navale</span><span class="sid">23</span></td>
+            <td data-l="Answer"><div class="row" style="gap:7px"><button class="btn sm"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><use href="#i-eye"/></svg>Open</button><span class="fwhen">09:04 AM · on time</span></div></td>
+            <td data-l="Mark"><div class="markin"><input class="inp" value="8"><span class="of">/ 10</span></div></td>
+            <td data-l="Remark"><input class="inp ph" value="Lost the sign on the third term in (c)."></td></tr>
+          <tr><td data-l="Student"><span class="sname">Atharv C. Powale</span><span class="sid">41</span></td>
+            <td data-l="Answer"><div class="row" style="gap:7px"><button class="btn sm"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><use href="#i-eye"/></svg>Open</button><span class="fwhen">10:51 PM · late</span></div></td>
+            <td data-l="Mark"><div class="markin"><input class="inp" value="6"><span class="of">/ 10</span></div></td>
+            <td data-l="Remark"><input class="inp ph" value=""></td></tr>
+          <tr><td data-l="Student"><span class="sname">Nikita S. Jain</span><span class="sid">4</span></td>
+            <td data-l="Answer"><span class="pill red">nothing sent</span></td>
+            <td data-l="Mark"><div class="markin"><input class="inp ph" value="–"><span class="of">/ 10</span></div></td>
+            <td data-l="Remark"><input class="inp ph" value=""></td></tr>
+        </tbody>
+      </table>
+      <div class="row" style="padding:15px 19px;border-top:1px solid var(--border);justify-content:flex-end"><button class="btn primary">Save all marks</button></div>
+    </div>
+
+    <div class="grpnote warn" style="margin-top:16px"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><use href="#i-info"/></svg>
+      <div><b>One student on this lecture</b>, so there is nobody to mark alongside. The same sheet went out on 15-11-26 — that is a separate assignment with its own marks.</div></div>
+  </div>
+
+  <div class="notes">
+    <div class="nh">The rule, precisely</div>
+    <div class="nrow"><div><b>An assignment belongs to a lecture</b></div><div>Not to a sheet, not to a subject. One lecture, one assignment — <code>assignments.lecture_id</code>.</div></div>
+    <div class="nrow"><div><b>All together is offered when</b></div><div><code>lecture.students.length &gt; 1</code>. Otherwise the toggle is not drawn at all and the amber note explains why.</div></div>
+    <div class="nrow"><div><b>Same sheet, another day</b></div><div>A second assignment row on that other lecture. Marks, submissions and the due date are all its own. The UI points this out in three places — the modal, the All assignments list and the marking header — so nobody is surprised by it.</div></div>
+    <div class="nrow"><div><b>Save all</b></div><div>Validates every mark first. If one is out of range nothing is saved, and the message names the limit. Students with nothing sent are skipped, not saved as zero.</div></div>
+    <div class="nrow"><div><b>Why not merge them</b></div><div>Two students who sat different lectures were taught differently, on different days, and may have different due dates. Merging them would make one mark stand for two different pieces of teaching.</div></div>
+  </div>
+</section>
+
+<!-- =============================== 6 =============================== -->
+<section class="scr" id="s6">
+  <div class="scr-h"><span class="n">6</span><h2>Student — plain rows</h2><span class="who s">Student</span></div>
+  <p class="scr-sub">
+    A new item in the student's sidebar, between Check-in and Profile. One table, no cards. The downloads sit at
+    the end of the row: the sheet, their own answer, and the teacher's corrected copy when there is one.
+  </p>
+
+  <div class="mock">
+    <div style="font-size:24px;font-weight:800;letter-spacing:-.02em">Assignments</div>
+    <div style="color:var(--muted);font-size:14px;margin:3px 0 16px">1 to do · 4 in all</div>
+    <div class="card flush">
+      <table>
+        <colgroup><col style="width:19%"><col style="width:9%"><col style="width:9%"><col style="width:13%"><col style="width:8%"><col style="width:21%"><col style="width:21%"></colgroup>
+        <thead><tr><th>Assignment</th><th>Given</th><th>Due</th><th>Status</th><th>Mark</th><th>Teacher's remark</th><th></th></tr></thead>
+        <tbody>
+          <tr><td data-l="Assignment"><div class="sname">Worksheet 7</div><div class="topic">Maths · Binomial expansion</div></td>
+            <td data-l="Given" class="dt">16-11-26</td><td data-l="Due" class="dt">22-11-26</td>
+            <td data-l="Status"><span class="pill amber">Due in 4 days</span></td>
+            <td data-l="Mark"><span style="color:var(--faint)">—</span></td>
+            <td data-l="Remark"><span style="color:var(--faint)">—</span></td>
+            <td><div class="row" style="justify-content:flex-end;gap:6px"><button class="btn sm"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><use href="#i-dl"/></svg>Download</button><button class="btn sm primary"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><use href="#i-up"/></svg>Send answer</button></div></td></tr>
+          <tr><td data-l="Assignment"><div class="sname">AP practice set</div><div class="topic">Maths · Sequences</div></td>
+            <td data-l="Given" class="dt">15-11-26</td><td data-l="Due" class="dt">20-11-26</td>
+            <td data-l="Status"><span class="pill grey">Sent — waiting</span></td>
+            <td data-l="Mark"><span style="color:var(--faint)">—</span></td>
+            <td data-l="Remark"><span style="color:var(--faint)">—</span></td>
+            <td><div class="row" style="justify-content:flex-end;gap:6px"><button class="btn sm">Sheet</button><button class="btn sm">My answer</button><button class="btn sm">Replace</button></div></td></tr>
+          <tr><td data-l="Assignment"><div class="sname">Functions</div><div class="topic">Maths · Transformations</div></td>
+            <td data-l="Given" class="dt">10-11-26</td><td data-l="Due" class="dt">13-11-26</td>
+            <td data-l="Status"><span class="pill green"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><use href="#i-check"/></svg>Marked</span></td>
+            <td data-l="Mark"><b style="font-size:16px">8</b> <span style="color:var(--muted)">/ 10</span></td>
+            <td data-l="Remark">Lost the sign on the third term in (c) — redo that one.</td>
+            <td><div class="row" style="justify-content:flex-end;gap:6px"><button class="btn sm">Sheet</button><button class="btn sm">My answer</button><button class="btn sm">Marked copy</button></div></td></tr>
+          <tr><td data-l="Assignment"><div class="sname">Vectors</div><div class="topic">Maths · Vectors</div></td>
+            <td data-l="Given" class="dt">05-11-26</td><td data-l="Due" class="dt">09-11-26</td>
+            <td data-l="Status"><span class="pill green"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><use href="#i-check"/></svg>Marked</span></td>
+            <td data-l="Mark"><b style="font-size:16px">9</b> <span style="color:var(--muted)">/ 10</span></td>
+            <td data-l="Remark"><span style="color:var(--faint)">—</span></td>
+            <td><div class="row" style="justify-content:flex-end;gap:6px"><button class="btn sm">Sheet</button><button class="btn sm">My answer</button></div></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="notes">
+    <div class="nh">How it is built</div>
+    <div class="nrow"><div><b>Order</b></div><div>To do first, then closed, then sent, then marked. Inside each, by due date. The thing that needs doing is always at the top.</div></div>
+    <div class="nrow"><div><b>Three downloads</b></div><div><b>Sheet</b> — the question paper, always. <b>My answer</b> — their own upload, once sent. <b>Marked copy</b> — the teacher's corrected file, only when one was attached.</div></div>
+    <div class="nrow"><div><b>Replace</b></div><div>Allowed until the due date. It clears any mark, because the work has changed and has to be looked at again. The old file is kept as an earlier version.</div></div>
+    <div class="nrow"><div><b>Closed</b></div><div>After the due date the Send button is gone, and the server refuses an upload too. Only the teacher's Re-open brings it back.</div></div>
+    <div class="nrow"><div><b>No remark</b></div><div>An em dash in the remark column. Not "no remark given", which reads like something is missing — it is the normal case.</div></div>
+    <div class="nrow"><div><b>Never another student</b></div><div>The list is built from this student's own rows, and every download checks ownership on the server before a link is handed out.</div></div>
+  </div>
+</section>
+
+<!-- =============================== 7 =============================== -->
+<section class="scr" id="s7">
+  <div class="scr-h"><span class="n">7</span><h2>Parent — plain rows, no files</h2><span class="who p">Parent</span></div>
+  <p class="scr-sub">
+    Four things only: what was set, whether it was sent, the mark, and the remark. No download anywhere — not the
+    question paper, not their child's answer.
+  </p>
+
+  <div class="mock">
+    <div style="font-size:24px;font-weight:800;letter-spacing:-.02em">Assignments</div>
+    <div style="color:var(--muted);font-size:14px;margin:3px 0 16px">Meera Samrat Navale · Grade 11</div>
+    <div class="stats">
+      <div class="stat"><div class="l"><span class="pip" style="background:var(--green)"></span>Sent</div><div class="v">3 <span style="font-size:14px;color:var(--muted);font-weight:600">of 4</span></div></div>
+      <div class="stat"><div class="l"><span class="pip" style="background:var(--blue)"></span>Average mark</div><div class="v">8.5</div></div>
+      <div class="stat"><div class="l"><span class="pip" style="background:var(--red)"></span>Not sent</div><div class="v" style="color:#B91C1C">1</div></div>
+    </div>
+    <div class="card flush">
+      <table>
+        <colgroup><col style="width:26%"><col style="width:11%"><col style="width:17%"><col style="width:11%"><col style="width:35%"></colgroup>
+        <thead><tr><th>Assignment</th><th>Due</th><th>Sent</th><th>Mark</th><th>Teacher's remark</th></tr></thead>
+        <tbody>
+          <tr><td data-l="Assignment"><div class="sname">Worksheet 7</div><div class="topic">Maths · Binomial expansion</div></td>
+            <td data-l="Due" class="dt">22-11-26</td><td data-l="Sent"><span class="pill amber">Not yet</span></td>
+            <td data-l="Mark"><span style="color:var(--faint)">—</span></td><td data-l="Remark"><span style="color:var(--faint)">—</span></td></tr>
+          <tr><td data-l="Assignment"><div class="sname">AP practice set</div><div class="topic">Maths · Sequences</div></td>
+            <td data-l="Due" class="dt">20-11-26</td><td data-l="Sent"><span class="pill green"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><use href="#i-check"/></svg>Sent on time</span></td>
+            <td data-l="Mark"><span style="color:var(--faint)">—</span></td><td data-l="Remark"><span style="color:var(--faint)">—</span></td></tr>
+          <tr><td data-l="Assignment"><div class="sname">Functions</div><div class="topic">Maths · Transformations</div></td>
+            <td data-l="Due" class="dt">13-11-26</td><td data-l="Sent"><span class="pill green"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><use href="#i-check"/></svg>Sent on time</span></td>
+            <td data-l="Mark"><b style="font-size:16px">8</b> <span style="color:var(--muted)">/ 10</span></td>
+            <td data-l="Remark">Lost the sign on the third term in (c) — redo that one.</td></tr>
+          <tr><td data-l="Assignment"><div class="sname">Vectors</div><div class="topic">Maths · Vectors</div></td>
+            <td data-l="Due" class="dt">09-11-26</td><td data-l="Sent"><span class="pill green"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><use href="#i-check"/></svg>Sent late</span></td>
+            <td data-l="Mark"><b style="font-size:16px">9</b> <span style="color:var(--muted)">/ 10</span></td>
+            <td data-l="Remark"><span style="color:var(--faint)">no remark this time</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="notes">
+    <div class="nh">How it is built</div>
+    <div class="nrow"><div><b>Five columns, no buttons</b></div><div>There is nothing for a parent to press. That is the design, not an omission.</div></div>
+    <div class="nrow"><div><b>Sent</b></div><div>Three states only — <b>Sent on time</b>, <b>Sent late</b>, <b>Not yet</b>, and <b>Not sent</b> once it closes. No file name, no time of day.</div></div>
+    <div class="nrow"><div><b>The three numbers</b></div><div>Sent · Average mark · Not sent. "Not sent" is the one that starts a conversation at home, which is the point of showing a parent anything.</div></div>
+    <div class="nrow"><div><b>The remark</b></div><div>Word for word what the teacher wrote — the same text the student sees. Written once, read by both.</div></div>
+    <div class="nrow"><div><b>The server agrees</b></div><div>A parent account asking for a file is refused with the same answer a stranger gets. Hiding the button is not the protection.</div></div>
+  </div>
+</section>
+
+<!-- =============================== 8 =============================== -->
+<section class="scr" id="s8">
+  <div class="scr-h"><span class="n">8</span><h2>Data, storage and the rules</h2><span class="who">Developer</span></div>
+  <p class="scr-sub">What has to exist behind those screens.</p>
+
+  <div class="mock">
+<pre><span class="c">-- Every delete is a soft delete, like everything else in this system.</span>
+
+<span class="k">assignments</span>
+  id, lecture_id, title VARCHAR(160), due_date DATE, total_marks SMALLINT,
+  file_key VARCHAR(255), file_name VARCHAR(255), file_size INT,
+  reopened_at DATETIME NULL, created_by INT, created_at, is_deleted
+
+<span class="k">assignment_submissions</span>
+  id, assignment_id, student_id,
+  file_key, file_name, file_size,
+  submitted_at DATETIME, is_late TINYINT(1),
+  version SMALLINT,           <span class="c">-- a replaced answer is a new version, the old row is kept</span>
+  is_deleted
+  UNIQUE (assignment_id, student_id, version)
+
+<span class="k">assignment_marks</span>
+  id, assignment_id, student_id,
+  mark DECIMAL(5,2) NULL,     <span class="c">-- NULL is allowed: a remark with no mark</span>
+  remark TEXT NULL,           <span class="c">-- NULL is the normal case</span>
+  marked_file_key VARCHAR(255) NULL, marked_file_name VARCHAR(255) NULL,
+  marked_by INT, marked_at DATETIME, is_deleted
+  UNIQUE (assignment_id, student_id)
+
+<span class="c">-- S3, one bucket, me-central-1, Block Public Access all on</span>
+assignments/&lt;assignment_id&gt;/brief/&lt;uuid&gt;.pdf
+assignments/&lt;assignment_id&gt;/submissions/&lt;student_id&gt;/&lt;uuid&gt;.pdf
+assignments/&lt;assignment_id&gt;/marked/&lt;student_id&gt;/&lt;uuid&gt;.pdf</pre>
+  </div>
+
+  <div class="notes" style="margin-top:14px">
+    <div class="nh">Rules the server enforces, not the screen</div>
+    <div class="nrow"><div><b>One per lecture</b></div><div><code>UNIQUE (lecture_id)</code> on live rows. The group rule falls out of this: students marked together are the students on that lecture, and nothing else can reach them.</div></div>
+    <div class="nrow"><div><b>Only its own students</b></div><div>A submission is refused unless that student is on that lecture.</div></div>
+    <div class="nrow"><div><b>Closed means closed</b></div><div>An upload after <code>due_date</code> with no <code>reopened_at</code> is refused by the API, not only hidden in the UI.</div></div>
+    <div class="nrow"><div><b>Late is decided on the server</b></div><div><code>is_late</code> is computed from the server's Dubai clock at the moment it lands — never from anything the browser sends.</div></div>
+    <div class="nrow"><div><b>Mark or remark</b></div><div>Both empty is a 400. A mark outside 0–<code>total_marks</code> is a 400. Changing a saved mark writes an audit row carrying the old one.</div></div>
+    <div class="nrow"><div><b>Who may open a file</b></div><div>The student who owns it · the teacher of that lecture · an admin. Nobody else, and <b>not the parent</b>. Checked per request, before any link is made.</div></div>
+    <div class="nrow"><div><b>Links expire</b></div><div>Presigned: 5 minutes to upload, 60 seconds to read. Made fresh every time, never stored. A stored link outlives the permission it was granted under.</div></div>
+    <div class="nrow"><div><b>Files are renamed</b></div><div>Stored under a UUID; the real name lives in the database. Two <code>answer.pdf</code>s would otherwise overwrite each other, and a crafted name could write somewhere it should not.</div></div>
+    <div class="nrow"><div><b>The app cannot delete</b></div><div>The IAM user has <code>PutObject</code> and <code>GetObject</code> only — no <code>DeleteObject</code>, no <code>ListBucket</code>. A removed assignment is hidden, never destroyed.</div></div>
+    <div class="nrow"><div><b>Validation</b></div><div>zod on every body. PDF and common image types, 10 MB, checked again on the server after the upload lands — the browser's claim about a file is not evidence.</div></div>
+  </div>
+
+  <div class="rule"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><use href="#i-info"/></svg>
+    <div><b>Still to decide.</b> Should a photo of handwritten work be allowed as well as a PDF? It changes the student's upload on a phone more than anything else here, so it is worth answering before the work starts rather than after.</div></div>
+</section>
+
+</div>
+</body>
+</html>

@@ -228,8 +228,9 @@ const txSchema = z.object({
   course_package_hours: z.number().optional().nullable(),
   discount_hours: z.number().optional().nullable(),
   notes: z.string().optional().nullable(),
-  // Why a discount is being given. For the approval queue only — it is stripped
-  // before the transaction is written.
+  // Only EDITING a payment needs a case made for it. Accepted here, and
+  // ignored, so an older client that still sends the field on a new payment is
+  // not refused for it.
   request_note: z.string().trim().max(500).optional().nullable(),
 });
 
@@ -240,23 +241,21 @@ router.post(
   wrap(async (req, res) => {
     const b = txSchema.parse(req.body);
 
-    // Hours given away for nothing are the ones worth a second pair of eyes, so
-    // an entry carrying a discount waits. A plain payment is recorded at once —
-    // money that has arrived should never be invisible.
-    const hasDiscount = !!(b.discount_hours && Number(b.discount_hours) > 0);
-    if (hasDiscount && needsApproval(req.user!.role)) {
-      const noteBad = noteProblem(b.request_note);
-      if (noteBad) return res.status(400).json({ error: noteBad, field: 'request_note' });
-      const id = await requestApproval({
-        note: String(b.request_note).trim(),
-        kind: 'fee_entry',
-        studentId: b.student_id,
-        payload: b,
-        summary: `${b.amount} AED with ${b.discount_hours} discount hours for ${await nameOf(b.student_id)}`,
-        userId: req.user!.userId,
-      });
-      return sentForApproval(res, id, `${b.discount_hours} discount hours`);
-    }
+    // Recording a payment is never held back and never needs a case made for
+    // it. Money that has arrived should never be invisible, and the office
+    // should not have to ask permission to write down what a family paid.
+    //
+    // It used to park an entry carrying DISCOUNT hours for the super admin and
+    // demand a written reason. That was wrong twice over: the form has no
+    // reason box when adding a payment — it only appears when changing one —
+    // so the request could never be completed, and the office was simply told
+    // "please write why you need this change" about a record they were making
+    // for the first time, with nowhere to write it. Not one such request was
+    // ever created; every attempt died at that message.
+    //
+    // The second pair of eyes stays where it belongs: EDITING a recorded
+    // payment, and REMOVING one. Those restate or erase something a family has
+    // already been told. Writing down a payment does neither.
 
     const conn = await pool.getConnection();
     try {

@@ -18,6 +18,7 @@ import StudentReport from './pages/admin/StudentReport';
 import HoursMonthly from './pages/admin/HoursMonthly';
 import HoursStatement from './pages/shared/HoursStatement';
 import Finance from './pages/admin/Finance';
+import Reminders from './pages/admin/Reminders';
 import Teachers from './pages/admin/Teachers';
 import Pivots from './pages/admin/Pivots';
 import Approvals from './pages/admin/Approvals';
@@ -102,6 +103,8 @@ export default function App() {
       <Route path="/admin/student/:id" element={<Protected roles={['admin']}><StudentReport /></Protected>} />
       <Route path="/admin/hours" element={<Protected roles={['admin']}><HoursMonthly /></Protected>} />
       <Route path="/admin/finance" element={<Protected roles={['admin']}><Finance /></Protected>} />
+      {/* Who is running out of hours, and who has already been called about it. */}
+      <Route path="/admin/reminders" element={<Protected roles={['admin']}><Reminders /></Protected>} />
       <Route path="/admin/teachers" element={<Protected roles={['admin']}><Teachers /></Protected>} />
       {/* Logging a class for a teacher — its own page, like the teacher's own. */}
       <Route path="/admin/lecture/:teacherId" element={<Protected roles={['admin']}><AdminLectureEntry /></Protected>} />
