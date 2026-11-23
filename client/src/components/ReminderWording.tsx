@@ -24,11 +24,9 @@ type Config = {
   enabled: boolean;
   firstHours: number;
   overdraftFrom: number;
-  hardenAt: number;
   textFirst: string;
   textZero: string;
   textOver: string;
-  textOverHard: string;
   signature: string;
 };
 
@@ -64,7 +62,7 @@ export function ReminderWording({ onClose }: { onClose: () => void }) {
 
   const set = <K extends keyof Config>(k: K, v: Config[K]) => setForm((f) => (f ? { ...f, [k]: v } : f));
 
-  const num = (label: string, k: 'firstHours' | 'overdraftFrom' | 'hardenAt', hint: string) => (
+  const num = (label: string, k: 'firstHours' | 'overdraftFrom', hint: string) => (
     <div>
       <label className="text-xs font-medium muted">{label}</label>
       <input
@@ -79,7 +77,7 @@ export function ReminderWording({ onClose }: { onClose: () => void }) {
     </div>
   );
 
-  const text = (label: string, k: 'textFirst' | 'textZero' | 'textOver' | 'textOverHard', example: string, n: string) => (
+  const text = (label: string, k: 'textFirst' | 'textZero' | 'textOver', example: string, n: string) => (
     <div>
       <div className="flex items-baseline gap-2">
         <label className="text-xs font-semibold">{label}</label>
@@ -116,7 +114,6 @@ export function ReminderWording({ onClose }: { onClose: () => void }) {
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 {num('Running low at', 'firstHours', 'The first message, when the balance falls to this many hours.')}
                 {num('Overdrawn at', 'overdraftFrom', 'This or deeper. -2 catches -3, -6 and worse — one message, not one per hour.')}
-                {num('Firmer wording at', 'hardenAt', 'An overdraft this deep uses the stronger ending.')}
               </div>
               <label className="flex items-center gap-2 mt-3 text-sm">
                 <input type="checkbox" disabled={!canEdit} checked={form.enabled} onChange={(e) => set('enabled', e.target.checked)} />
@@ -130,13 +127,20 @@ export function ReminderWording({ onClose }: { onClose: () => void }) {
 
             <p className="text-xs muted">
               <b>{'{name}'}</b> the student · <b>{'{n}'}</b> their real hours, never the threshold ·
-              <b> {'{form_no}'}</b> the form number
+              <b> {'{form_no}'}</b> the form number · <b>{'{n_after}'}</b> hours left in a fresh
+              package once the overdraft comes off it
+            </p>
+            {/* The office writes these, so the one piece of syntax they need is
+                spelled out rather than left to be discovered. */}
+            <p className="text-xs muted mt-1">
+              Anything inside <b>{'[[ ]]'}</b> is only sent to a parent whose child has actually
+              gone past the package. At exactly zero hours it drops out, so nobody is told they
+              have exceeded 0 hours.
             </p>
 
             {text('1 · Running low', 'textFirst', 'hours left, above zero', '3')}
             {text('2 · Out of hours', 'textZero', 'zero, down to the overdraft line', '0')}
             {text('3 · Overdrawn', 'textOver', 'at the overdraft line or past it', '4.5')}
-            {text('3b · Overdrawn, deeper', 'textOverHard', 'past the firmer line', '12')}
 
             <div>
               <label className="text-xs font-semibold">Bank details and sign-off</label>

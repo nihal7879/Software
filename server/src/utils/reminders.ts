@@ -52,12 +52,18 @@ export type ReminderConfig = {
   firstHours: number;
   /** The overdraft warning, when the balance reaches this OR ANYTHING BEYOND IT. */
   overdraftFrom: number;
-  /** An overdraft this deep or worse gets the firmer wording. */
-  hardenAt: number;
+  /**
+   * The package to quote when the student has NO payment history yet - a new
+   * family being asked for their first renewal. Everyone else is quoted their
+   * OWN last package instead, read off their most recent fee transaction,
+   * because the institute sells 30, 15 and 35 hour packages and a parent on
+   * AED 2100 for 15 should never be sent a bill for 4200 for 30.
+   */
+  packageHours: number;
+  packageAmount: number;
   textFirst: string;
   textZero: string;
   textOver: string;
-  textOverHard: string;
   /** Bank details and sign-off, the same on every fee message the institute sends. */
   signature: string;
 };
@@ -66,7 +72,8 @@ export const DEFAULTS: ReminderConfig = {
   enabled: true,
   firstHours: 5,
   overdraftFrom: -2,
-  hardenAt: -5,
+  packageHours: 30,
+  packageAmount: 4200,
   // Written in the institute's own voice, taken from the fee messages they
   // have actually been sending parents on WhatsApp through 2026 — the
   // "Dear parent, greetings from Stem Vision" opening, "We request you to
@@ -78,26 +85,25 @@ export const DEFAULTS: ReminderConfig = {
   // standing family. The system does not know which, and a wrong amount in a
   // fee message is worse than no amount, so the office adds it.
   textFirst:
-    'Dear parent, greetings from Stem Vision.\n\n' +
-    'This is to inform you that {name} has {n} hours remaining in the current package. ' +
-    'We request you to kindly renew the package so that the lectures continue without any break.',
+    'Dear parent, greetings for the day. Please find attached the summary of lectures taken by {name}.\n\n' +
+    'Please note that {name} is left with {n} hours of lectures in the existing package. ' +
+    'We request you to renew the package of AED {amount} for {pkg_hours} hours.',
+  // At exactly zero there is nothing to "exceed", so both clauses about
+  // exceeded hours are wrapped in [[ ]] and drop out. A parent whose child
+  // finished on the hour should not be told they have exceeded 0 hours.
   textZero:
-    'Dear parent, greetings from Stem Vision.\n\n' +
-    'This is to inform you that the package hours for {name} are now complete. ' +
-    'We request you to kindly renew the package at the earliest so that the lectures continue without any break.',
+    'Dear parent, greetings for the day. Please find attached the summary of lectures taken by {name}.\n\n' +
+    'Please note that {name} has completed all the hours of the existing package' +
+    '[[, and has exceeded {n} hours of lectures]]. ' +
+    'We request you to renew the package of AED {amount} for {pkg_hours} hours.' +
+    '[[ Kindly note that the exceeded hours will be adjusted in the new package.]]',
   textOver:
-    'Dear parent, greetings from Stem Vision.\n\n' +
-    'Please note that {name} has exceeded {n} hours of lectures. ' +
-    'We request you to kindly renew the package at the earliest. ' +
-    'Kindly note that the previous {n} hours will be adjusted in this package renewal.',
-  // Deeper, but not harsher. The institute does not threaten parents in any
-  // message in that chat, and a system that suddenly does would not sound
-  // like them. What it adds is the real consequence they do mention: slots.
-  textOverHard:
-    'Dear parent, greetings from Stem Vision.\n\n' +
-    'Please note that {name} has exceeded {n} hours of lectures. ' +
-    'We request you to kindly clear the balance at the earliest so that we can continue to block the lecture slots for {name}. ' +
-    'Kindly note that the previous {n} hours will be adjusted in the package renewal.',
+    'Dear parent, greetings for the day. Please find attached the summary of lectures taken by {name}.\n\n' +
+    'Please note that {name} has exceeded {n} hours of lectures beyond the package, ' +
+    'for which payment is still pending. ' +
+    'We request you to renew the package of AED {amount} for {pkg_hours} hours at the earliest. ' +
+    'Kindly note that the previous {n} hours will be adjusted in this package renewal, ' +
+    'so {n_after} hours will remain in the new package.',
   // Exactly the block they paste under every fee message.
   signature:
     'Pls find the bank details for fees transfer: INITIUM EDUCATIONAL SERVICES FZCO\n' +
@@ -113,11 +119,11 @@ export const KEYS = {
   enabled: 'reminders_enabled',
   firstHours: 'reminder_first_hours',
   overdraftFrom: 'reminder_overdraft_from',
-  hardenAt: 'reminder_harden_at',
   textFirst: 'reminder_text_first',
   textZero: 'reminder_text_0',
   textOver: 'reminder_text_over',
-  textOverHard: 'reminder_text_over_5',
+  packageHours: 'reminder_package_hours',
+  packageAmount: 'reminder_package_amount',
   signature: 'reminder_signature',
 } as const;
 
@@ -147,11 +153,11 @@ export async function reminderConfig(): Promise<ReminderConfig> {
     firstHours: Math.max(0, num(v[KEYS.firstHours], DEFAULTS.firstHours)),
     // An overdraft step must be at or below zero, or the rule contradicts itself.
     overdraftFrom: Math.min(0, num(v[KEYS.overdraftFrom], DEFAULTS.overdraftFrom)),
-    hardenAt: Math.min(0, num(v[KEYS.hardenAt], DEFAULTS.hardenAt)),
+    packageHours: Math.max(1, num(v[KEYS.packageHours], DEFAULTS.packageHours)),
+    packageAmount: Math.max(0, num(v[KEYS.packageAmount], DEFAULTS.packageAmount)),
     textFirst: text(v[KEYS.textFirst], DEFAULTS.textFirst),
     textZero: text(v[KEYS.textZero], DEFAULTS.textZero),
     textOver: text(v[KEYS.textOver], DEFAULTS.textOver),
-    textOverHard: text(v[KEYS.textOverHard], DEFAULTS.textOverHard),
     signature: text(v[KEYS.signature], DEFAULTS.signature),
   };
   cached = { at: Date.now(), cfg };
@@ -180,9 +186,23 @@ export function tierFor(hoursLeft: number, cfg: ReminderConfig): number | null {
 /**
  * Which of the three conversations this is: 1 running low, 2 out of hours,
  * 3 overdrawn. A student only ever moves forward through them, and only once
- * each — going deeper into an overdraft is still conversation 3.
+ * each - going deeper into an overdraft is still conversation 3, and is said
+ * in the same words.
  */
 const stageOf = (tier: number) => (tier > 0 ? 1 : tier === 0 ? 2 : 3);
+
+/**
+ * 4200 → "4,200". Grouped, because a fee in a message to a parent is read as
+ * money and "4200" invites a second look. Fils are kept only when there are
+ * any: the institute's packages are whole dirhams.
+ */
+export function money(n: number): string {
+  const r = Math.round(n * 100) / 100;
+  return r.toLocaleString('en-AE', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: Number.isInteger(r) ? 0 : 2,
+  });
+}
 
 /** 3 → "3", 1.5 → "1.5", 2.82 → "2.82". No trailing zeros in a sentence. */
 export function hoursWord(n: number): string {
@@ -202,17 +222,46 @@ export function hoursWord(n: number): string {
 export function renderMessage(
   tier: number,
   hoursLeft: number,
-  student: { full_name: string; form_no: string },
+  student: {
+    full_name: string;
+    form_no: string;
+    /** Their most recent payment. Absent for a student who has never paid. */
+    last_amount?: string | number | null;
+    last_pkg_hours?: string | number | null;
+  },
   cfg: ReminderConfig
 ): string {
-  const raw =
-    tier > 0 ? cfg.textFirst
-      : tier === 0 ? cfg.textZero
-        : tier <= cfg.hardenAt ? cfg.textOverHard
-          : cfg.textOver;
-  return raw
+  // Three conversations, not four. However deep the overdraft goes it is
+  // still the same thing being asked for, in the same words.
+  const raw = tier > 0 ? cfg.textFirst : tier === 0 ? cfg.textZero : cfg.textOver;
+  // A clause in [[ ]] is only for a student who has actually gone past the
+  // package. At exactly zero hours "and has exceeded 0 hours of lectures" is
+  // both wrong and the kind of thing a parent reads twice, so it is dropped
+  // rather than rendered with a zero in it.
+  const exceeded = hoursLeft < 0 ? Math.abs(hoursLeft) : 0;
+
+  // What to quote for the renewal. A family that has paid before is quoted
+  // THEIR package, off their last transaction; the institute sells 4200/30,
+  // 2100/15, 1900/15 and 4200/35, and a wrong figure in a fee message is
+  // worse than no figure. A student with no payment history yet - the first
+  // renewal of a new joiner - falls back to the house package in settings.
+  const paidHours = Number(student.last_pkg_hours);
+  const paidAmount = Number(student.last_amount);
+  const pkgHours = Number.isFinite(paidHours) && paidHours > 0 ? paidHours : cfg.packageHours;
+  const amount = Number.isFinite(paidAmount) && paidAmount > 0 ? paidAmount : cfg.packageAmount;
+  const withClauses = exceeded > 0
+    ? raw.replace(/\[\[|\]\]/g, '')
+    : raw.replace(/\[\[[\s\S]*?\]\]/g, '');
+
+  return withClauses
     .replace(/\{name\}/g, student.full_name || `Form ${student.form_no}`)
     .replace(/\{form_no\}/g, student.form_no || '')
+    // What is left of a fresh package once the overdraft comes off it. Never
+    // below zero: a parent owing more than a whole package should be told
+    // nothing remains, not handed a negative number.
+    .replace(/\{amount\}/g, money(amount))
+    .replace(/\{pkg_hours\}/g, hoursWord(pkgHours))
+    .replace(/\{n_after\}/g, hoursWord(Math.max(0, pkgHours - exceeded)))
     .replace(/\{n\}/g, hoursWord(hoursLeft))
     // "has 1 hours left" is the sort of thing a parent notices and an office
     // gets blamed for. Done here rather than in the template so the institute
@@ -228,6 +277,9 @@ type Candidate = {
   credited: string | number;
   last_tier: number | null;
   last_credited: string | number | null;
+  /** The family's most recent payment, so the renewal quotes what THEY pay. */
+  last_amount: string | number | null;
+  last_pkg_hours: string | number | null;
 };
 
 /**
@@ -269,7 +321,12 @@ export async function raiseDueReminders(): Promise<number> {
               ${CREDITED_EXPR} - ${CONSUMED_EXPR} AS hours_left,
               ${CREDITED_EXPR}                    AS credited,
               (SELECT r.tier           FROM reminders r WHERE r.student_id = s.id AND r.is_deleted = FALSE ORDER BY r.id DESC LIMIT 1) AS last_tier,
-              (SELECT r.credited_hours FROM reminders r WHERE r.student_id = s.id AND r.is_deleted = FALSE ORDER BY r.id DESC LIMIT 1) AS last_credited
+              (SELECT r.credited_hours FROM reminders r WHERE r.student_id = s.id AND r.is_deleted = FALSE ORDER BY r.id DESC LIMIT 1) AS last_credited,
+              -- What this family last actually paid, newest first. Ordered by
+              -- the payment date and then the id, so two payments entered on
+              -- the same day still resolve to the one recorded last.
+              (SELECT ft.amount               FROM fee_transactions ft WHERE ft.student_id = s.id AND ft.is_deleted = FALSE ORDER BY ft.payment_date DESC, ft.id DESC LIMIT 1) AS last_amount,
+              (SELECT ft.course_package_hours FROM fee_transactions ft WHERE ft.student_id = s.id AND ft.is_deleted = FALSE ORDER BY ft.payment_date DESC, ft.id DESC LIMIT 1) AS last_pkg_hours
          FROM students s
         WHERE s.is_deleted = FALSE
           AND s.is_active = TRUE

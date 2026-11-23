@@ -152,14 +152,12 @@ router.put(
         // At or below zero, or the rule contradicts itself. The test at scan
         // time is "hours_left <= this", so -2 catches -3, -6 and anything worse.
         overdraftFrom: z.number().min(-100).max(0),
-        hardenAt: z.number().min(-100).max(0),
         // Generous: these carry the greeting, the request and the reason, and
         // the institute writes longer than a developer expects. setting_value
         // is TEXT now, so the limit is politeness, not storage.
         textFirst: z.string().trim().min(1).max(2000),
         textZero: z.string().trim().min(1).max(2000),
         textOver: z.string().trim().min(1).max(2000),
-        textOverHard: z.string().trim().min(1).max(2000),
         // Bank details and sign-off. Changing a bank should be one edit here,
         // not the same block corrected in four places.
         signature: z.string().trim().max(2000),
@@ -171,11 +169,9 @@ router.put(
       [KEYS.enabled, b.enabled ? '1' : '0'],
       [KEYS.firstHours, String(b.firstHours)],
       [KEYS.overdraftFrom, String(b.overdraftFrom)],
-      [KEYS.hardenAt, String(b.hardenAt)],
       [KEYS.textFirst, b.textFirst],
       [KEYS.textZero, b.textZero],
       [KEYS.textOver, b.textOver],
-      [KEYS.textOverHard, b.textOverHard],
       [KEYS.signature, b.signature],
     ];
     for (const [k, v] of pairs) {
